@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import App from './App.jsx'
 import Legajos from './Legajos.jsx'
+import Calculistas from './Calculistas.jsx'
 
 const APPS = [
   { id: 'presupuestos',  label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
@@ -17,6 +18,7 @@ export default function Root() {
 
   if (current === 'presupuestos') return <Layout current={current} onNav={setCurrent}><App /></Layout>
   if (current === 'legajos')      return <Layout current={current} onNav={setCurrent}><Legajos /></Layout>
+  if (current === 'calculistas') return <Layout current={current} onNav={setCurrent}><Calculistas /></Layout>
 
   // Home
   return (
