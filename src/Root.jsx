@@ -2,11 +2,13 @@ import React, { useState } from 'react'
 import App from './App.jsx'
 import Legajos from './Legajos.jsx'
 import Calculistas from './Calculistas.jsx'
+import CRM from './CRM.jsx'
 
 const APPS = [
   { id: 'presupuestos',  label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
   { id: 'legajos',       label: 'Legajos',      icon: '🗂️', desc: 'Proyectos y etapas' },
   { id: 'calculistas',   label: 'Calculistas',  icon: '👷', desc: 'Equipo y postulantes' },
+  { id: 'crm',           label: 'Clientes',     icon: '👥', desc: '148 contactos' },
 ]
 
 const s = {
@@ -19,6 +21,7 @@ export default function Root() {
   if (current === 'presupuestos') return <Layout current={current} onNav={setCurrent}><App /></Layout>
   if (current === 'legajos')      return <Layout current={current} onNav={setCurrent}><Legajos /></Layout>
   if (current === 'calculistas') return <Layout current={current} onNav={setCurrent}><Calculistas /></Layout>
+  if (current === 'crm') return <Layout current={current} onNav={setCurrent}><CRM /></Layout>
 
   // Home
   return (
