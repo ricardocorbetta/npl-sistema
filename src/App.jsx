@@ -70,8 +70,10 @@ export default function App() {
   const [saving, setSaving]     = useState(false);
   const [vista, setVista]       = useState("lista");
   const [editando, setEditando] = useState(null);
-  const [filtro, setFiltro]     = useState("todos");
-  const [busq, setBusq]         = useState("");
+  const [filtro, setFiltro] = useState("todos");
+  const [busq, setBusq] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -120,12 +122,14 @@ export default function App() {
     return okE && okB;
   });
 
-  const kpis = {
-    total: items.length,
-    aprobados: items.filter(x => x.estado === "aprobado").length,
-    enCurso: items.filter(x => ["enviado", "negociacion"].includes(x.estado)).length,
-    monto: items.filter(x => x.estado === "aprobado" && x.moneda === "ARS").reduce((s, x) => s + (Number(x.monto) || 0), 0),
-  };
+  const filtrados = items.filter(p => {
+    const okE = filtro === "todos" || p.estado === filtro;
+    const q = busq.toLowerCase();
+    const okB = !q || [p.cliente, p.codigo, p.descripcion].some(v => v?.toLowerCase().includes(q));
+    const okDesde = !fechaDesde || (p.fechaEmision && p.fechaEmision >= fechaDesde);
+    const okHasta = !fechaHasta || (p.fechaEmision && p.fechaEmision <= fechaHasta);
+    return okE && okB && okDesde && okHasta;
+  });
 
   if (vista === "form") return (
     <FormView
@@ -186,6 +190,20 @@ export default function App() {
           <option value="todos">Todos los estados</option>
           {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
         </select>
+        <input
+          type="date"
+          value={fechaDesde}
+          onChange={e => setFechaDesde(e.target.value)}
+          style={{ ...s.input, width: "auto" }}
+          placeholder="Desde"
+        />
+        <input
+          type="date"
+          value={fechaHasta}
+          onChange={e => setFechaHasta(e.target.value)}
+          style={{ ...s.input, width: "auto" }}
+          placeholder="Hasta"
+        />
       </div>
 
       {/* Estado */}
