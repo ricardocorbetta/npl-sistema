@@ -3,8 +3,9 @@ import App from './App.jsx'
 import Legajos from './Legajos.jsx'
 
 const APPS = [
-  { id: 'presupuestos', label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
-  { id: 'legajos',      label: 'Legajos',      icon: '🗂️', desc: 'Proyectos y etapas' },
+  { id: 'presupuestos',  label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
+  { id: 'legajos',       label: 'Legajos',      icon: '🗂️', desc: 'Proyectos y etapas' },
+  { id: 'calculistas',   label: 'Calculistas',  icon: '👷', desc: 'Equipo y postulantes' },
 ]
 
 const s = {
