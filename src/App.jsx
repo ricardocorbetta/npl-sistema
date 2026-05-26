@@ -6,7 +6,7 @@ const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const HDR = { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation" };
 
 const api = {
-  get:    ()      => fetch(`${SUPA_URL}/presupuestos?select=*&order=created_at.desc&limit=1000`, { headers: HDR }).then(r => r.json()),
+  get:    ()      => fetch(`${SUPA_URL}/presupuestos?select=*&order=fecha_emision.desc&limit=1000`, { headers: HDR }).then(r => r.json()),
   post:   (d)     => fetch(`${SUPA_URL}/presupuestos`, { method: "POST",  headers: HDR, body: JSON.stringify(d) }).then(r => r.json()),
   patch:  (id, d) => fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: HDR, body: JSON.stringify(d) }).then(r => r.json()),
   delete: (id)    => fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "DELETE", headers: HDR }),
@@ -64,14 +64,14 @@ const emptyForm = () => ({
 });
 
 export default function App() {
-  const [items, setItems]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [saving, setSaving]     = useState(false);
-  const [vista, setVista]       = useState("lista");
-  const [editando, setEditando] = useState(null);
-  const [filtro, setFiltro] = useState("todos");
-  const [busq, setBusq] = useState("");
+  const [items, setItems]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [saving, setSaving]       = useState(false);
+  const [vista, setVista]         = useState("lista");
+  const [editando, setEditando]   = useState(null);
+  const [filtro, setFiltro]       = useState("todos");
+  const [busq, setBusq]           = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
 
@@ -119,17 +119,17 @@ export default function App() {
     const okE = filtro === "todos" || p.estado === filtro;
     const q = busq.toLowerCase();
     const okB = !q || [p.cliente, p.codigo, p.descripcion].some(v => v?.toLowerCase().includes(q));
-    return okE && okB;
-  });
-
-  const filtrados = items.filter(p => {
-    const okE = filtro === "todos" || p.estado === filtro;
-    const q = busq.toLowerCase();
-    const okB = !q || [p.cliente, p.codigo, p.descripcion].some(v => v?.toLowerCase().includes(q));
     const okDesde = !fechaDesde || (p.fechaEmision && p.fechaEmision >= fechaDesde);
     const okHasta = !fechaHasta || (p.fechaEmision && p.fechaEmision <= fechaHasta);
     return okE && okB && okDesde && okHasta;
   });
+
+  const kpis = {
+    total: filtrados.length,
+    aprobados: filtrados.filter(x => x.estado === "aprobado").length,
+    enCurso: filtrados.filter(x => ["enviado", "negociacion"].includes(x.estado)).length,
+    monto: filtrados.filter(x => x.estado === "aprobado" && x.moneda === "ARS").reduce((s, x) => s + (Number(x.monto) || 0), 0),
+  };
 
   if (vista === "form") return (
     <FormView
@@ -180,7 +180,7 @@ export default function App() {
       </div>
 
       {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input
           placeholder="Buscar cliente, código, descripción..."
           value={busq} onChange={e => setBusq(e.target.value)}
@@ -190,20 +190,20 @@ export default function App() {
           <option value="todos">Todos los estados</option>
           {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
         </select>
-        <input
-          type="date"
-          value={fechaDesde}
-          onChange={e => setFechaDesde(e.target.value)}
-          style={{ ...s.input, width: "auto" }}
-          placeholder="Desde"
-        />
-        <input
-          type="date"
-          value={fechaHasta}
-          onChange={e => setFechaHasta(e.target.value)}
-          style={{ ...s.input, width: "auto" }}
-          placeholder="Hasta"
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>Desde</span>
+          <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} style={{ ...s.input, width: 140 }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>Hasta</span>
+          <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} style={{ ...s.input, width: 140 }} />
+        </div>
+        {(fechaDesde || fechaHasta) && (
+          <button onClick={() => { setFechaDesde(""); setFechaHasta(""); }}
+            style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}>
+            Limpiar fechas
+          </button>
+        )}
       </div>
 
       {/* Estado */}
