@@ -12,10 +12,10 @@ const api = {
 };
 
 const ESTADOS = [
-  { id: "activo",     label: "Activo",      color: "#3B6D11", bg: "#EAF3DE" },
+  { id: "activo",     label: "Activo",        color: "#3B6D11", bg: "#EAF3DE" },
   { id: "evaluacion", label: "En evaluación", color: "#854F0B", bg: "#FAEEDA" },
-  { id: "postulante", label: "Postulante",  color: "#185FA5", bg: "#E6F1FB" },
-  { id: "inactivo",   label: "Inactivo",    color: "#888",    bg: "#f5f5f5" },
+  { id: "postulante", label: "Postulante",    color: "#185FA5", bg: "#E6F1FB" },
+  { id: "inactivo",   label: "Inactivo",      color: "#888",    bg: "#f5f5f5" },
 ];
 
 const NIVELES = ["Junior", "Semi-Senior", "Senior"];
@@ -23,13 +23,7 @@ const SOFT = ["No lo uso", "Básico", "Intermedio", "Avanzado"];
 const DISPONIBILIDAD = ["Menos de 10 hs semanales", "Entre 10 y 20 hs semanales", "Más de 20 hs semanales"];
 const EXPERIENCIA = ["No tengo", "Menos de 5 proyectos", "Entre 5 y 20 proyectos", "Más de 20 proyectos"];
 
-const s = {
-  sans: { fontFamily: "system-ui, -apple-system, sans-serif" },
-  card: { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "14px 16px" },
-  btn: { padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "none" },
-  input: { width: "100%", fontSize: 13, padding: "6px 10px", border: "1px solid #e5e5e5", borderRadius: 8, boxSizing: "border-box", background: "#fff" },
-  label: { display: "block", fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 5 },
-};
+const inp = { width: "100%", fontSize: 13, padding: "6px 10px", border: "1px solid #e5e5e5", borderRadius: 8, boxSizing: "border-box", background: "#fff" };
 
 function Badge({ estado }) {
   const e = ESTADOS.find(x => x.id === estado) || ESTADOS[0];
@@ -42,12 +36,34 @@ function NivelDot({ nivel }) {
 }
 
 function SoftBadge({ label, nivel }) {
-  const colors = { "No lo uso": "#ddd", "Básico": "#FAEEDA", "Intermedio": "#E6F1FB", "Avanzado": "#EAF3DE" };
+  const colors = { "No lo uso": "#f0f0f0", "Básico": "#FAEEDA", "Intermedio": "#E6F1FB", "Avanzado": "#EAF3DE" };
   const text = { "No lo uso": "#aaa", "Básico": "#854F0B", "Intermedio": "#185FA5", "Avanzado": "#3B6D11" };
   return (
     <div style={{ textAlign: "center" }}>
-      <p style={{ margin: 0, fontSize: 10, color: "#aaa" }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 10, color: "#aaa", marginBottom: 3 }}>{label}</p>
       <span style={{ fontSize: 11, fontWeight: 500, background: colors[nivel] || "#f5f5f5", color: text[nivel] || "#888", padding: "2px 8px", borderRadius: 99 }}>{nivel || "—"}</span>
+    </div>
+  );
+}
+
+function Grid({ children }) {
+  return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>{children}</div>;
+}
+
+function Section({ title, children }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111", borderBottom: "1px solid #f0f0f0", paddingBottom: 8 }}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function F({ label, children }) {
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 5 }}>{label}</label>
+      {children}
     </div>
   );
 }
@@ -69,7 +85,6 @@ export default function Calculistas() {
   const [selected, setSelected] = useState(null);
   const [editando, setEditando] = useState(null);
   const [busq, setBusq]         = useState("");
-  const [filtro, setFiltro]     = useState("todos");
   const [tab, setTab]           = useState("activos");
 
   const load = useCallback(async () => {
@@ -116,11 +131,10 @@ export default function Calculistas() {
     try { await api.delete(id); } catch (_) { load(); }
   };
 
-  const activos     = items.filter(x => x.estado === "activo");
-  const evaluacion  = items.filter(x => ["evaluacion", "postulante"].includes(x.estado));
-  const inactivos   = items.filter(x => x.estado === "inactivo");
-
-  const tabItems = tab === "activos" ? activos : tab === "evaluacion" ? evaluacion : inactivos;
+  const activos    = items.filter(x => x.estado === "activo");
+  const evaluacion = items.filter(x => ["evaluacion", "postulante"].includes(x.estado));
+  const inactivos  = items.filter(x => x.estado === "inactivo");
+  const tabItems   = tab === "activos" ? activos : tab === "evaluacion" ? evaluacion : inactivos;
 
   const filtrados = tabItems.filter(c => {
     const q = busq.toLowerCase();
@@ -152,27 +166,21 @@ export default function Calculistas() {
   );
 
   return (
-    <div style={{ ...s.sans, padding: "20px", maxWidth: 1000, margin: "0 auto" }}>
+    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "20px", maxWidth: 1000, margin: "0 auto" }}>
 
-      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
         <div>
           <p style={{ margin: 0, fontSize: 12, color: "#999", fontWeight: 500 }}>NPL · APP 03</p>
           <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, color: "#111" }}>Calculistas</h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={load} style={{ ...s.btn, background: "#f5f5f5", color: "#555", border: "1px solid #e5e5e5" }}>↻</button>
-          <button onClick={() => { setEditando(null); setVista("form"); }} style={{ ...s.btn, background: "#111", color: "#fff" }}>+ Nuevo</button>
+          <button onClick={load} style={{ padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "1px solid #e5e5e5", background: "#f5f5f5", color: "#555" }}>↻</button>
+          <button onClick={() => { setEditando(null); setVista("form"); }} style={{ padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "none", background: "#111", color: "#fff" }}>+ Nuevo</button>
         </div>
       </div>
 
-      {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, marginBottom: 20 }}>
-        {[
-          ["Activos", kpis.activos],
-          ["Disponibles", kpis.disponibles],
-          ["En evaluación", kpis.evaluacion],
-        ].map(([l, v]) => (
+        {[["Activos", kpis.activos], ["Disponibles", kpis.disponibles], ["En evaluación", kpis.evaluacion]].map(([l, v]) => (
           <div key={l} style={{ background: "#f9f9f9", borderRadius: 8, padding: "10px 14px", border: "1px solid #eee" }}>
             <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{l}</p>
             <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 600, color: "#111" }}>{loading ? "..." : v}</p>
@@ -180,12 +188,11 @@ export default function Calculistas() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 16, border: "1px solid #e5e5e5", borderRadius: 8, overflow: "hidden", width: "fit-content" }}>
+      <div style={{ display: "flex", marginBottom: 16, border: "1px solid #e5e5e5", borderRadius: 8, overflow: "hidden", width: "fit-content" }}>
         {[
-          { id: "activos", label: `Equipo activo (${activos.length})` },
+          { id: "activos",    label: `Equipo activo (${activos.length})` },
           { id: "evaluacion", label: `En evaluación (${evaluacion.length})` },
-          { id: "inactivos", label: `Inactivos (${inactivos.length})` },
+          { id: "inactivos",  label: `Inactivos (${inactivos.length})` },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ padding: "6px 16px", fontSize: 12, fontWeight: 500, background: tab === t.id ? "#111" : "#fff", color: tab === t.id ? "#fff" : "#888", border: "none", cursor: "pointer" }}>
@@ -194,10 +201,9 @@ export default function Calculistas() {
         ))}
       </div>
 
-      {/* Búsqueda */}
       <div style={{ marginBottom: 16 }}>
         <input placeholder="Buscar por nombre, estudio, ciudad..." value={busq} onChange={e => setBusq(e.target.value)}
-          style={{ ...s.input, maxWidth: 400 }} />
+          style={{ ...inp, maxWidth: 400 }} />
       </div>
 
       {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando...</p>}
@@ -206,7 +212,8 @@ export default function Calculistas() {
       {!loading && !error && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
           {filtrados.map(c => (
-            <div key={c.id} style={{ ...s.card, cursor: "pointer" }} onClick={() => { setSelected(c); setVista("detalle"); }}>
+            <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}
+              onClick={() => { setSelected(c); setVista("detalle"); }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                 <div>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#111" }}>{c.nombre}</p>
@@ -214,31 +221,25 @@ export default function Calculistas() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                   <Badge estado={c.estado} />
-                  {c.disponible !== undefined && (
-                    <span style={{ fontSize: 10, color: c.disponible ? "#3B6D11" : "#A32D2D" }}>
-                      {c.disponible ? "● Disponible" : "● Ocupado"}
-                    </span>
-                  )}
+                  <span style={{ fontSize: 10, color: c.disponible ? "#3B6D11" : "#A32D2D" }}>
+                    {c.disponible ? "● Disponible" : "● Ocupado"}
+                  </span>
                 </div>
               </div>
-
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                 <NivelDot nivel={c.nivel} />
                 {c.ciudad && <span style={{ fontSize: 11, color: "#888", background: "#f5f5f5", padding: "2px 8px", borderRadius: 99 }}>📍 {c.ciudad}</span>}
               </div>
-
               <div style={{ display: "flex", gap: 12, justifyContent: "space-between" }}>
                 <SoftBadge label="CYPECAD" nivel={c.cypecad} />
                 <SoftBadge label="AUTOCAD" nivel={c.autocad} />
                 <SoftBadge label="SKETCHUP" nivel={c.sketchup} />
               </div>
-
               {c.observaciones && (
                 <p style={{ margin: "10px 0 0", fontSize: 11, color: "#888", borderTop: "1px solid #f0f0f0", paddingTop: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {c.observaciones}
                 </p>
               )}
-
               <div style={{ display: "flex", gap: 6, marginTop: 10, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
                 {c.wsp && <a href={`https://wa.me/${c.wsp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                   style={{ fontSize: 11, padding: "3px 10px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#f5f5f5", color: "#333", textDecoration: "none" }}>WSP</a>}
@@ -250,9 +251,7 @@ export default function Calculistas() {
             </div>
           ))}
           {filtrados.length === 0 && (
-            <p style={{ textAlign: "center", padding: 40, color: "#999", gridColumn: "1/-1" }}>
-              No hay calculistas en esta categoría.
-            </p>
+            <p style={{ textAlign: "center", padding: 40, color: "#999", gridColumn: "1/-1" }}>No hay calculistas en esta categoría.</p>
           )}
         </div>
       )}
@@ -272,7 +271,6 @@ function DetalleView({ c, onBack, onEdit, onEliminar }) {
         </div>
       </div>
 
-      {/* Info principal */}
       <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "16px", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <Badge estado={c.estado} />
@@ -283,12 +281,9 @@ function DetalleView({ c, onBack, onEdit, onEliminar }) {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
           {[
-            ["Estudio", c.estudio || "—"],
-            ["Ciudad", c.ciudad || "—"],
-            ["Experiencia", c.experiencia || "—"],
-            ["Disponibilidad", c.disponibilidad || "—"],
-            ["Freelance", c.freelance ? "Sí" : "No"],
-            ["Factura", c.factura ? "Sí" : "No"],
+            ["Estudio", c.estudio || "—"], ["Ciudad", c.ciudad || "—"],
+            ["Experiencia", c.experiencia || "—"], ["Disponibilidad", c.disponibilidad || "—"],
+            ["Freelance", c.freelance ? "Sí" : "No"], ["Factura", c.factura ? "Sí" : "No"],
           ].map(([l, v]) => (
             <div key={l}>
               <p style={{ margin: 0, fontSize: 11, color: "#aaa" }}>{l}</p>
@@ -298,7 +293,6 @@ function DetalleView({ c, onBack, onEdit, onEliminar }) {
         </div>
       </div>
 
-      {/* Software */}
       <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "16px", marginBottom: 16 }}>
         <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111" }}>Software</p>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -310,7 +304,6 @@ function DetalleView({ c, onBack, onEdit, onEliminar }) {
         {c.sistemas && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#666" }}>Sistemas: {c.sistemas}</p>}
       </div>
 
-      {/* Contacto */}
       <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "16px", marginBottom: 16 }}>
         <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111" }}>Contacto</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -322,7 +315,6 @@ function DetalleView({ c, onBack, onEdit, onEliminar }) {
         </div>
       </div>
 
-      {/* Observaciones */}
       {c.observaciones && (
         <div style={{ background: "#fffbe6", border: "1px solid #f0e68c", borderRadius: 10, padding: "14px 16px" }}>
           <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "#888" }}>Observaciones internas</p>
@@ -383,10 +375,12 @@ function FormView({ inicial, onSave, onCancel, saving }) {
       <Section title="Experiencia y modalidad">
         <Grid>
           <F label="Experiencia en viviendas"><select style={inp} value={f.experiencia} onChange={e => set("experiencia", e.target.value)}>{EXPERIENCIA.map(s => <option key={s}>{s}</option>)}</select></F>
-          <F label="Disponibilidad horaria"><select style={inp} value={f.disponibilidad} onChange={e => set("disponibilidad", e.target.value)}>
-            <option value="">Sin especificar</option>
-            {DISPONIBILIDAD.map(s => <option key={s}>{s}</option>)}
-          </select></F>
+          <F label="Disponibilidad horaria">
+            <select style={inp} value={f.disponibilidad} onChange={e => set("disponibilidad", e.target.value)}>
+              <option value="">Sin especificar</option>
+              {DISPONIBILIDAD.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </F>
           <F label="Modalidad">
             <div style={{ display: "flex", gap: 16 }}>
               <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
@@ -411,21 +405,6 @@ function FormView({ inicial, onSave, onCancel, saving }) {
         </button>
         <button onClick={onCancel} style={{ padding: "8px 18px", fontSize: 14, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "1px solid #e5e5e5", background: "#f5f5f5", color: "#555" }}>Cancelar</button>
       </div>
-    </div>
-  );
-}
-
-const inp = { width: "100%", fontSize: 13, padding: "6px 10px", border: "1px solid #e5e5e5", borderRadius: 8, boxSizing: "border-box", background: "#fff" };
-function Grid({ children }) { return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>{children}</div>; }
-function Section({ title, children }) { return <div style={{ marginBottom: 20 }}><p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111", borderBottom: "1px solid #f0f0f0", paddingBottom: 8 }}>{title}</p>{children}</div>; }
-function F({ label, children }) { return <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 5 }}>{label}</label>{children}</div>; }
-function SoftBadge({ label, nivel }) {
-  const colors = { "No lo uso": "#f0f0f0", "Básico": "#FAEEDA", "Intermedio": "#E6F1FB", "Avanzado": "#EAF3DE" };
-  const text = { "No lo uso": "#aaa", "Básico": "#854F0B", "Intermedio": "#185FA5", "Avanzado": "#3B6D11" };
-  return (
-    <div style={{ textAlign: "center" }}>
-      <p style={{ margin: 0, fontSize: 10, color: "#aaa", marginBottom: 3 }}>{label}</p>
-      <span style={{ fontSize: 11, fontWeight: 500, background: colors[nivel] || "#f5f5f5", color: text[nivel] || "#888", padding: "2px 8px", borderRadius: 99 }}>{nivel || "—"}</span>
     </div>
   );
 }
