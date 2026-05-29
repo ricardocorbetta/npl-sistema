@@ -3,12 +3,14 @@ import App from './App.jsx'
 import Legajos from './Legajos.jsx'
 import Calculistas from './Calculistas.jsx'
 import CRM from './CRM.jsx'
+import Obras from './Obras.jsx'
 
 const APPS = [
   { id: 'presupuestos',  label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
   { id: 'legajos',       label: 'Legajos',      icon: '🗂️', desc: 'Proyectos y etapas' },
   { id: 'calculistas',   label: 'Calculistas',  icon: '👷', desc: 'Equipo y postulantes' },
   { id: 'crm',           label: 'Clientes',     icon: '👥', desc: '148 contactos' },
+  { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
 ]
 
 const s = {
@@ -22,6 +24,7 @@ export default function Root() {
   if (current === 'legajos')      return <Layout current={current} onNav={setCurrent}><Legajos /></Layout>
   if (current === 'calculistas') return <Layout current={current} onNav={setCurrent}><Calculistas /></Layout>
   if (current === 'crm') return <Layout current={current} onNav={setCurrent}><CRM /></Layout>
+  if (current === 'obras') return <Layout current={current} onNav={setCurrent}><Obras /></Layout>
 
   // Home
   return (
