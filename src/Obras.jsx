@@ -505,4 +505,4 @@ function NuevaObra({ onBack, onCreada }) {
       </button>
     </div>
   );
-}.
+}
