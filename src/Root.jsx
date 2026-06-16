@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
 import App from './App.jsx'
-import Legajos from './Legajos.jsx'
+import Proyectos from './Proyectos.jsx'
 import Calculistas from './Calculistas.jsx'
 import CRM from './CRM.jsx'
 import Dashboard from './Dashboard.jsx'
@@ -11,7 +11,7 @@ import Obras from './Obras.jsx'
 const APPS_ADMIN = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '📊', desc: 'Panel de control' },
   { id: 'presupuestos', label: 'Presupuestos',  icon: '📋', desc: 'Pipeline y seguimiento' },
-  { id: 'legajos',      label: 'Legajos',       icon: '🗂️', desc: 'Proyectos y etapas' },
+  { id: 'proyectos',   label: 'Proyectos',    icon: '🗂️', desc: 'Kanban de proyectos' },
   { id: 'obras',        label: 'Obras',         icon: '🏗️', desc: 'Seguimiento diario' },
   { id: 'calculistas',  label: 'Calculistas',   icon: '👷', desc: 'Equipo y postulantes' },
   { id: 'crm',          label: 'Clientes',      icon: '👥', desc: '148 contactos' },
@@ -75,7 +75,7 @@ export default function Root() {
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
   if (current === 'presupuestos') return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><App /></Layout>
-  if (current === 'legajos')      return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Legajos /></Layout>
+      if (current === 'proyectos')  return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Proyectos /></Layout>
   if (current === 'calculistas')  return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Calculistas /></Layout>
   if (current === 'crm')          return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
   if (current === 'dashboard')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
