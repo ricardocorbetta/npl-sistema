@@ -158,22 +158,22 @@ function Form({ item, onSave, onCancel }) {
                             <button onClick={onCancel} style={{ ...s.btn, background: "#f5f5f5", color: "#555" }}>Cancelar</button>button>
                   </div>div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                            <div><label style={s.label}>Numero</label>label><input style={s.input} value={form.numero_proyecto || ""} onChange={e => set("numero_proyecto", e.target.value)} placeholder="ej: 539" /></div>div>
-                          <div><label style={s.label}>Estado</label>label><select style={s.input} value={form.estado} onChange={e => set("estado", e.target.value)}>{ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>option>)}</select>select></div>div>
-                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Descripcion *</label>label><input style={s.input} value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Vivienda Abasto Ejecucion Steel" /></div>div>
-                          <div><label style={s.label}>Cliente</label>label><input style={s.input} value={form.cliente || ""} onChange={e => set("cliente", e.target.value)} placeholder="Ej: Arq. Nievas Edu" /></div>div>
-                          <div><label style={s.label}>Encargado</label>label><select style={s.input} value={form.encargado || ""} onChange={e => set("encargado", e.target.value)}><option value="">Sin asignar</option>option>{ENCARGADOS_FIJOS.map(e => <option key={e} value={e}>{e}</option>option>)}</select>select></div>div>
-                          <div><label style={s.label}>Categoria</label>label><select style={s.input} value={form.categoria || "proyecto"} onChange={e => set("categoria", e.target.value)}>{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>option>)}</select>select></div>div>
-                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Proxima tarea</label>label><input style={s.input} value={form.proxima_tarea || ""} onChange={e => set("proxima_tarea", e.target.value)} placeholder="Ej: Entregar - 8 de Junio" /></div>div>
+                            <div><label style={s.label}>Numero</label><input style={s.input} value={form.numero_proyecto || ""} onChange={e => set("numero_proyecto", e.target.value)} placeholder="ej: 539" /></div>div>
+                          <div><label style={s.label}>Estado</label><select style={s.input} value={form.estado} onChange={e => set("estado", e.target.value)}>{ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>div>
+                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Descripcion *</label><input style={s.input} value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Vivienda Abasto Ejecucion Steel" /></div>div>
+                          <div><label style={s.label}>Cliente</label><input style={s.input} value={form.cliente || ""} onChange={e => set("cliente", e.target.value)} placeholder="Ej: Arq. Nievas Edu" /></div>div>
+                          <div><label style={s.label}>Encargado</label><select style={s.input} value={form.encargado || ""} onChange={e => set("encargado", e.target.value)}><option value="">Sin asignar</option>{ENCARGADOS_FIJOS.map(e => <option key={e} value={e}>{e}</option>)}</select></div>div>
+                          <div><label style={s.label}>Categoria</label><select style={s.input} value={form.categoria || "proyecto"} onChange={e => set("categoria", e.target.value)}>{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>div>
+                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Proxima tarea</label><input style={s.input} value={form.proxima_tarea || ""} onChange={e => set("proxima_tarea", e.target.value)} placeholder="Ej: Entregar - 8 de Junio" /></div>div>
                   </div>div>
                 <div style={{ marginTop: 16 }}>
-                        <label style={s.label}>Avance del proyecto</label>label>
+                        <label style={s.label}>Avance del proyecto</label>
                         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
                           {CHECKS.map(c => (
                         <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
                                       <input type="checkbox" checked={!!form[c.key]} onChange={e => set(c.key, e.target.checked)} style={{ width: 15, height: 15 }} />
                           {c.label}
-                        </label>label>
+                        </label>
                       ))}
                         </div>div>
                 </div>div>
@@ -257,13 +257,13 @@ export default function Proyectos() {
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
                         <input placeholder="Buscar proyecto, cliente, numero..." value={busq} onChange={e => setBusq(e.target.value)} style={{ ...s.input, flex: 1, minWidth: 200 }} />
                         <select value={filtroEst} onChange={e => setFiltroEst(e.target.value)} style={{ ...s.input, width: "auto" }}>
-                                  <option value="todos">Todos los estados</option>option>
-                          {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>option>)}
-                        </select>select>
+                                  <option value="todos">Todos los estados</option>
+                          {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
+                        </select>
                         <select value={filtroEnc} onChange={e => setFiltroEnc(e.target.value)} style={{ ...s.input, width: "auto" }}>
-                                  <option value="todos">Todos los encargados</option>option>
-                          {encargadosUnicos.map(e => <option key={e} value={e}>{e}</option>option>)}
-                        </select>select>
+                                  <option value="todos">Todos los encargados</option>
+                          {encargadosUnicos.map(e => <option key={e} value={e}>{e}</option>)}
+                        </select>
                   {(busq || filtroEst !== "todos" || filtroEnc !== "todos") && (
                       <button onClick={() => { setBusq(""); setFiltroEst("todos"); setFiltroEnc("todos"); }} style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}>Limpiar</button>button>
                         )}
