@@ -48,7 +48,7 @@ const s = {
 
 function EstadoBadge({ estado }) {
     const e = ESTADOS.find(x => x.id === estado) || ESTADOS[0];
-    return <span style={{ fontSize: 11, fontWeight: 600, background: e.color, color: e.text, borderRadius: 6, padding: "2px 8px" }}>{e.label}</span>span>;
+    return <span style={{ fontSize: 11, fontWeight: 600, background: e.color, color: e.text, borderRadius: 6, padding: "2px 8px" }}>{e.label}</span>;
 }
 
 function CheckProgress({ p }) {
@@ -57,10 +57,10 @@ function CheckProgress({ p }) {
     return (
           <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
             {CHECKS.map(c => (
-                    <span key={c.key} title={c.label} style={{ width: 18, height: 18, borderRadius: 4, fontSize: 9, fontWeight: 700, background: p[c.key] ? "#111" : "#efefef", color: p[c.key] ? "#fff" : "#bbb", display: "flex", alignItems: "center", justifyContent: "center" }}>{c.abbr}</span>span>
+                    <span key={c.key} title={c.label} style={{ width: 18, height: 18, borderRadius: 4, fontSize: 9, fontWeight: 700, background: p[c.key] ? "#111" : "#efefef", color: p[c.key] ? "#fff" : "#bbb", display: "flex", alignItems: "center", justifyContent: "center" }}>{c.abbr}</span>
                   ))}
-                  <span style={{ fontSize: 11, color: "#aaa", marginLeft: 2 }}>{pct}%</span>span>
-          </div>div>
+                  <span style={{ fontSize: 11, color: "#aaa", marginLeft: 2 }}>{pct}%</span>
+          </div>
         );
 }
 
@@ -71,15 +71,15 @@ function ProyectoCard({ p, onEdit, onDelete }) {
                   onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              {p.numero_proyecto && <span style={{ fontSize: 11, color: "#bbb", fontWeight: 600 }}>{p.numero_proyecto} - </span>span>}
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{p.descripcion}</span>span>
-                            </div>div>
-                            <button onClick={e => { e.stopPropagation(); onDelete(p.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#d0d0d0", fontSize: 17, padding: 0, lineHeight: 1 }}>x</button>button>
-                  </div>div>
-                  <p style={{ margin: "0 0 7px", fontSize: 12, color: "#888" }}>{p.cliente || "-"}</p>p>
-            {p.proxima_tarea && <p style={{ margin: "0 0 8px", fontSize: 11, color: "#444", background: "#f7f7f7", borderRadius: 6, padding: "4px 8px", borderLeft: "3px solid #111" }}>{p.proxima_tarea}</p>p>}
+                              {p.numero_proyecto && <span style={{ fontSize: 11, color: "#bbb", fontWeight: 600 }}>{p.numero_proyecto} - </span>}
+                                        <span style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{p.descripcion}</span>
+                            </div>
+                            <button onClick={e => { e.stopPropagation(); onDelete(p.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#d0d0d0", fontSize: 17, padding: 0, lineHeight: 1 }}>x</button>
+                  </div>
+                  <p style={{ margin: "0 0 7px", fontSize: 12, color: "#888" }}>{p.cliente || "-"}</p>
+            {p.proxima_tarea && <p style={{ margin: "0 0 8px", fontSize: 11, color: "#444", background: "#f7f7f7", borderRadius: 6, padding: "4px 8px", borderLeft: "3px solid #111" }}>{p.proxima_tarea}</p>}
                   <CheckProgress p={p} />
-          </div>div>
+          </div>
         );
 }
 
@@ -99,37 +99,37 @@ function Kanban({ items, onEdit, onDelete }) {
                     return (
                                 <div key={col.id} style={{ flex: "0 0 268px", background: col.bg, borderRadius: 12, padding: 12, border: "1px solid #efefef" }}>
                                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                                                              <span style={{ fontSize: 12, fontWeight: 700, color: "#333", textTransform: "uppercase", letterSpacing: .5 }}>{col.label}</span>span>
-                                                              <span style={{ fontSize: 11, color: "#888", background: "#e8e8e8", borderRadius: 12, padding: "1px 8px", fontWeight: 600 }}>{colItems.length}</span>span>
-                                              </div>div>
+                                                              <span style={{ fontSize: 12, fontWeight: 700, color: "#333", textTransform: "uppercase", letterSpacing: .5 }}>{col.label}</span>
+                                                              <span style={{ fontSize: 11, color: "#888", background: "#e8e8e8", borderRadius: 12, padding: "1px 8px", fontWeight: 600 }}>{colItems.length}</span>
+                                              </div>
                                   {colItems.map(p => <ProyectoCard key={p.id} p={p} onEdit={onEdit} onDelete={onDelete} />)}
-                                  {colItems.length === 0 && <p style={{ fontSize: 12, color: "#ccc", textAlign: "center", padding: "18px 0" }}>Sin proyectos</p>p>}
-                                </div>div>
+                                  {colItems.length === 0 && <p style={{ fontSize: 12, color: "#ccc", textAlign: "center", padding: "18px 0" }}>Sin proyectos</p>}
+                                </div>
                               );
           })}
-          </div>div>
+          </div>
         );
 }
 
 function Lista({ items, onEdit, onDelete }) {
-    if (items.length === 0) return <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Sin resultados</p>p>;
+    if (items.length === 0) return <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Sin resultados</p>;
     return (
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {items.map(p => (
                     <div key={p.id} onClick={() => onEdit(p)} style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: 12, color: "#bbb", fontWeight: 600, minWidth: 44 }}>{p.numero_proyecto || "-"}</span>span>
+                                <span style={{ fontSize: 12, color: "#bbb", fontWeight: 600, minWidth: 44 }}>{p.numero_proyecto || "-"}</span>
                                 <div style={{ flex: 1, minWidth: 180 }}>
-                                              <span style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>{p.descripcion}</span>span>
-                                  {p.cliente && <span style={{ fontSize: 12, color: "#888", marginLeft: 8 }}>{p.cliente}</span>span>}
-                                </div>div>
-                      {p.proxima_tarea && <span style={{ fontSize: 11, color: "#555", background: "#f5f5f5", borderRadius: 6, padding: "3px 8px", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.proxima_tarea}</span>span>}
-                                <span style={{ fontSize: 12, color: "#666", minWidth: 80 }}>{p.encargado || "-"}</span>span>
+                                              <span style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>{p.descripcion}</span>
+                                  {p.cliente && <span style={{ fontSize: 12, color: "#888", marginLeft: 8 }}>{p.cliente}</span>}
+                                </div>
+                      {p.proxima_tarea && <span style={{ fontSize: 11, color: "#555", background: "#f5f5f5", borderRadius: 6, padding: "3px 8px", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.proxima_tarea}</span>}
+                                <span style={{ fontSize: 12, color: "#666", minWidth: 80 }}>{p.encargado || "-"}</span>
                                 <EstadoBadge estado={p.estado} />
                                 <CheckProgress p={p} />
-                                <button onClick={e => { e.stopPropagation(); onDelete(p.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 16, marginLeft: "auto" }}>x</button>button>
-                    </div>div>
+                                <button onClick={e => { e.stopPropagation(); onDelete(p.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 16, marginLeft: "auto" }}>x</button>
+                    </div>
                   ))}
-          </div>div>
+          </div>
         );
 }
 
@@ -154,18 +154,18 @@ function Form({ item, onSave, onCancel }) {
     return (
           <div style={{ ...s.sans, maxWidth: 620, margin: "0 auto", padding: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111" }}>{item ? "Editar proyecto" : "Nuevo proyecto"}</h2>h2>
-                            <button onClick={onCancel} style={{ ...s.btn, background: "#f5f5f5", color: "#555" }}>Cancelar</button>button>
-                  </div>div>
+                            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111" }}>{item ? "Editar proyecto" : "Nuevo proyecto"}</h2>
+                            <button onClick={onCancel} style={{ ...s.btn, background: "#f5f5f5", color: "#555" }}>Cancelar</button>
+                  </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                            <div><label style={s.label}>Numero</label><input style={s.input} value={form.numero_proyecto || ""} onChange={e => set("numero_proyecto", e.target.value)} placeholder="ej: 539" /></div>div>
-                          <div><label style={s.label}>Estado</label><select style={s.input} value={form.estado} onChange={e => set("estado", e.target.value)}>{ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>div>
-                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Descripcion *</label><input style={s.input} value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Vivienda Abasto Ejecucion Steel" /></div>div>
-                          <div><label style={s.label}>Cliente</label><input style={s.input} value={form.cliente || ""} onChange={e => set("cliente", e.target.value)} placeholder="Ej: Arq. Nievas Edu" /></div>div>
-                          <div><label style={s.label}>Encargado</label><select style={s.input} value={form.encargado || ""} onChange={e => set("encargado", e.target.value)}><option value="">Sin asignar</option>{ENCARGADOS_FIJOS.map(e => <option key={e} value={e}>{e}</option>)}</select></div>div>
-                          <div><label style={s.label}>Categoria</label><select style={s.input} value={form.categoria || "proyecto"} onChange={e => set("categoria", e.target.value)}>{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>div>
-                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Proxima tarea</label><input style={s.input} value={form.proxima_tarea || ""} onChange={e => set("proxima_tarea", e.target.value)} placeholder="Ej: Entregar - 8 de Junio" /></div>div>
-                  </div>div>
+                            <div><label style={s.label}>Numero</label><input style={s.input} value={form.numero_proyecto || ""} onChange={e => set("numero_proyecto", e.target.value)} placeholder="ej: 539" /></div>
+                          <div><label style={s.label}>Estado</label><select style={s.input} value={form.estado} onChange={e => set("estado", e.target.value)}>{ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></div>
+                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Descripcion *</label><input style={s.input} value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Vivienda Abasto Ejecucion Steel" /></div>
+                          <div><label style={s.label}>Cliente</label><input style={s.input} value={form.cliente || ""} onChange={e => set("cliente", e.target.value)} placeholder="Ej: Arq. Nievas Edu" /></div>
+                          <div><label style={s.label}>Encargado</label><select style={s.input} value={form.encargado || ""} onChange={e => set("encargado", e.target.value)}><option value="">Sin asignar</option>{ENCARGADOS_FIJOS.map(e => <option key={e} value={e}>{e}</option>)}</select></div>
+                          <div><label style={s.label}>Categoria</label><select style={s.input} value={form.categoria || "proyecto"} onChange={e => set("categoria", e.target.value)}>{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                          <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Proxima tarea</label><input style={s.input} value={form.proxima_tarea || ""} onChange={e => set("proxima_tarea", e.target.value)} placeholder="Ej: Entregar - 8 de Junio" /></div>
+                  </div>
                 <div style={{ marginTop: 16 }}>
                         <label style={s.label}>Avance del proyecto</label>
                         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
@@ -175,13 +175,13 @@ function Form({ item, onSave, onCancel }) {
                           {c.label}
                         </label>
                       ))}
-                        </div>div>
-                </div>div>
-            {err && <p style={{ color: "#c00", fontSize: 13, marginTop: 12 }}>{err}</p>p>}
+                        </div>
+                </div>
+            {err && <p style={{ color: "#c00", fontSize: 13, marginTop: 12 }}>{err}</p>}
                 <button onClick={submit} disabled={saving} style={{ ...s.btn, background: "#111", color: "#fff", width: "100%", justifyContent: "center", marginTop: 20, padding: "11px", opacity: saving ? .6 : 1 }}>
                   {saving ? "Guardando..." : "Guardar proyecto"}
-                </button>button>
-          </div>div>
+                </button>
+          </div>
         );
 }
 
@@ -227,33 +227,33 @@ export default function Proyectos() {
     };
   
     if (editando !== null) {
-          return <div style={s.sans}><Form item={editando || null} onSave={() => { setEditando(null); load(); }} onCancel={() => setEditando(null)} /></div>div>;
+          return <div style={s.sans}><Form item={editando || null} onSave={() => { setEditando(null); load(); }} onCancel={() => setEditando(null)} /></div>;
     }
   
     return (
           <div style={{ ...s.sans, padding: "16px 20px", maxWidth: 1600, margin: "0 auto" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
                         <div>
-                                  <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111" }}>Proyectos</h1>h1>
-                                  <p style={{ margin: "2px 0 0", fontSize: 13, color: "#888" }}>{items.length} proyectos en total</p>p>
-                        </div>div>
+                                  <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111" }}>Proyectos</h1>
+                                  <p style={{ margin: "2px 0 0", fontSize: 13, color: "#888" }}>{items.length} proyectos en total</p>
+                        </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                   <div style={{ display: "flex", background: "#f0f0f0", borderRadius: 8, padding: 2 }}>
                                     {[["kanban", "Kanban"], ["lista", "Lista"]].map(([v, lbl]) => (
-                          <button key={v} onClick={() => setVista(v)} style={{ ...s.btn, background: vista === v ? "#fff" : "transparent", color: vista === v ? "#111" : "#888" }}>{lbl}</button>button>
+                          <button key={v} onClick={() => setVista(v)} style={{ ...s.btn, background: vista === v ? "#fff" : "transparent", color: vista === v ? "#111" : "#888" }}>{lbl}</button>
                         ))}
-                                  </div>div>
-                                  <button onClick={() => setEditando(false)} style={{ ...s.btn, background: "#111", color: "#fff" }}>+ Nuevo</button>button>
-                        </div>div>
-                </div>div>
+                                  </div>
+                                  <button onClick={() => setEditando(false)} style={{ ...s.btn, background: "#111", color: "#fff" }}>+ Nuevo</button>
+                        </div>
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 10, marginBottom: 14 }}>
                   {[["Activos", kpis.activos, "#fff"], ["Revision", kpis.revision, "#fffcf0"], ["Entregados", kpis.entregados, "#f5f9ff"], ["Sin cobrar", kpis.sinCobrar, "#fff5f5"]].map(([l, v, bg]) => (
                       <div key={l} style={{ background: bg, borderRadius: 8, padding: "10px 14px", border: "1px solid #eee" }}>
-                                  <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{l}</p>p>
-                                  <p style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, color: "#111" }}>{loading ? "..." : v}</p>p>
-                      </div>div>
+                                  <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{l}</p>
+                                  <p style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, color: "#111" }}>{loading ? "..." : v}</p>
+                      </div>
                     ))}
-                </div>div>
+                </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
                         <input placeholder="Buscar proyecto, cliente, numero..." value={busq} onChange={e => setBusq(e.target.value)} style={{ ...s.input, flex: 1, minWidth: 200 }} />
                         <select value={filtroEst} onChange={e => setFiltroEst(e.target.value)} style={{ ...s.input, width: "auto" }}>
@@ -265,13 +265,13 @@ export default function Proyectos() {
                           {encargadosUnicos.map(e => <option key={e} value={e}>{e}</option>)}
                         </select>
                   {(busq || filtroEst !== "todos" || filtroEnc !== "todos") && (
-                      <button onClick={() => { setBusq(""); setFiltroEst("todos"); setFiltroEnc("todos"); }} style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}>Limpiar</button>button>
+                      <button onClick={() => { setBusq(""); setFiltroEst("todos"); setFiltroEnc("todos"); }} style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}>Limpiar</button>
                         )}
-                </div>div>
-            {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando proyectos...</p>p>}
-            {error && <div style={{ textAlign: "center", padding: 40 }}><p style={{ color: "#c00", marginBottom: 12 }}>Error: {error}</p>p><button onClick={load} style={{ ...s.btn, background: "#f5f5f5", border: "1px solid #ddd", color: "#333" }}>Reintentar</button>button></div>div>}
+                </div>
+            {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando proyectos...</p>}
+            {error && <div style={{ textAlign: "center", padding: 40 }}><p style={{ color: "#c00", marginBottom: 12 }}>Error: {error}</p><button onClick={load} style={{ ...s.btn, background: "#f5f5f5", border: "1px solid #ddd", color: "#333" }}>Reintentar</button></div>}
             {!loading && !error && vista === "kanban" && <Kanban items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
             {!loading && !error && vista === "lista" && <Lista items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
-          </div>div>
+          </div>
         );
 }</div>
