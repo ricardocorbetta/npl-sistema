@@ -256,7 +256,7 @@ export default function Proyectos() {
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
                         <input placeholder="Buscar proyecto, cliente, numero..." value={busq} onChange={e => setBusq(e.target.value)} style={{ ...s.input, flex: 1, minWidth: 200 }} />
-                        <select value={filtroEst} onChange={e => setFiltroEst(e.target.value)} style={{ ...s.input, width: "auto" }}>
+                                       <select value={filtroEst} onChange={e => setFiltroEst(e.target.value)} style={{ ...s.input, width: "auto" }}>
                                   <option value="todos">Todos los estados</option>
                           {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
                         </select>
@@ -274,4 +274,4 @@ export default function Proyectos() {
             {!loading && !error && vista === "lista" && <Lista items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
           </div>
         );
-}</div>
+}<
