@@ -272,7 +272,8 @@ export default function Proyectos() {
             {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando proyectos...</p>}
             {error && <div style={{ textAlign: "center", padding: 40 }}><p style={{ color: "#c00", marginBottom: 12 }}>Error: {error}</p><button onClick={load} style={{ ...s.btn, background: "#f5f5f5", border: "1px solid #ddd", color: "#333" }}>Reintentar</button></div>}
             {!loading && !error && vista === "kanban" && <Kanban items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
-            {!loading && !error && vista === "lista" && <Lista items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
+            {!loading && !error && vista === "lista" && <Lista items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />
           </div>
         );
 }<
+  }
