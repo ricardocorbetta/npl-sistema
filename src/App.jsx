@@ -1,359 +1,412 @@
-import React from "react";
-import { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
-const HDR = { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation" };
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
 
-const api = {
-  get:    ()      => fetch(`${SUPA_URL}/presupuestos?select=*&order=fecha_emision.desc&limit=1000`, { headers: HDR }).then(r => r.json()),
-  post:   (d)     => fetch(`${SUPA_URL}/presupuestos`, { method: "POST",  headers: HDR, body: JSON.stringify(d) }).then(r => r.json()),
-  patch:  (id, d) => fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: HDR, body: JSON.stringify(d) }).then(r => r.json()),
-  delete: (id)    => fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "DELETE", headers: HDR }),
-};
+async function getToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || ANON_KEY;
+}
+function hdrs(tk) {
+  return { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json", Prefer: "return=representation" };
+}
 
-const toDb = p => ({
-  cliente: p.cliente, tipo: p.tipo, descripcion: p.descripcion,
-  superficie: p.superficie || null, monto: p.monto || null, moneda: p.moneda,
-  estado: p.estado, fecha_emision: p.fechaEmision || null,
-  fecha_vencimiento: p.fechaVencimiento || null,
-  calculista: p.calculista, probabilidad: p.probabilidad, obs: p.obs,
-});
-
-const fromDb = r => ({
-  id: r.id, codigo: r.codigo, cliente: r.cliente, tipo: r.tipo,
-  descripcion: r.descripcion, superficie: r.superficie, monto: r.monto,
-  moneda: r.moneda || "ARS", estado: r.estado || "borrador",
-  fechaEmision: r.fecha_emision, fechaVencimiento: r.fecha_vencimiento,
-  calculista: r.calculista, probabilidad: r.probabilidad ?? 50, obs: r.obs,
-});
-
-const ESTADOS = [
-  { id: "borrador",    label: "Borrador",       color: "#5F5E5A", bg: "#F1EFE8" },
-  { id: "enviado",     label: "Enviado",         color: "#185FA5", bg: "#E6F1FB" },
-  { id: "negociacion", label: "En negociación",  color: "#854F0B", bg: "#FAEEDA" },
-  { id: "aprobado",    label: "Aprobado",        color: "#3B6D11", bg: "#EAF3DE" },
-  { id: "rechazado",   label: "Rechazado",       color: "#A32D2D", bg: "#FCEBEB" },
-  { id: "vencido",     label: "Vencido",         color: "#993C1D", bg: "#FAECE7" },
+const TIPOS_SERVICIO = [
+  { v: "calculo",       label: "📐 Cálculo estructural",      desc: "Genera proyecto de ingeniería" },
+  { v: "calculo_obra",  label: "📐🏗️ Cálculo + Obra",         desc: "Genera proyecto y obra" },
+  { v: "obra",          label: "🏗️ Dirección de obra",         desc: "Genera obra de campo" },
+  { v: "auditoria",     label: "🔍 Auditoría de obra",         desc: "Revisión de obra existente" },
+  { v: "certificacion", label: "📋 Certificación",             desc: "Revisión y certificación" },
+  { v: "otro",          label: "📝 Otro",                      desc: "" },
 ];
 
-const TIPOS = ["Vivienda unifamiliar","Edificio residencial","Local comercial","Industrial","Relevamiento","Ampliación","Otro"];
+const ESTADOS = [
+  { v: "borrador",     label: "Borrador",     color: "#888" },
+  { v: "enviado",      label: "Enviado",      color: "#3b82f6" },
+  { v: "aprobado",     label: "Aprobado",     color: "#22c55e" },
+  { v: "rechazado",    label: "Rechazado",    color: "#ef4444" },
+  { v: "en_ejecucion", label: "En ejecución", color: "#f59e0b" },
+  { v: "finalizado",   label: "Finalizado",   color: "#6366f1" },
+];
 
-const s = {
-  sans: { fontFamily: "system-ui, -apple-system, sans-serif" },
-  card: { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "12px 16px" },
-  btn: { padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "none" },
-  input: { width: "100%", fontSize: 13, padding: "6px 10px", border: "1px solid #e5e5e5", borderRadius: 8, boxSizing: "border-box", background: "#fff" },
-  label: { display: "block", fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 5 },
+const shared = {
+  btn:  { padding: "9px 18px", background: "#111", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnSm:{ padding: "6px 12px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" },
+  inp:  { width: "100%", padding: "10px 12px", border: "1px solid #e0e0e0", borderRadius: 10, fontSize: 14, boxSizing: "border-box" },
+  card: { background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 5px rgba(0,0,0,.07)" },
+  lbl:  { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4, display: "block" },
 };
 
-function Badge({ estado }) {
-  const e = ESTADOS.find(x => x.id === estado) || ESTADOS[0];
-  return <span style={{ background: e.bg, color: e.color, fontSize: 11, fontWeight: 500, padding: "2px 10px", borderRadius: 99 }}>{e.label}</span>;
-}
+/* ─── Modal nuevo cliente inline ─── */
+function ModalNuevoCliente({ onCreado, onClose }) {
+  const [form, setForm] = useState({ empresa: "", contacto: "", mail: "", wsp: "", ciudad: "", tipo: "empresa" });
+  const [saving, setSaving] = useState(false);
 
-function fmt(v, m) {
-  if (!v && v !== 0) return "—";
-  return (m === "USD" ? "USD " : "$ ") + Number(v).toLocaleString("es-AR");
-}
-
-const emptyForm = () => ({
-  cliente: "", tipo: TIPOS[0], descripcion: "", superficie: "", monto: "",
-  moneda: "ARS", estado: "borrador", fechaEmision: new Date().toISOString().slice(0, 10),
-  fechaVencimiento: "", calculista: "", probabilidad: 50, obs: "",
-});
-
-export default function App() {
-  const [items, setItems]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
-  const [saving, setSaving]       = useState(false);
-  const [vista, setVista]         = useState("lista");
-  const [editando, setEditando]   = useState(null);
-  const [filtro, setFiltro]       = useState("todos");
-  const [busq, setBusq]           = useState("");
-  const [fechaDesde, setFechaDesde] = useState("");
-  const [fechaHasta, setFechaHasta] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const data = await api.get();
-      if (data?.message) throw new Error(data.message);
-      setItems((data || []).map(fromDb));
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const saveForm = async (f) => {
+  async function crear() {
     setSaving(true);
-    try {
-      if (f.id) {
-        const res = await api.patch(f.id, toDb(f));
-        const upd = Array.isArray(res) ? res[0] : res;
-        setItems(prev => prev.map(x => x.id === f.id ? fromDb(upd) : x));
-      } else {
-        const res = await api.post(toDb(f));
-        const created = Array.isArray(res) ? res[0] : res;
-        setItems(prev => [fromDb(created), ...prev]);
-      }
-      setVista("lista"); setEditando(null);
-    } catch (e) { alert("Error al guardar: " + e.message); }
+    const tk = await getToken();
+    const r = await fetch(`${SUPA_URL}/clientes`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(form) });
+    const rows = await r.json();
+    onCreado(rows[0]);
     setSaving(false);
-  };
-
-  const cambiarEstado = async (id, estado) => {
-    setItems(prev => prev.map(x => x.id === id ? { ...x, estado } : x));
-    try { await api.patch(id, { estado }); } catch (_) { load(); }
-  };
-
-  const eliminar = async (id) => {
-    if (!confirm("¿Eliminar este presupuesto?")) return;
-    setItems(prev => prev.filter(x => x.id !== id));
-    try { await api.delete(id); } catch (_) { load(); }
-  };
-
-  const filtrados = items.filter(p => {
-    const okE = filtro === "todos" || p.estado === filtro;
-    const q = busq.toLowerCase();
-    const okB = !q || [p.cliente, p.codigo, p.descripcion].some(v => v?.toLowerCase().includes(q));
-    const okDesde = !fechaDesde || (p.fechaEmision && p.fechaEmision >= fechaDesde);
-    const okHasta = !fechaHasta || (p.fechaEmision && p.fechaEmision <= fechaHasta);
-    return okE && okB && okDesde && okHasta;
-  });
-
-  const kpis = {
-    total: filtrados.length,
-    aprobados: filtrados.filter(x => x.estado === "aprobado").length,
-    enCurso: filtrados.filter(x => ["enviado", "negociacion"].includes(x.estado)).length,
-    monto: filtrados.filter(x => x.estado === "aprobado" && x.moneda === "ARS").reduce((s, x) => s + (Number(x.monto) || 0), 0),
-  };
-
-  if (vista === "form") return (
-    <FormView
-      inicial={editando || emptyForm()}
-      onSave={saveForm}
-      onCancel={() => { setVista("lista"); setEditando(null); }}
-      saving={saving}
-    />
-  );
+  }
 
   return (
-    <div style={{ ...s.sans, padding: "20px", maxWidth: 1100, margin: "0 auto" }}>
-
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 12, color: "#999", fontWeight: 500 }}>NPL · APP 06</p>
-          <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, color: "#111" }}>Seguimiento de presupuestos</h1>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 400 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+          <h3 style={{ margin: 0 }}>Nuevo cliente</h3>
+          <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 10px" }}>✕</button>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={load} style={{ ...s.btn, background: "#f5f5f5", color: "#555", border: "1px solid #e5e5e5" }}>↻</button>
-          <div style={{ display: "flex", border: "1px solid #e5e5e5", borderRadius: 8, overflow: "hidden" }}>
-            {["lista", "kanban"].map(v => (
-              <button key={v} onClick={() => setVista(v)} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 500, background: vista === v ? "#f0f0f0" : "#fff", border: "none", cursor: "pointer", color: vista === v ? "#111" : "#888" }}>
-                {v === "lista" ? "Lista" : "Kanban"}
-              </button>
-            ))}
+        {[
+          { lbl: "Empresa / Nombre *", key: "empresa", ph: "Razón social o nombre" },
+          { lbl: "Contacto", key: "contacto", ph: "Nombre del contacto" },
+          { lbl: "Email", key: "mail", ph: "mail@ejemplo.com" },
+          { lbl: "WhatsApp", key: "wsp", ph: "+54 9 11 ..." },
+          { lbl: "Ciudad", key: "ciudad", ph: "Buenos Aires" },
+        ].map(f => (
+          <div key={f.key} style={{ marginBottom: 10 }}>
+            <span style={shared.lbl}>{f.lbl}</span>
+            <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} style={shared.inp} placeholder={f.ph} />
           </div>
-          <button onClick={() => { setEditando(null); setVista("form"); }} style={{ ...s.btn, background: "#111", color: "#fff" }}>
-            + Nuevo
+        ))}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button onClick={crear} disabled={!form.empresa || saving} style={{ ...shared.btn, flex: 1 }}>
+            {saving ? "Creando…" : "Crear cliente"}
           </button>
+          <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "9px" }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Modal nuevo/editar presupuesto ─── */
+function ModalPresupuesto({ pres, onGuardar, onClose }) {
+  const esNuevo = !pres?.id;
+  const [form, setForm] = useState({
+    codigo:           pres?.codigo || "",
+    cliente:          pres?.cliente || "",
+    cliente_id:       pres?.cliente_id || "",
+    tipo_servicio:    pres?.tipo_servicio || "",
+    descripcion:      pres?.descripcion || "",
+    superficie:       pres?.superficie || "",
+    monto:            pres?.monto || "",
+    moneda:           pres?.moneda || "ARS",
+    estado:           pres?.estado || "borrador",
+    probabilidad:     pres?.probabilidad || "",
+    fecha_emision:    pres?.fecha_emision || new Date().toISOString().slice(0,10),
+    fecha_vencimiento:pres?.fecha_vencimiento || "",
+    obs:              pres?.obs || "",
+  });
+  const [clientes,      setClientes]      = useState([]);
+  const [showNuevoCli,  setShowNuevoCli]  = useState(false);
+  const [saving,        setSaving]        = useState(false);
+
+  useEffect(() => {
+    async function cargar() {
+      const tk = await getToken();
+      const d = await fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json());
+      setClientes(Array.isArray(d) ? d : []);
+    }
+    cargar();
+  }, []);
+
+  function clienteCreado(cli) {
+    setClientes(prev => [...prev, cli].sort((a,b) => a.empresa.localeCompare(b.empresa)));
+    setForm(p => ({ ...p, cliente_id: cli.id, cliente: cli.empresa }));
+    setShowNuevoCli(false);
+  }
+
+  async function guardar() {
+    setSaving(true);
+    await onGuardar(form);
+    setSaving(false);
+  }
+
+  const tipoInfo = TIPOS_SERVICIO.find(t => t.v === form.tipo_servicio);
+
+  return (
+    <>
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <h3 style={{ margin: 0 }}>{esNuevo ? "Nuevo presupuesto" : "Editar presupuesto"}</h3>
+            <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 10px" }}>✕</button>
+          </div>
+
+          {/* Tipo de servicio */}
+          <div style={{ marginBottom: 16 }}>
+            <span style={shared.lbl}>Tipo de servicio *</span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {TIPOS_SERVICIO.map(t => (
+                <button key={t.v} onClick={() => setForm(p => ({ ...p, tipo_servicio: t.v }))} style={{
+                  padding: "10px 12px", textAlign: "left", borderRadius: 10, cursor: "pointer", fontSize: 13,
+                  border: form.tipo_servicio === t.v ? "2px solid #111" : "1px solid #e0e0e0",
+                  background: form.tipo_servicio === t.v ? "#111" : "#fff",
+                  color: form.tipo_servicio === t.v ? "#fff" : "#333",
+                  fontWeight: form.tipo_servicio === t.v ? 600 : 400,
+                }}>
+                  <div>{t.label}</div>
+                  {t.desc && <div style={{ fontSize: 11, opacity: .7, marginTop: 2 }}>{t.desc}</div>}
+                </button>
+              ))}
+            </div>
+            {tipoInfo && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#3b82f6", background: "#eff6ff", borderRadius: 8, padding: "6px 10px" }}>
+                ℹ️ {tipoInfo.desc || tipoInfo.label}
+              </div>
+            )}
+          </div>
+
+          {/* Cliente */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={shared.lbl}>Cliente *</span>
+              <button onClick={() => setShowNuevoCli(true)} style={{ ...shared.btnSm, fontSize: 11, padding: "3px 8px" }}>+ Nuevo cliente</button>
+            </div>
+            <select
+              value={form.cliente_id}
+              onChange={e => {
+                const cli = clientes.find(c => c.id === e.target.value);
+                setForm(p => ({ ...p, cliente_id: e.target.value, cliente: cli?.empresa || "" }));
+              }}
+              style={shared.inp}
+            >
+              <option value="">Seleccionar cliente…</option>
+              {clientes.map(c => <option key={c.id} value={c.id}>{c.empresa}</option>)}
+            </select>
+          </div>
+
+          {/* Código y descripción */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: "0 0 140px" }}>
+              <span style={shared.lbl}>Código</span>
+              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="NPL-2026-001" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={shared.lbl}>Descripción *</span>
+              <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Breve descripción del trabajo" />
+            </div>
+          </div>
+
+          {/* Monto y moneda */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <span style={shared.lbl}>Monto</span>
+              <input type="number" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} style={shared.inp} placeholder="0" />
+            </div>
+            <div style={{ flex: "0 0 100px" }}>
+              <span style={shared.lbl}>Moneda</span>
+              <select value={form.moneda} onChange={e => setForm(p => ({ ...p, moneda: e.target.value }))} style={shared.inp}>
+                <option value="ARS">ARS $</option>
+                <option value="USD">USD u$s</option>
+              </select>
+            </div>
+            <div style={{ flex: "0 0 100px" }}>
+              <span style={shared.lbl}>Superficie m²</span>
+              <input type="number" value={form.superficie} onChange={e => setForm(p => ({ ...p, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
+            </div>
+          </div>
+
+          {/* Estado y probabilidad */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <span style={shared.lbl}>Estado</span>
+              <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} style={shared.inp}>
+                {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: "0 0 120px" }}>
+              <span style={shared.lbl}>Probabilidad %</span>
+              <input type="number" min="0" max="100" value={form.probabilidad} onChange={e => setForm(p => ({ ...p, probabilidad: e.target.value }))} style={shared.inp} placeholder="0" />
+            </div>
+          </div>
+
+          {/* Fechas */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <span style={shared.lbl}>Fecha emisión</span>
+              <input type="date" value={form.fecha_emision} onChange={e => setForm(p => ({ ...p, fecha_emision: e.target.value }))} style={shared.inp} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={shared.lbl}>Vencimiento</span>
+              <input type="date" value={form.fecha_vencimiento} onChange={e => setForm(p => ({ ...p, fecha_vencimiento: e.target.value }))} style={shared.inp} />
+            </div>
+          </div>
+
+          {/* Observaciones */}
+          <div style={{ marginBottom: 16 }}>
+            <span style={shared.lbl}>Observaciones</span>
+            <textarea value={form.obs} onChange={e => setForm(p => ({ ...p, obs: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} placeholder="Notas internas…" />
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving} style={{ ...shared.btn, flex: 1 }}>
+              {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
+            </button>
+            <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
+          </div>
         </div>
       </div>
 
+      {showNuevoCli && <ModalNuevoCliente onCreado={clienteCreado} onClose={() => setShowNuevoCli(false)} />}
+    </>
+  );
+}
+
+/* ─── Lista de presupuestos ─── */
+export default function App() {
+  const [presupuestos, setPresupuestos] = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [showModal,    setShowModal]    = useState(false);
+  const [editando,     setEditando]     = useState(null);
+  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtroTipo,   setFiltroTipo]   = useState("todos");
+  const [isMobile,     setIsMobile]     = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", check);
+    cargar();
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  async function cargar() {
+    setLoading(true);
+    const tk = await getToken();
+    const d = await fetch(`${SUPA_URL}/presupuestos?order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
+    setPresupuestos(Array.isArray(d) ? d : []);
+    setLoading(false);
+  }
+
+  async function guardar(form) {
+    const tk = await getToken();
+    if (editando?.id) {
+      await fetch(`${SUPA_URL}/presupuestos?id=eq.${editando.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(form) });
+    } else {
+      await fetch(`${SUPA_URL}/presupuestos`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(form) });
+    }
+    setShowModal(false);
+    setEditando(null);
+    cargar();
+  }
+
+  async function cambiarEstado(id, estado) {
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ estado }) });
+    setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, estado } : p));
+  }
+
+  const filtrados = presupuestos.filter(p => {
+    const pasaEstado = filtroEstado === "todos" || p.estado === filtroEstado;
+    const pasaTipo   = filtroTipo   === "todos" || p.tipo_servicio === filtroTipo;
+    return pasaEstado && pasaTipo;
+  });
+
+  // KPIs
+  const totalMonto = presupuestos.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const enPipeline = presupuestos.filter(p => ["enviado","borrador"].includes(p.estado)).length;
+
+  return (
+    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: isMobile ? 16 : 28, maxWidth: 1100, margin: "0 auto" }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <p style={{ margin: 0, fontSize: 12, color: "#999", fontWeight: 500 }}>NPL · Admin</p>
+          <h1 style={{ margin: "2px 0 0", fontSize: isMobile ? 20 : 24, fontWeight: 700 }}>💰 Presupuestos</h1>
+        </div>
+        <button onClick={() => { setEditando(null); setShowModal(true); }} style={shared.btn}>+ Nuevo presupuesto</button>
+      </div>
+
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          ["Total", kpis.total],
-          ["Aprobados", kpis.aprobados],
-          ["En curso", kpis.enCurso],
-          ["Facturado ARS", kpis.monto > 0 ? "$ " + kpis.monto.toLocaleString("es-AR") : "—"],
-        ].map(([l, v]) => (
-          <div key={l} style={{ background: "#f9f9f9", borderRadius: 8, padding: "10px 14px", border: "1px solid #eee" }}>
-            <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{l}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 600, color: "#111" }}>{loading ? "..." : v}</p>
+          { label: "Total aprobado", value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
+          { label: "En pipeline",    value: enPipeline,                               color: "#3b82f6" },
+          { label: "Total",          value: presupuestos.length,                       color: "#888" },
+        ].map(k => (
+          <div key={k.label} style={{ ...shared.card, textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</div>
+            <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{k.label}</div>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          placeholder="Buscar cliente, código, descripción..."
-          value={busq} onChange={e => setBusq(e.target.value)}
-          style={{ ...s.input, flex: 1, minWidth: 200 }}
-        />
-        <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...s.input, width: "auto" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
           <option value="todos">Todos los estados</option>
-          {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
+          {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
         </select>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>Desde</span>
-          <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} style={{ ...s.input, width: 140 }} />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>Hasta</span>
-          <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} style={{ ...s.input, width: 140 }} />
-        </div>
-        {(fechaDesde || fechaHasta) && (
-          <button onClick={() => { setFechaDesde(""); setFechaHasta(""); }}
-            style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}>
-            Limpiar fechas
-          </button>
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
+          <option value="todos">Todos los tipos</option>
+          {TIPOS_SERVICIO.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+        </select>
+        {(filtroEstado !== "todos" || filtroTipo !== "todos") && (
+          <button onClick={() => { setFiltroEstado("todos"); setFiltroTipo("todos"); }} style={{ ...shared.btnSm, padding: "8px 12px" }}>✕ Limpiar</button>
         )}
+        <span style={{ fontSize: 13, color: "#aaa", alignSelf: "center" }}>{filtrados.length} resultados</span>
       </div>
 
-      {/* Estado */}
-      {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando datos...</p>}
-      {error && (
-        <div style={{ textAlign: "center", padding: 40 }}>
-          <p style={{ color: "#c00", marginBottom: 12 }}>Error: {error}</p>
-          <button onClick={load} style={{ ...s.btn, background: "#f5f5f5", border: "1px solid #ddd", color: "#333" }}>Reintentar</button>
-        </div>
-      )}
-
-      {!loading && !error && vista === "lista" && (
-        <Lista items={filtrados} onEdit={p => { setEditando(p); setVista("form"); }} onDelete={eliminar} onEstado={cambiarEstado} />
-      )}
-      {!loading && !error && vista === "kanban" && (
-        <Kanban items={filtrados} onEdit={p => { setEditando(p); setVista("form"); }} onEstado={cambiarEstado} />
-      )}
-      {!loading && !error && filtrados.length === 0 && (
-        <p style={{ textAlign: "center", padding: 40, color: "#999" }}>
-          {items.length === 0 ? 'No hay presupuestos. Hacé clic en "+ Nuevo" para crear el primero.' : "No hay resultados para ese filtro."}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Lista({ items, onEdit, onDelete, onEstado }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {items.map(p => (
-        <div key={p.id} style={{ ...s.card }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 500, color: "#999" }}>{p.codigo || "—"}</span>
-                <Badge estado={p.estado} />
-                <span style={{ fontSize: 12, color: "#aaa" }}>{p.tipo}</span>
-              </div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#111" }}>{p.cliente || "Sin cliente"}</p>
-              {p.descripcion && <p style={{ margin: "2px 0 0", fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion}</p>}
-            </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#111" }}>{fmt(p.monto, p.moneda)}</p>
-              {p.superficie && <p style={{ margin: "2px 0 0", fontSize: 12, color: "#aaa" }}>{p.superficie} m²</p>}
-            </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
-            <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#aaa", flexWrap: "wrap" }}>
-              {p.calculista && <span>👤 {p.calculista}</span>}
-              {p.fechaEmision && <span>📅 {p.fechaEmision}</span>}
-              {p.probabilidad > 0 && <span>🎯 {p.probabilidad}%</span>}
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <select value={p.estado} onChange={e => onEstado(p.id, e.target.value)}
-                style={{ fontSize: 11, padding: "3px 6px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#f9f9f9", cursor: "pointer" }}>
-                {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
-              </select>
-              <button onClick={() => onEdit(p)} style={{ fontSize: 11, padding: "3px 10px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#fff", cursor: "pointer" }}>Editar</button>
-              <button onClick={() => onDelete(p.id)} style={{ fontSize: 11, padding: "3px 10px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#fff", color: "#c00", cursor: "pointer" }}>✕</button>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Kanban({ items, onEdit, onEstado }) {
-  const cols = ESTADOS.filter(e => e.id !== "vencido");
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, alignItems: "start" }}>
-      {cols.map(col => {
-        const cards = items.filter(p => p.estado === col.id);
-        return (
-          <div key={col.id} style={{ background: "#f9f9f9", borderRadius: 10, padding: 10, border: "1px solid #eee" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: col.color }}>{col.label}</span>
-              <span style={{ fontSize: 11, background: col.bg, color: col.color, borderRadius: 99, padding: "1px 7px" }}>{cards.length}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {cards.map(p => (
-                <div key={p.id} onClick={() => onEdit(p)} style={{ ...s.card, cursor: "pointer" }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.cliente || "Sin cliente"}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#aaa" }}>{p.codigo}</p>
-                  <p style={{ margin: "4px 0 0", fontSize: 12, fontWeight: 600, color: "#111" }}>{fmt(p.monto, p.moneda)}</p>
+      {/* Lista */}
+      {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtrados.map(p => {
+            const estado = ESTADOS.find(e => e.v === p.estado);
+            const tipo   = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
+            return (
+              <div key={p.id} style={{ ...shared.card, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                    {p.codigo && <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa" }}>{p.codigo}</span>}
+                    {tipo && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 8, padding: "2px 8px", color: "#555" }}>{tipo.label}</span>}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 3 }}>{p.descripcion || "Sin descripción"}</div>
+                  <div style={{ fontSize: 13, color: "#888" }}>{p.cliente}</div>
+                  {p.obs && <div style={{ fontSize: 12, color: "#aaa", marginTop: 4, fontStyle: "italic" }}>{p.obs}</div>}
                 </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
-function FormView({ inicial, onSave, onCancel, saving }) {
-  const [f, setF] = useState({ ...inicial });
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                  {p.monto && (
+                    <div style={{ fontWeight: 800, fontSize: 16, color: "#111" }}>
+                      {p.moneda === "USD" ? "u$s" : "$"} {parseFloat(p.monto).toLocaleString("es-AR")}
+                    </div>
+                  )}
+                  {/* Selector estado inline */}
+                  <select
+                    value={p.estado || "borrador"}
+                    onChange={e => cambiarEstado(p.id, e.target.value)}
+                    style={{
+                      fontSize: 12, padding: "5px 8px", borderRadius: 8, cursor: "pointer",
+                      border: `1px solid ${estado?.color || "#e0e0e0"}`,
+                      color: estado?.color || "#888",
+                      background: "#fff", fontWeight: 600,
+                    }}
+                  >
+                    {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
+                  </select>
 
-  return (
-    <div style={{ ...s.sans, padding: "20px", maxWidth: 800, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <button onClick={onCancel} style={{ fontSize: 13, color: "#666", background: "none", border: "none", cursor: "pointer", padding: 0 }}>← Volver</button>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#111" }}>
-          {f.id ? `Editar ${f.codigo || "presupuesto"}` : "Nuevo presupuesto"}
-        </h2>
-      </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => { setEditando(p); setShowModal(true); }} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {filtrados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
+        </div>
+      )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 }}>
-        <F label="Cliente / empresa *"><input style={s.input} value={f.cliente} onChange={e => set("cliente", e.target.value)} placeholder="Nombre del cliente" /></F>
-        <F label="Tipo de proyecto"><select style={s.input} value={f.tipo} onChange={e => set("tipo", e.target.value)}>{TIPOS.map(t => <option key={t}>{t}</option>)}</select></F>
-        <F label="Descripción"><input style={s.input} value={f.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Descripción breve" /></F>
-        <F label="Superficie (m²)"><input style={s.input} type="number" value={f.superficie} onChange={e => set("superficie", e.target.value)} placeholder="ej: 120" /></F>
-        <F label="Monto">
-          <div style={{ display: "flex", gap: 6 }}>
-            <select style={{ ...s.input, width: 80 }} value={f.moneda} onChange={e => set("moneda", e.target.value)}>
-              <option>ARS</option><option>USD</option>
-            </select>
-            <input style={{ ...s.input, flex: 1 }} type="number" value={f.monto} onChange={e => set("monto", e.target.value)} placeholder="0" />
-          </div>
-        </F>
-        <F label="Estado"><select style={s.input} value={f.estado} onChange={e => set("estado", e.target.value)}>{ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></F>
-        <F label="Calculista asignado"><input style={s.input} value={f.calculista} onChange={e => set("calculista", e.target.value)} placeholder="Nombre del calculista" /></F>
-        <F label={`Probabilidad de cierre: ${f.probabilidad}%`}><input type="range" min={0} max={100} step={5} value={f.probabilidad} onChange={e => set("probabilidad", Number(e.target.value))} style={{ width: "100%" }} /></F>
-        <F label="Fecha de emisión"><input style={s.input} type="date" value={f.fechaEmision} onChange={e => set("fechaEmision", e.target.value)} /></F>
-        <F label="Fecha de vencimiento"><input style={s.input} type="date" value={f.fechaVencimiento} onChange={e => set("fechaVencimiento", e.target.value)} /></F>
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <F label="Observaciones">
-          <textarea style={{ ...s.input, resize: "vertical" }} value={f.obs} onChange={e => set("obs", e.target.value)} rows={3} placeholder="Notas internas..." />
-        </F>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
-        <button onClick={() => { if (!f.cliente?.trim()) return alert("El cliente es obligatorio"); onSave(f); }} disabled={saving}
-          style={{ ...s.btn, background: "#111", color: "#fff", opacity: saving ? 0.6 : 1 }}>
-          {saving ? "Guardando..." : "Guardar presupuesto"}
-        </button>
-        <button onClick={onCancel} style={{ ...s.btn, background: "#f5f5f5", color: "#555", border: "1px solid #e5e5e5" }}>Cancelar</button>
-      </div>
-    </div>
-  );
-}
-
-function F({ label, children }) {
-  return (
-    <div>
-      <label style={s.label}>{label}</label>
-      {children}
+      {showModal && (
+        <ModalPresupuesto
+          pres={editando}
+          onGuardar={guardar}
+          onClose={() => { setShowModal(false); setEditando(null); }}
+        />
+      )}
     </div>
   );
 }
