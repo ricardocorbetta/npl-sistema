@@ -7,7 +7,8 @@ import CRM from './CRM.jsx'
 import Dashboard from './Dashboard.jsx'
 import Obras from './Obras.jsx'
 
-const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
+const EDGE_URL        = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
+const EDGE_LIST_URL   = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
 
 const APPS_ADMIN = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '📊', desc: 'Panel de control' },
@@ -229,8 +230,12 @@ function Usuarios({ session }) {
   useEffect(() => { cargar() }, [])
 
   const cargar = async () => {
-    const { data } = await supabase.from('perfiles').select('*').order('created_at', { ascending: false })
-    setUsers(data || [])
+    const { data: { session: s } } = await supabase.auth.getSession()
+    const res = await fetch(EDGE_LIST_URL, {
+      headers: { 'Authorization': `Bearer ${s.access_token}` }
+    })
+    const json = await res.json()
+    setUsers(json.data || [])
     setLoading(false)
   }
 
