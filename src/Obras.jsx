@@ -1,7 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYzODMxMjMsImV4cCI6MjA2MTk1OTEyM30.3L4YPsHnFWEBFLlJEZYFoX4wCYwZiHGHERgKCbUqiH4";
+
+async function getToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || ANON_KEY;
+}
 
 function hdrs(token) {
   return {
@@ -346,30 +352,34 @@ function VistaAdmin({ token }) {
 
   async function cargarObras() {
     setLoading(true);
-    const r = await fetch(`${SUPA_URL}/obras_campo?order=created_at.desc&select=*`, { headers: hdrs(token) });
+    const tk = await getToken();
+    const r = await fetch(`${SUPA_URL}/obras_campo?order=created_at.desc&select=*`, { headers: hdrs(tk) });
     const d = await r.json();
     setObras(Array.isArray(d) ? d : []);
     setLoading(false);
   }
 
   async function cargarJefes() {
-    const r = await fetch(`${SUPA_URL}/perfiles?rol=eq.jefe_obra&select=id,nombre`, { headers: hdrs(token) });
+    const tk = await getToken();
+    const r = await fetch(`${SUPA_URL}/perfiles?rol=eq.jefe_obra&select=id,nombre`, { headers: hdrs(tk) });
     const d = await r.json();
     setJefesList(Array.isArray(d) ? d : []);
   }
 
   async function seleccionar(o) {
     setSelected(o);
+    const tk = await getToken();
     const [t, p] = await Promise.all([
-      fetch(`${SUPA_URL}/tareas_obra?obra_id=eq.${o.id}&order=orden.asc`, { headers: hdrs(token) }).then(r => r.json()),
-      fetch(`${SUPA_URL}/partes_diarios?obra_id=eq.${o.id}&order=fecha.desc&limit=30`, { headers: hdrs(token) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/tareas_obra?obra_id=eq.${o.id}&order=orden.asc`, { headers: hdrs(tk) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/partes_diarios?obra_id=eq.${o.id}&order=fecha.desc&limit=30`, { headers: hdrs(tk) }).then(r => r.json()),
     ]);
     setTareas(Array.isArray(t) ? t : []);
     setPartes(Array.isArray(p) ? p : []);
   }
 
   async function crearObra() {
-    await fetch(`${SUPA_URL}/obras_campo`, { method: "POST", headers: hdrs(token), body: JSON.stringify(nuevaObra) });
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/obras_campo`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(nuevaObra) });
     setShowModal(false);
     setNuevaObra({ nombre: "", cliente: "", direccion: "", fecha_inicio_plan: "", fecha_fin_plan: "", jefe_id: "" });
     cargarObras();
@@ -377,14 +387,16 @@ function VistaAdmin({ token }) {
 
   async function crearTarea() {
     if (!selected) return;
-    await fetch(`${SUPA_URL}/tareas_obra`, { method: "POST", headers: hdrs(token), body: JSON.stringify({ ...nuevaTarea, obra_id: selected.id, orden: tareas.length }) });
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/tareas_obra`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ ...nuevaTarea, obra_id: selected.id, orden: tareas.length }) });
     setShowTareaM(false);
     setNuevaTarea({ nombre: "", fecha_inicio_plan: "", fecha_fin_plan: "" });
     seleccionar(selected);
   }
 
   async function cambiarEstado(id, estado) {
-    await fetch(`${SUPA_URL}/obras_campo?id=eq.${id}`, { method: "PATCH", headers: hdrs(token), body: JSON.stringify({ estado }) });
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/obras_campo?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ estado }) });
     cargarObras();
     if (selected?.id === id) setSelected(prev => ({ ...prev, estado }));
   }
