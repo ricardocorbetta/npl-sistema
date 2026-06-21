@@ -81,7 +81,7 @@ export default function Root() {
   if (current === 'calculistas')  return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Calculistas /></Layout>
   if (current === 'crm')          return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
   if (current === 'dashboard')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
-  if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras token={session?.access_token} perfil={perfil} onLogout={logout} /></Layout>
+  if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras perfil={perfil} onLogout={logout} /></Layout>
   if (current === 'usuarios')     return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Usuarios session={session} /></Layout>
 
   return (
