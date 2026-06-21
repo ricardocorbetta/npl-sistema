@@ -6,6 +6,7 @@ import Calculistas from './Calculistas.jsx'
 import CRM from './CRM.jsx'
 import Dashboard from './Dashboard.jsx'
 import Obras from './Obras.jsx'
+import Biblioteca from './Biblioteca.jsx'
 
 const EDGE_URL        = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
 const EDGE_LIST_URL   = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
@@ -17,6 +18,7 @@ const APPS_ADMIN = [
   { id: 'obras',        label: 'Obras',         icon: '🏗️', desc: 'Seguimiento diario' },
   { id: 'calculistas',  label: 'Calculistas',   icon: '👷', desc: 'Equipo y postulantes' },
   { id: 'crm',          label: 'Clientes',      icon: '👥', desc: '148 contactos' },
+  { id: 'biblioteca',   label: 'Biblioteca',    icon: '📚', desc: 'Rubros y tareas' },
   { id: 'usuarios',     label: 'Usuarios',      icon: '⚙️', desc: 'Gestión de accesos' },
 ]
 
@@ -82,6 +84,7 @@ export default function Root() {
   if (current === 'crm')          return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
   if (current === 'dashboard')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
   if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras perfil={perfil} onLogout={logout} /></Layout>
+  if (current === 'biblioteca')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Biblioteca /></Layout>
   if (current === 'usuarios')     return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Usuarios session={session} /></Layout>
 
   return (
