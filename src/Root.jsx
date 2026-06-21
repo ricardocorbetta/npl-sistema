@@ -7,7 +7,8 @@ import CRM from './CRM.jsx'
 import Dashboard from './Dashboard.jsx'
 import Obras from './Obras.jsx'
 
-// Apps disponibles por rol
+const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
+
 const APPS_ADMIN = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '📊', desc: 'Panel de control' },
   { id: 'presupuestos', label: 'Presupuestos',  icon: '📋', desc: 'Pipeline y seguimiento' },
@@ -54,7 +55,6 @@ export default function Root() {
   const cargarPerfil = async (uid) => {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
     setPerfil(data)
-    // jefe_obra va directo a obras
     if (data?.rol === 'jefe_obra') setCurrent('obras')
     setLoading(false)
   }
@@ -71,7 +71,6 @@ export default function Root() {
   )
 
   if (!session) return <LoginScreen />
-
   if (!perfil || !perfil.activo) return <PendienteScreen onLogout={logout} perfil={perfil} />
 
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
@@ -82,9 +81,8 @@ export default function Root() {
   if (current === 'crm')          return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
   if (current === 'dashboard')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
   if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras token={session?.access_token} perfil={perfil} onLogout={logout} /></Layout>
-  if (current === 'usuarios')     return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Usuarios /></Layout>
+  if (current === 'usuarios')     return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Usuarios session={session} /></Layout>
 
-  // Home — jefe_obra no llega acá (va directo a obras)
   return (
     <div style={{ ...s.sans, minHeight: '100vh', background: '#f9f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ marginBottom: 32, textAlign: 'center' }}>
@@ -109,13 +107,11 @@ export default function Root() {
   )
 }
 
-// ─── Layout con navbar ────────────────────────────────────────
+// ─── Layout ───────────────────────────────────────────────────
 function Layout({ current, onNav, apps, onLogout, perfil, children }) {
-  // jefe_obra: sin navbar, pantalla completa
   if (perfil?.rol === 'jefe_obra') {
     return <div style={{ ...s.sans, minHeight: '100vh', background: '#f8f8f8' }}>{children}</div>
   }
-
   return (
     <div style={{ ...s.sans, minHeight: '100vh', background: '#fff' }}>
       <div style={{ background: '#111', padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 46, overflowX: 'auto' }}>
@@ -169,7 +165,6 @@ function LoginScreen() {
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111' }}>NPL Sistema</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>Ingeniería Civil</p>
         </div>
-
         <div style={{ display: 'flex', border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
           {[['login', 'Ingresar'], ['registro', 'Registrarse']].map(([id, label]) => (
             <button key={id} onClick={() => { setTab(id); setMsg('') }}
@@ -178,27 +173,22 @@ function LoginScreen() {
             </button>
           ))}
         </div>
-
         {tab === 'registro' && (
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Nombre completo</label>
             <input style={s.inp} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
           </div>
         )}
-
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Email</label>
           <input style={s.inp} type="email" value={mail} onChange={e => setMail(e.target.value)} placeholder="tu@mail.com" />
         </div>
-
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Contraseña</label>
           <input style={s.inp} type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
             onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? login() : registro())} />
         </div>
-
         {msg && <p style={{ fontSize: 13, color: msg.includes('exitoso') ? '#3B6D11' : '#c00', marginBottom: 14, textAlign: 'center' }}>{msg}</p>}
-
         <button onClick={tab === 'login' ? login : registro} disabled={loading}
           style={{ width: '100%', padding: '13px', fontSize: 15, fontWeight: 700, borderRadius: 10, border: 'none', background: loading ? '#aaa' : '#111', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer' }}>
           {loading ? 'Cargando...' : tab === 'login' ? 'Ingresar' : 'Crear cuenta'}
@@ -227,27 +217,104 @@ function PendienteScreen({ onLogout, perfil }) {
   )
 }
 
-// ─── Panel de usuarios (solo admin) ──────────────────────────
-function Usuarios() {
-  const [users, setUsers]   = useState([])
+// ─── Panel de usuarios ────────────────────────────────────────
+function Usuarios({ session }) {
+  const [users, setUsers]     = useState([])
   const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [msg, setMsg]         = useState('')
+  const [form, setForm]       = useState({ nombre: '', email: '', password: '', rol: 'calculista' })
 
-  useEffect(() => {
-    supabase.from('perfiles').select('*').order('created_at', { ascending: false })
-      .then(({ data }) => { setUsers(data || []); setLoading(false) })
-  }, [])
+  useEffect(() => { cargar() }, [])
+
+  const cargar = async () => {
+    const { data } = await supabase.from('perfiles').select('*').order('created_at', { ascending: false })
+    setUsers(data || [])
+    setLoading(false)
+  }
 
   const actualizar = async (id, campo, valor) => {
     await supabase.from('perfiles').update({ [campo]: valor }).eq('id', id)
     setUsers(prev => prev.map(u => u.id === id ? { ...u, [campo]: valor } : u))
   }
 
+  const crearUsuario = async () => {
+    if (!form.nombre || !form.email || !form.password) return setMsg('Completá todos los campos')
+    setSaving(true); setMsg('')
+    try {
+      const { data: { session: s } } = await supabase.auth.getSession()
+      const res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${s.access_token}`,
+        },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (data.error) { setMsg(data.error); setSaving(false); return }
+      setMsg('✓ Usuario creado correctamente')
+      setForm({ nombre: '', email: '', password: '', rol: 'calculista' })
+      setShowForm(false)
+      cargar()
+    } catch (e) { setMsg('Error de conexión') }
+    setSaving(false)
+  }
+
+  const ROLES = [
+    { value: 'admin',      label: 'Admin' },
+    { value: 'jefe_obra',  label: 'Jefe de Obra' },
+    { value: 'calculista', label: 'Calculista' },
+    { value: 'pendiente',  label: 'Pendiente' },
+  ]
+
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px', maxWidth: 800, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ margin: 0, fontSize: 12, color: '#999', fontWeight: 500 }}>NPL · Admin</p>
-        <h1 style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 700, color: '#111' }}>Gestión de usuarios</h1>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', padding: '24px 20px', maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20 }}>
+        <div>
+          <p style={{ margin: 0, fontSize: 12, color: '#999', fontWeight: 500 }}>NPL · Admin</p>
+          <h1 style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 700, color: '#111' }}>Gestión de usuarios</h1>
+        </div>
+        <button onClick={() => { setShowForm(!showForm); setMsg('') }}
+          style={{ padding: '9px 18px', fontSize: 13, fontWeight: 600, background: '#111', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer' }}>
+          {showForm ? 'Cancelar' : '+ Nuevo usuario'}
+        </button>
       </div>
+
+      {/* Formulario nuevo usuario */}
+      {showForm && (
+        <div style={{ background: '#f9f9f9', border: '1px solid #e5e5e5', borderRadius: 14, padding: 20, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600 }}>Nuevo usuario</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Nombre completo *</label>
+              <input style={s.inp} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre y apellido" />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Email *</label>
+              <input style={s.inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="usuario@mail.com" />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Contraseña *</label>
+              <input style={s.inp} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Rol *</label>
+              <select style={{ ...s.inp }} value={form.rol} onChange={e => setForm(p => ({ ...p, rol: e.target.value }))}>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
+          </div>
+          {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#3B6D11' : '#c00', margin: '0 0 12px' }}>{msg}</p>}
+          <button onClick={crearUsuario} disabled={saving}
+            style={{ padding: '10px 24px', fontSize: 14, fontWeight: 600, background: saving ? '#aaa' : '#111', color: '#fff', border: 'none', borderRadius: 10, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Creando...' : 'Crear usuario'}
+          </button>
+        </div>
+      )}
+
+      {msg && !showForm && <p style={{ fontSize: 13, color: '#3B6D11', marginBottom: 16 }}>{msg}</p>}
 
       {loading && <p style={{ color: '#aaa' }}>Cargando...</p>}
 
@@ -261,10 +328,7 @@ function Usuarios() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select value={u.rol} onChange={e => actualizar(u.id, 'rol', e.target.value)}
                 style={{ fontSize: 12, padding: '5px 8px', border: '1px solid #e5e5e5', borderRadius: 8, background: '#f9f9f9', cursor: 'pointer' }}>
-                <option value="pendiente">Pendiente</option>
-                <option value="admin">Admin</option>
-                <option value="jefe_obra">Jefe de Obra</option>
-                <option value="calculista">Calculista</option>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
               <button onClick={() => actualizar(u.id, 'activo', !u.activo)}
                 style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: u.activo ? '#EAF3DE' : '#f5f5f5', color: u.activo ? '#3B6D11' : '#888', fontWeight: 600 }}>
