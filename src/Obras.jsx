@@ -538,9 +538,9 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
     async function cargarRelaciones() {
       const tk = await getToken();
       const [pArr, cArr, caArr, prArr] = await Promise.all([
-        fetch(`${SUPA_URL}/proyectos?select=id,nombre&order=nombre.asc`,         { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/clientes?select=id,nombre&order=nombre.asc`,          { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/calculistas?select=id,nombre&order=nombre.asc`,       { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/proyectos?select=id,descripcion,numero_proyecto&order=numero_proyecto.asc`,         { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`,          { headers: hdrs(tk) }).then(r => r.json()),
+        Promise.resolve([]),
         fetch(`${SUPA_URL}/presupuestos?select=id,nombre&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
       ]);
       setProyectos(Array.isArray(pArr) ? pArr : []);
@@ -622,7 +622,7 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
             <span style={shared.lbl}>🏢 Cliente (CRM)</span>
             <select value={form.cliente_id} onChange={e => setForm(p => ({ ...p, cliente_id: e.target.value }))} style={shared.inp}>
               <option value="">Sin vincular</option>
-              {clientesCRM.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              {clientesCRM.map(c => <option key={c.id} value={c.id}>{c.empresa}</option>)}
             </select>
           </div>
 
@@ -630,7 +630,7 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
             <span style={shared.lbl}>📋 Proyecto (Ingeniería)</span>
             <select value={form.proyecto_id} onChange={e => setForm(p => ({ ...p, proyecto_id: e.target.value }))} style={shared.inp}>
               <option value="">Sin vincular</option>
-              {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              {proyectos.map(p => <option key={p.id} value={p.id}>{p.numero_proyecto} — {p.descripcion}</option>)}
             </select>
           </div>
 
@@ -646,7 +646,7 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
             <span style={shared.lbl}>💰 Presupuesto aprobado</span>
             <select value={form.presupuesto_id} onChange={e => setForm(p => ({ ...p, presupuesto_id: e.target.value }))} style={shared.inp}>
               <option value="">Sin vincular</option>
-              {presupuestos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              {presupuestos.map(p => <option key={p.id} value={p.id}>{p.cliente} — {p.descripcion}</option>)}
             </select>
           </div>
         </div>
