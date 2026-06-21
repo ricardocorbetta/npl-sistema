@@ -54,6 +54,8 @@ export default function Root() {
   const cargarPerfil = async (uid) => {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
     setPerfil(data)
+    // jefe_obra va directo a obras
+    if (data?.rol === 'jefe_obra') setCurrent('obras')
     setLoading(false)
   }
 
@@ -75,14 +77,14 @@ export default function Root() {
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
   if (current === 'presupuestos') return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><App /></Layout>
-      if (current === 'proyectos')  return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Proyectos /></Layout>
+  if (current === 'proyectos')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Proyectos /></Layout>
   if (current === 'calculistas')  return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Calculistas /></Layout>
   if (current === 'crm')          return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
   if (current === 'dashboard')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
-  if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras /></Layout>
+  if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras token={session?.access_token} perfil={perfil} onLogout={logout} /></Layout>
   if (current === 'usuarios')     return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Usuarios /></Layout>
 
-  // Home
+  // Home — jefe_obra no llega acá (va directo a obras)
   return (
     <div style={{ ...s.sans, minHeight: '100vh', background: '#f9f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ marginBottom: 32, textAlign: 'center' }}>
@@ -109,6 +111,11 @@ export default function Root() {
 
 // ─── Layout con navbar ────────────────────────────────────────
 function Layout({ current, onNav, apps, onLogout, perfil, children }) {
+  // jefe_obra: sin navbar, pantalla completa
+  if (perfil?.rol === 'jefe_obra') {
+    return <div style={{ ...s.sans, minHeight: '100vh', background: '#f8f8f8' }}>{children}</div>
+  }
+
   return (
     <div style={{ ...s.sans, minHeight: '100vh', background: '#fff' }}>
       <div style={{ background: '#111', padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 46, overflowX: 'auto' }}>
