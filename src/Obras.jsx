@@ -796,7 +796,29 @@ function VistaAdmin() {
                 {o.codigo && <div style={{ fontSize: 10, fontWeight: 700, color: !isMobile && selected?.id === o.id ? "#666" : "#aaa", marginBottom: 2 }}>{o.codigo}</div>}
                 <div style={{ fontWeight: 600, fontSize: 13, color: !isMobile && selected?.id === o.id ? "#fff" : "#111" }}>{o.nombre}</div>
                 {o.cliente && <div style={{ fontSize: 11, color: !isMobile && selected?.id === o.id ? "#aaa" : "#888", marginTop: 2 }}>{o.cliente}</div>}
-                {jefe && <div style={{ fontSize: 11, color: !isMobile && selected?.id === o.id ? "#666" : "#aaa", marginTop: 1 }}>👷 {jefe.nombre}</div>}
+                {/* Selector responsable inline */}
+                <select
+                  value={o.jefe_id || ""}
+                  onClick={e => e.stopPropagation()}
+                  onChange={async e => {
+                    e.stopPropagation();
+                    const nuevoJefeId = e.target.value;
+                    const tk = await getToken();
+                    await fetch(`${SUPA_URL}/obras_campo?id=eq.${o.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ jefe_id: nuevoJefeId || null }) });
+                    setObras(prev => prev.map(ob => ob.id === o.id ? { ...ob, jefe_id: nuevoJefeId || null } : ob));
+                    if (selected?.id === o.id) setSelected(prev => ({ ...prev, jefe_id: nuevoJefeId || null }));
+                  }}
+                  style={{
+                    marginTop: 6, fontSize: 11, padding: "3px 6px",
+                    border: "1px solid " + (!isMobile && selected?.id === o.id ? "#444" : "#e0e0e0"),
+                    borderRadius: 6, background: !isMobile && selected?.id === o.id ? "#222" : "#f8f8f8",
+                    color: !isMobile && selected?.id === o.id ? "#ccc" : "#555",
+                    cursor: "pointer", width: "100%", maxWidth: 200,
+                  }}
+                >
+                  <option value="">👷 Sin responsable</option>
+                  {jefesList.map(j => <option key={j.id} value={j.id}>👷 {j.nombre}</option>)}
+                </select>
                 <div style={{ marginTop: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4, color: !isMobile && selected?.id === o.id ? "#aaa" : "#888" }}>
