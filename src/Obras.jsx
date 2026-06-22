@@ -722,8 +722,8 @@ function VistaAdmin() {
       const tk2 = await getToken();
       const tArr = await fetch(`${SUPA_URL}/tareas_obra?obra_id=eq.${o.id}&select=id`, { headers: hdrs(tk2) }).then(r => r.json());
       if (!Array.isArray(tArr) || tArr.length === 0) { avMap[o.id] = 0; return; }
-      const ids = tArr.map(t => `tarea_id=eq.${t.id}`).join(",");
-      const avArr = await fetch(`${SUPA_URL}/avances_tarea?or=(${ids})&order=created_at.desc`, { headers: hdrs(tk2) }).then(r => r.json());
+      const ids = tArr.map(t => t.id).join(",");
+      const avArr = await fetch(`${SUPA_URL}/avances_tarea?tarea_id=in.(${ids})&order=created_at.desc`, { headers: hdrs(tk2) }).then(r => r.json());
       if (!Array.isArray(avArr) || avArr.length === 0) { avMap[o.id] = 0; return; }
       const latest = {};
       avArr.forEach(a => { if (!latest[a.tarea_id]) latest[a.tarea_id] = a.porcentaje; });
@@ -747,16 +747,16 @@ function VistaAdmin() {
     setPartes(Array.isArray(pArr) ? pArr : []);
 
     if (tFinal.length > 0) {
-      const ids = tFinal.map(t => `tarea_id=eq.${t.id}`).join(",");
-      const avArr = await fetch(`${SUPA_URL}/avances_tarea?or=(${ids})&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
+      const ids = tFinal.map(t => t.id).join(",");
+      const avArr = await fetch(`${SUPA_URL}/avances_tarea?tarea_id=in.(${ids})&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
       const avMap = {};
       (Array.isArray(avArr) ? avArr : []).forEach(a => { if (!avMap[a.tarea_id]) avMap[a.tarea_id] = a; });
       setAvancesTareas(avMap);
 
       // Cargar archivos de cada avance
-      const avIds = Object.values(avMap).map(a => `avance_id=eq.${a.id}`).join(",");
+      const avIds = Object.values(avMap).map(a => a.id).join(",");
       if (avIds) {
-        const archArr = await fetch(`${SUPA_URL}/archivos_avance?or=(${avIds})`, { headers: hdrs(tk) }).then(r => r.json());
+        const archArr = await fetch(`${SUPA_URL}/archivos_avance?avance_id=in.(${avIds})`, { headers: hdrs(tk) }).then(r => r.json());
         const archMap = {};
         (Array.isArray(archArr) ? archArr : []).forEach(ar => {
           if (!archMap[ar.avance_id]) archMap[ar.avance_id] = [];
