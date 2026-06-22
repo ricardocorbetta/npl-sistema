@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import Combobox from "./Combobox.jsx";
 import { supabase } from "./supabase.js";
+import Combobox from "./Combobox.jsx";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
-const SUPA_STORAGE = "https://imkmosifqxzbtqgzssst.supabase.co/storage/v1";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
 
 async function getToken() {
@@ -53,30 +52,24 @@ const shared = {
   lbl:  { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6, display: "block" },
 };
 
-/* ─── Upload archivo a Supabase Storage ─── */
+/* ─── Upload archivo ─── */
 async function uploadArchivo(file, codigoObra, tipo) {
   const ext = file.name.split(".").pop();
   const fecha = new Date().toISOString().slice(0, 10);
   const path = `obras/${codigoObra || "sin-codigo"}/${fecha}/${tipo}/${Date.now()}.${ext}`;
-
-  const { data, error } = await supabase.storage
-    .from("npl-obras")
-    .upload(path, file, { upsert: true, contentType: file.type });
-
+  const { data, error } = await supabase.storage.from("npl-obras").upload(path, file, { upsert: true, contentType: file.type });
   if (error) throw new Error("Error al subir: " + error.message);
-  return { path, url: path, tipo, nombre: file.name };
+  return { path, tipo, nombre: file.name };
 }
 
-/* ─── URL firmada para ver archivo privado ─── */
+/* ─── URL firmada ─── */
 async function getUrlFirmada(path) {
-  const { data, error } = await supabase.storage
-    .from("npl-obras")
-    .createSignedUrl(path, 3600);
-  if (error) { console.error(error); return null; }
+  const { data, error } = await supabase.storage.from("npl-obras").createSignedUrl(path, 3600);
+  if (error) return null;
   return data.signedUrl;
 }
 
-/* ─── Formatear fecha relativa ─── */
+/* ─── Fecha relativa ─── */
 function fechaRelativa(fecha) {
   if (!fecha) return null;
   const hoy = new Date();
@@ -90,18 +83,27 @@ function fechaRelativa(fecha) {
   return f.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
 }
 
+/* ─── Ícono por tipo de archivo ─── */
+function iconoArchivo(tipo) {
+  if (tipo === "foto")  return "📷";
+  if (tipo === "video") return "🎥";
+  if (tipo === "audio") return "🎙️";
+  return "📎";
+}
+
 /* ════════════════════════════════════════════
-   PANEL AVANCE — para jefe (marcar % + nota + archivo)
+   PANEL AVANCE — bottom sheet para marcar % + nota + archivo
 ════════════════════════════════════════════ */
-function PanelAvance({ tarea, avanceActual, obraCodigo, onGuardar, onClose }) {
+function PanelAvance({ tarea, avanceActual, notaActual, obraCodigo, onGuardar, onClose }) {
   const [pct,     setPct]     = useState(avanceActual || 0);
-  const [nota,    setNota]    = useState("");
+  const [nota,    setNota]    = useState(notaActual || "");
   const [archivo, setArchivo] = useState(null);
   const [subiendo,setSubiendo]= useState(false);
   const [msg,     setMsg]     = useState("");
   const fotoRef  = useRef();
   const videoRef = useRef();
   const audioRef = useRef();
+  const color = ETAPA_COLOR[tarea.etapa] || "#888";
 
   async function guardar() {
     setSubiendo(true);
@@ -109,89 +111,78 @@ function PanelAvance({ tarea, avanceActual, obraCodigo, onGuardar, onClose }) {
       let archivoData = null;
       if (archivo) {
         const tipo = archivo.type.startsWith("image") ? "foto" : archivo.type.startsWith("video") ? "video" : "audio";
-        archivoData = await uploadArchivo(archivo, obraCodigo || "sin-codigo", tipo);
-        archivoData.tipo = tipo;
-        archivoData.nombre = archivo.name;
+        archivoData = await uploadArchivo(archivo, obraCodigo, tipo);
       }
       await onGuardar(pct, nota, archivoData);
       onClose();
-    } catch (e) { setMsg("Error al guardar: " + e.message); }
+    } catch (e) { setMsg("Error: " + e.message); }
     setSubiendo(false);
   }
 
-  const color = ETAPA_COLOR[tarea.etapa] || "#888";
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 200 }}>
-      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
-        {/* Handle */}
-        <div style={{ width: 40, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "0 auto 20px" }} />
-
+      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 40px", width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ width: 40, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "0 auto 16px" }} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 11, color: color, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>{tarea.etapa}</div>
+            <div style={{ fontSize: 11, color, fontWeight: 700, textTransform: "uppercase", marginBottom: 2 }}>{tarea.etapa}</div>
             <div style={{ fontWeight: 700, fontSize: 17 }}>{tarea.nombre}</div>
             {tarea.fecha_inicio_plan && (
-              <div style={{ fontSize: 12, color: "#aaa", marginTop: 3 }}>
-                Inicio estimado: {fechaRelativa(tarea.fecha_inicio_plan)} · {new Date(tarea.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")}
+              <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>
+                📅 {new Date(tarea.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")}
+                {tarea.fecha_fin_plan && ` → ${new Date(tarea.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}`}
               </div>
             )}
           </div>
           <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 10px" }}>✕</button>
         </div>
 
-        {/* Selector % */}
         <span style={shared.lbl}>Avance</span>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           {PCT_BTNS.map(p => (
             <button key={p} onClick={() => setPct(p)} style={{
-              ...shared.btnSm, minWidth: 50, minHeight: 44, fontWeight: 700, fontSize: 14,
+              ...shared.btnSm, minWidth: 52, minHeight: 44, fontWeight: 700, fontSize: 14,
               background: pct === p ? color : "#f0f0f0",
               color: pct === p ? "#fff" : "#333",
             }}>{p}%</button>
           ))}
         </div>
-
-        {/* Barra */}
-        <div style={{ height: 8, background: "#f0f0f0", borderRadius: 4, overflow: "hidden", marginBottom: 20 }}>
+        <div style={{ height: 8, background: "#f0f0f0", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
           <div style={{ height: "100%", width: `${pct}%`, background: pct === 100 ? "#22c55e" : color, transition: "width .3s" }} />
         </div>
 
-        {/* Nota */}
-        <span style={shared.lbl}>Nota (opcional)</span>
-        <textarea
-          value={nota} onChange={e => setNota(e.target.value)}
-          placeholder="¿Qué se hizo hoy en esta tarea?"
-          rows={3} style={{ ...shared.inp, resize: "none", marginBottom: 16, lineHeight: 1.5 }}
-        />
+        <span style={shared.lbl}>Nota</span>
+        <textarea value={nota} onChange={e => setNota(e.target.value)} placeholder="¿Qué se hizo? Observaciones…" rows={3} style={{ ...shared.inp, resize: "none", marginBottom: 16, lineHeight: 1.5 }} />
 
-        {/* Adjuntar archivo */}
-        <span style={shared.lbl}>Adjuntar</span>
+        <span style={shared.lbl}>Adjuntar archivo</span>
+        <input ref={fotoRef}  type="file" accept="image/*"   capture="environment" style={{ display: "none" }} onChange={e => setArchivo(e.target.files[0])} />
+        <input ref={videoRef} type="file" accept="video/*"   capture="environment" style={{ display: "none" }} onChange={e => setArchivo(e.target.files[0])} />
+        <input ref={audioRef} type="file" accept="audio/*"                         style={{ display: "none" }} onChange={e => setArchivo(e.target.files[0])} />
         <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-          <input ref={fotoRef}  type="file" accept="image/*"   capture="environment" style={{ display: "none" }} onChange={e => setArchivo(e.target.files[0])} />
-          <input ref={videoRef} type="file" accept="video/*"   capture="environment" style={{ display: "none" }} onChange={e => setArchivo(e.target.files[0])} />
-          <input ref={audioRef} type="file" accept="audio/*"                         style={{ display: "none" }} onChange={e => setArchivo(e.target.files[0])} />
-
-          <button onClick={() => fotoRef.current.click()}  style={{ ...shared.btnSm, flex: 1, minHeight: 48, fontSize: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            📷<span style={{ fontSize: 10 }}>Foto</span>
-          </button>
-          <button onClick={() => videoRef.current.click()} style={{ ...shared.btnSm, flex: 1, minHeight: 48, fontSize: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            🎥<span style={{ fontSize: 10 }}>Video</span>
-          </button>
-          <button onClick={() => audioRef.current.click()} style={{ ...shared.btnSm, flex: 1, minHeight: 48, fontSize: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            🎙️<span style={{ fontSize: 10 }}>Audio</span>
-          </button>
+          {[
+            { ref: fotoRef,  emoji: "📷", label: "Foto" },
+            { ref: videoRef, emoji: "🎥", label: "Video" },
+            { ref: audioRef, emoji: "🎙️", label: "Audio" },
+          ].map(({ ref, emoji, label }) => (
+            <button key={label} onClick={() => ref.current.click()} style={{
+              ...shared.btnSm, flex: 1, minHeight: 52, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontSize: 22,
+              border: "1px dashed #ddd",
+            }}>
+              {emoji}<span style={{ fontSize: 11, color: "#888" }}>{label}</span>
+            </button>
+          ))}
         </div>
 
         {archivo && (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 12px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#16a34a" }}>📎 {archivo.name}</span>
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 12px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#16a34a" }}>
+              {archivo.type.startsWith("image") ? "📷" : archivo.type.startsWith("video") ? "🎥" : "🎙️"} {archivo.name}
+            </span>
             <button onClick={() => setArchivo(null)} style={{ ...shared.btnSm, padding: "3px 8px", fontSize: 11 }}>✕</button>
           </div>
         )}
 
-        {msg && <div style={{ color: "#e53", fontSize: 13, marginBottom: 12 }}>{msg}</div>}
-
+        {msg && <div style={{ color: "#e53", fontSize: 13, marginBottom: 10 }}>{msg}</div>}
         <button onClick={guardar} disabled={subiendo} style={{ ...shared.btn, width: "100%", minHeight: 50, fontSize: 16 }}>
           {subiendo ? "Guardando…" : "Guardar avance"}
         </button>
@@ -201,21 +192,273 @@ function PanelAvance({ tarea, avanceActual, obraCodigo, onGuardar, onClose }) {
 }
 
 /* ════════════════════════════════════════════
+   PANEL TAREA — historial + repositorio documental
+════════════════════════════════════════════ */
+function PanelHistorial({ tarea, obraCodigo, onClose }) {
+  const [historial, setHistorial] = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const color = ETAPA_COLOR[tarea.etapa] || "#888";
+
+  useEffect(() => {
+    async function cargar() {
+      const tk = await getToken();
+      // Todos los avances de esta tarea con archivos
+      const avArr = await fetch(
+        `${SUPA_URL}/avances_tarea?tarea_id=eq.${tarea.id}&order=created_at.desc`,
+        { headers: hdrs(tk) }
+      ).then(r => r.json());
+
+      if (!Array.isArray(avArr) || avArr.length === 0) { setLoading(false); return; }
+
+      const avIds = avArr.map(a => a.id).join(",");
+      const archArr = await fetch(
+        `${SUPA_URL}/archivos_avance?avance_id=in.(${avIds})&order=created_at.asc`,
+        { headers: hdrs(tk) }
+      ).then(r => r.json());
+
+      // Agrupar archivos por avance y generar URLs firmadas
+      const archMap = {};
+      for (const ar of (Array.isArray(archArr) ? archArr : [])) {
+        if (!archMap[ar.avance_id]) archMap[ar.avance_id] = [];
+        const url = await getUrlFirmada(ar.storage_path);
+        archMap[ar.avance_id].push({ ...ar, signedUrl: url });
+      }
+
+      // Obtener info del parte (fecha y jefe)
+      const parteIds = [...new Set(avArr.map(a => a.parte_id))].join(",");
+      const partesArr = await fetch(
+        `${SUPA_URL}/partes_diarios?id=in.(${parteIds})&select=id,fecha,jefe_id`,
+        { headers: hdrs(tk) }
+      ).then(r => r.json());
+
+      const parteMap = {};
+      (Array.isArray(partesArr) ? partesArr : []).forEach(p => { parteMap[p.id] = p; });
+
+      // Obtener nombres de jefes
+      const jefeIds = [...new Set(Object.values(parteMap).map(p => p.jefe_id).filter(Boolean))].join(",");
+      let perfilesMap = {};
+      if (jefeIds) {
+        const perfiles = await fetch(
+          `${SUPA_URL}/perfiles?id=in.(${jefeIds})&select=id,nombre`,
+          { headers: hdrs(tk) }
+        ).then(r => r.json());
+        (Array.isArray(perfiles) ? perfiles : []).forEach(p => { perfilesMap[p.id] = p.nombre; });
+      }
+
+      const hist = avArr.map(av => ({
+        ...av,
+        fecha: parteMap[av.parte_id]?.fecha,
+        quien: perfilesMap[parteMap[av.parte_id]?.jefe_id] || "Admin",
+        archivos: archMap[av.id] || [],
+      }));
+
+      setHistorial(hist);
+      setLoading(false);
+    }
+    cargar();
+  }, [tarea.id]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 200 }}>
+      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 40px", width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ width: 40, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "0 auto 16px" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 11, color, fontWeight: 700, textTransform: "uppercase", marginBottom: 2 }}>{tarea.etapa}</div>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>{tarea.nombre}</div>
+          </div>
+          <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 10px" }}>✕</button>
+        </div>
+
+        {loading ? (
+          <p style={{ color: "#aaa", textAlign: "center", padding: 32 }}>Cargando historial…</p>
+        ) : historial.length === 0 ? (
+          <p style={{ color: "#aaa", textAlign: "center", padding: 32 }}>Sin registros aún</p>
+        ) : historial.map((av, i) => (
+          <div key={av.id} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: i < historial.length - 1 ? "1px solid #f0f0f0" : "none" }}>
+            {/* Header del registro */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 18, color: av.porcentaje === 100 ? "#22c55e" : color }}>{av.porcentaje}%</span>
+                <div style={{ height: 6, width: 80, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${av.porcentaje}%`, background: av.porcentaje === 100 ? "#22c55e" : color }} />
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#555" }}>👷 {av.quien}</div>
+                {av.fecha && <div style={{ fontSize: 11, color: "#aaa" }}>{new Date(av.fecha + "T12:00").toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })}</div>}
+              </div>
+            </div>
+
+            {/* Nota */}
+            {av.nota && (
+              <div style={{ background: "#f8f8f8", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "#444", fontStyle: "italic" }}>
+                💬 {av.nota}
+              </div>
+            )}
+
+            {/* Archivos */}
+            {av.archivos.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: "#aaa", fontWeight: 600, textTransform: "uppercase", marginBottom: 8 }}>Archivos adjuntos</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {av.archivos.map(ar => (
+                    <div key={ar.id} style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #e0e0e0" }}>
+                      {ar.tipo === "foto" && ar.signedUrl ? (
+                        <a href={ar.signedUrl} target="_blank" rel="noreferrer">
+                          <img src={ar.signedUrl} alt="" style={{ width: 100, height: 100, objectFit: "cover", display: "block" }} />
+                        </a>
+                      ) : (
+                        <a href={ar.signedUrl} target="_blank" rel="noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: 100, height: 100, background: "#f5f5f5", textDecoration: "none", gap: 4 }}>
+                          <span style={{ fontSize: 28 }}>{iconoArchivo(ar.tipo)}</span>
+                          <span style={{ fontSize: 10, color: "#888", textAlign: "center", padding: "0 4px" }}>{ar.nombre_archivo?.split("/").pop()?.substring(0, 15)}</span>
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   COMPONENTE TAREA — usado en ambas vistas
+════════════════════════════════════════════ */
+function TareaCard({ tarea, avance, archivos, color, isMobile, onMarcarAvance, onVerHistorial }) {
+  const pctT = avance?.porcentaje || 0;
+  const inicioRel = fechaRelativa(tarea.fecha_inicio_plan);
+
+  return (
+    <div style={{ ...shared.card, marginBottom: 10, borderLeft: `4px solid ${color}` }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{tarea.nombre}</span>
+            {tarea.etapa && !isMobile && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: color + "22", color, borderRadius: 6, padding: "2px 7px" }}>{tarea.etapa}</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+            {tarea.fecha_inicio_plan && (
+              <span style={{ fontSize: 11, color: "#aaa" }}>
+                📅 {new Date(tarea.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")}
+                {inicioRel ? ` (${inicioRel})` : ""}
+              </span>
+            )}
+            {tarea.fecha_fin_plan && (
+              <span style={{ fontSize: 11, color: "#aaa" }}>
+                🏁 {new Date(tarea.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}
+              </span>
+            )}
+          </div>
+          {avance?.nota && (
+            <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic", background: "#f8f8f8", borderRadius: 6, padding: "4px 8px" }}>
+              💬 {avance.nota}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginLeft: 10, flexShrink: 0 }}>
+          <span style={{ fontWeight: 800, fontSize: 20, color: pctT === 100 ? "#22c55e" : "#111" }}>{pctT}%</span>
+          {/* Botón historial */}
+          <button onClick={onVerHistorial} style={{ ...shared.btnSm, fontSize: 11, padding: "3px 8px", color: "#888" }}>
+            📂 {archivos?.length || 0} arch.
+          </button>
+        </div>
+      </div>
+
+      {/* Barra progreso */}
+      <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
+        <div style={{ height: "100%", width: `${pctT}%`, background: pctT === 100 ? "#22c55e" : color, transition: "width .3s" }} />
+      </div>
+
+      {/* Miniaturas de archivos recientes */}
+      {archivos && archivos.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {archivos.slice(0, 4).map(ar => (
+            <div key={ar.id} onClick={onVerHistorial} style={{ width: 44, height: 44, borderRadius: 6, overflow: "hidden", border: "1px solid #e0e0e0", cursor: "pointer", background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {ar.tipo === "foto" && ar.signedUrl ? (
+                <img src={ar.signedUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ fontSize: 20 }}>{iconoArchivo(ar.tipo)}</span>
+              )}
+            </div>
+          ))}
+          {archivos.length > 4 && (
+            <div onClick={onVerHistorial} style={{ width: 44, height: 44, borderRadius: 6, border: "1px solid #e0e0e0", cursor: "pointer", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#888" }}>
+              +{archivos.length - 4}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Botones % */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {PCT_BTNS.map(pct => (
+          <button key={pct} onClick={() => onMarcarAvance(pct)} style={{
+            ...shared.btnSm,
+            minWidth: isMobile ? 44 : 38, minHeight: isMobile ? 40 : 32,
+            fontWeight: 600, fontSize: 13,
+            background: avance?.porcentaje === pct ? color : "#f0f0f0",
+            color: avance?.porcentaje === pct ? "#fff" : "#333",
+          }}>{pct}%</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   HOOK — cargar avances y archivos de una lista de tareas
+════════════════════════════════════════════ */
+async function cargarAvancesYArchivos(tareas) {
+  if (!tareas.length) return { avMap: {}, archMap: {} };
+  const tk = await getToken();
+
+  const ids = tareas.map(t => t.id).join(",");
+  const avArr = await fetch(`${SUPA_URL}/avances_tarea?tarea_id=in.(${ids})&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
+
+  const avMap = {};
+  (Array.isArray(avArr) ? avArr : []).forEach(a => { if (!avMap[a.tarea_id]) avMap[a.tarea_id] = a; });
+
+  // Archivos del avance más reciente por tarea
+  const avIds = Object.values(avMap).map(a => a.id).join(",");
+  let archMap = {};
+  if (avIds) {
+    const archArr = await fetch(`${SUPA_URL}/archivos_avance?avance_id=in.(${avIds})&order=created_at.asc`, { headers: hdrs(tk) }).then(r => r.json());
+    // Generar URLs firmadas
+    for (const ar of (Array.isArray(archArr) ? archArr : [])) {
+      const url = await getUrlFirmada(ar.storage_path);
+      if (!archMap[ar.avance_id]) archMap[ar.avance_id] = [];
+      archMap[ar.avance_id].push({ ...ar, signedUrl: url });
+    }
+  }
+
+  return { avMap, archMap };
+}
+
+/* ════════════════════════════════════════════
    VISTA JEFE — mobile
 ════════════════════════════════════════════ */
 function VistaJefe({ perfil, onLogout }) {
-  const [obra,    setObra]    = useState(null);
-  const [tareas,  setTareas]  = useState([]);
-  const [parte,   setParte]   = useState(null);
-  const [eventos, setEventos] = useState([]);
-  const [avances, setAvances] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [msg,     setMsg]     = useState("");
-  const [tab,     setTab]     = useState("tareas");
-  const [panelTarea, setPanelTarea] = useState(null);
-  const [showEvt, setShowEvt] = useState(false);
-  const [nuevoEvt, setNuevoEvt] = useState({ tipo: "remito", descripcion: "", proveedor: "", numero_remito: "", conforme: true, dias_perdidos: "" });
+  const [obra,         setObra]         = useState(null);
+  const [tareas,       setTareas]       = useState([]);
+  const [parte,        setParte]        = useState(null);
+  const [eventos,      setEventos]      = useState([]);
+  const [avances,      setAvances]      = useState({});
+  const [archivosMap,  setArchivosMap]  = useState({});
+  const [loading,      setLoading]      = useState(true);
+  const [saving,       setSaving]       = useState(false);
+  const [msg,          setMsg]          = useState("");
+  const [tab,          setTab]          = useState("tareas");
+  const [panelTarea,   setPanelTarea]   = useState(null); // { tarea, mode: 'avance'|'historial' }
+  const [showEvt,      setShowEvt]      = useState(false);
+  const [nuevoEvt,     setNuevoEvt]     = useState({ tipo: "remito", descripcion: "", proveedor: "", numero_remito: "", conforme: true, dias_perdidos: "" });
 
   const hoy = new Date().toISOString().slice(0, 10);
 
@@ -232,20 +475,25 @@ function VistaJefe({ perfil, onLogout }) {
         fetch(`${SUPA_URL}/tareas_obra?obra_id=eq.${o.id}&order=orden.asc`, { headers: hdrs(tk) }).then(r => r.json()),
         fetch(`${SUPA_URL}/partes_diarios?obra_id=eq.${o.id}&fecha=eq.${hoy}&select=*`, { headers: hdrs(tk) }).then(r => r.json()),
       ]);
-      setTareas(Array.isArray(tArr) ? tArr : []);
+      const tFinal = Array.isArray(tArr) ? tArr : [];
+      setTareas(tFinal);
 
       const p = pArr[0] || null;
       if (p) {
         setParte(p);
-        const [evArr, avArr] = await Promise.all([
-          fetch(`${SUPA_URL}/eventos_parte?parte_id=eq.${p.id}&order=created_at.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-          fetch(`${SUPA_URL}/avances_tarea?parte_id=eq.${p.id}`, { headers: hdrs(tk) }).then(r => r.json()),
-        ]);
+        const evArr = await fetch(`${SUPA_URL}/eventos_parte?parte_id=eq.${p.id}&order=created_at.asc`, { headers: hdrs(tk) }).then(r => r.json());
         setEventos(Array.isArray(evArr) ? evArr : []);
-        const avMap = {};
-        (Array.isArray(avArr) ? avArr : []).forEach(a => { avMap[a.tarea_id] = a; });
-        setAvances(avMap);
       }
+
+      // Cargar avances y archivos
+      const { avMap, archMap } = await cargarAvancesYArchivos(tFinal);
+      // archMap está indexado por avance_id, necesitamos por tarea_id
+      const archByTarea = {};
+      Object.entries(avMap).forEach(([tareaId, av]) => {
+        archByTarea[tareaId] = archMap[av.id] || [];
+      });
+      setAvances(avMap);
+      setArchivosMap(archByTarea);
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [perfil, hoy]);
@@ -255,6 +503,11 @@ function VistaJefe({ perfil, onLogout }) {
   async function asegurarParte() {
     const tk = await getToken();
     if (parte) return { parte, tk };
+    const existentes = await fetch(`${SUPA_URL}/partes_diarios?obra_id=eq.${obra.id}&fecha=eq.${hoy}`, { headers: hdrs(tk) }).then(r => r.json());
+    if (Array.isArray(existentes) && existentes.length > 0) {
+      setParte(existentes[0]);
+      return { parte: existentes[0], tk };
+    }
     const r = await fetch(`${SUPA_URL}/partes_diarios`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ obra_id: obra.id, fecha: hoy, jefe_id: perfil.id }) });
     const rows = await r.json();
     const p = rows[0]; setParte(p);
@@ -285,8 +538,11 @@ function VistaJefe({ perfil, onLogout }) {
       avanceId = rows[0].id;
     }
 
-    if (archivoData) {
-      await fetch(`${SUPA_URL}/archivos_avance`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ avance_id: avanceId, tipo: archivoData.tipo, url: archivoData.url, nombre_archivo: archivoData.nombre, storage_path: archivoData.path }) });
+    if (archivoData && avanceId) {
+      await fetch(`${SUPA_URL}/archivos_avance`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ avance_id: avanceId, tipo: archivoData.tipo, url: archivoData.path, nombre_archivo: archivoData.nombre, storage_path: archivoData.path }) });
+      // Agregar miniatura
+      const url = await getUrlFirmada(archivoData.path);
+      setArchivosMap(prev => ({ ...prev, [tareaId]: [...(prev[tareaId] || []), { ...archivoData, id: Date.now(), avance_id: avanceId, signedUrl: url }] }));
     }
 
     setAvances(prev => ({ ...prev, [tareaId]: { ...prev[tareaId], id: avanceId, porcentaje: pct, nota } }));
@@ -328,7 +584,6 @@ function VistaJefe({ perfil, onLogout }) {
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh", background: "#f5f5f7", paddingBottom: 32 }}>
-
       {/* Header */}
       <div style={{ background: "#111", color: "#fff", padding: "16px 20px", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -383,30 +638,18 @@ function VistaJefe({ perfil, onLogout }) {
                   <span style={{ fontWeight: 700, fontSize: 13, flex: 1, color: "#333" }}>{etapa}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color }}>{pctE}%</span>
                 </div>
-                {tArr.map(t => {
-                  const pctT = avances[t.id]?.porcentaje || 0;
-                  const nota = avances[t.id]?.nota;
-                  const inicioRel = fechaRelativa(t.fecha_inicio_plan);
-                  return (
-                    <div key={t.id} onClick={() => setPanelTarea(t)} style={{ ...shared.card, marginBottom: 10, borderLeft: `4px solid ${color}`, cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                        <div style={{ flex: 1 }}>
-                          <span style={{ fontWeight: 600, fontSize: 15 }}>{t.nombre}</span>
-                          <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
-                            {t.fecha_inicio_plan && <span style={{ fontSize: 11, color: "#aaa" }}>📅 {inicioRel || new Date(t.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
-                            {t.fecha_fin_plan    && <span style={{ fontSize: 11, color: "#aaa" }}>🏁 {new Date(t.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
-                          </div>
-                          {nota && <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic", background: "#f5f5f5", borderRadius: 6, padding: "4px 8px" }}>💬 {nota}</div>}
-                        </div>
-                        <span style={{ fontWeight: 800, fontSize: 18, color: pctT === 100 ? "#22c55e" : color, marginLeft: 10 }}>{pctT}%</span>
-                      </div>
-                      <div style={{ height: 5, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pctT}%`, background: pctT === 100 ? "#22c55e" : color, transition: "width .3s" }} />
-                      </div>
-                      <div style={{ marginTop: 8, fontSize: 11, color: "#aaa", textAlign: "right" }}>Tocar para actualizar →</div>
-                    </div>
-                  );
-                })}
+                {tArr.map(t => (
+                  <TareaCard
+                    key={t.id}
+                    tarea={t}
+                    avance={avances[t.id]}
+                    archivos={archivosMap[t.id]}
+                    color={color}
+                    isMobile={true}
+                    onMarcarAvance={pct => setPanelTarea({ tarea: t, pct, mode: "avance" })}
+                    onVerHistorial={() => setPanelTarea({ tarea: t, mode: "historial" })}
+                  />
+                ))}
               </div>
             );
           })}
@@ -488,27 +731,30 @@ function VistaJefe({ perfil, onLogout }) {
         </div>
       )}
 
-      {/* Panel avance */}
-      {panelTarea && (
+      {/* Paneles */}
+      {panelTarea?.mode === "avance" && (
         <PanelAvance
-          tarea={panelTarea}
-          avanceActual={avances[panelTarea.id]?.porcentaje || 0}
+          tarea={panelTarea.tarea}
+          avanceActual={panelTarea.pct}
+          notaActual={avances[panelTarea.tarea.id]?.nota}
           obraCodigo={obra.codigo}
-          onGuardar={(pct, nota, arch) => guardarAvance(panelTarea.id, pct, nota, arch)}
+          onGuardar={(pct, nota, arch) => guardarAvance(panelTarea.tarea.id, pct, nota, arch)}
           onClose={() => setPanelTarea(null)}
         />
+      )}
+      {panelTarea?.mode === "historial" && (
+        <PanelHistorial tarea={panelTarea.tarea} obraCodigo={obra.codigo} onClose={() => setPanelTarea(null)} />
       )}
     </div>
   );
 }
 
 /* ════════════════════════════════════════════
-   MODAL EDITAR OBRA (hamburguesa admin)
+   MODAL EDITAR OBRA
 ════════════════════════════════════════════ */
 function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
   const [form, setForm] = useState({
     nombre:               obra.nombre || "",
-    cliente:              obra.cliente || "",
     direccion:            obra.direccion || "",
     codigo:               obra.codigo || "",
     sistema_constructivo: obra.sistema_constructivo || "Steel Frame",
@@ -519,30 +765,26 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
     notas:                obra.notas || "",
     cliente_id:           obra.cliente_id || "",
     proyecto_id:          obra.proyecto_id || "",
-    calculista_id:        obra.calculista_id || "",
     presupuesto_id:       obra.presupuesto_id || "",
   });
 
-  const [proyectos,    setProyectos]    = useState([]);
-  const [clientesCRM,  setClientesCRM]  = useState([]);
-  const [calculistas,  setCalculistas]  = useState([]);
-  const [presupuestos, setPresupuestos] = useState([]);
+  const [proyectos,   setProyectos]   = useState([]);
+  const [clientesCRM, setClientesCRM] = useState([]);
+  const [presupuestos,setPresupuestos]= useState([]);
 
   useEffect(() => {
-    async function cargarRelaciones() {
+    async function cargar() {
       const tk = await getToken();
-      const [pArr, cArr, caArr, prArr] = await Promise.all([
-        fetch(`${SUPA_URL}/proyectos?select=id,descripcion,numero_proyecto&order=numero_proyecto.asc`,         { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`,          { headers: hdrs(tk) }).then(r => r.json()),
-        Promise.resolve([]),
-        fetch(`${SUPA_URL}/presupuestos?select=id,nombre&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
+      const [pArr, cArr, prArr] = await Promise.all([
+        fetch(`${SUPA_URL}/proyectos?select=id,descripcion,numero_proyecto&order=numero_proyecto.asc`, { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/presupuestos?select=id,codigo,descripcion,cliente&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
       ]);
       setProyectos(Array.isArray(pArr) ? pArr : []);
       setClientesCRM(Array.isArray(cArr) ? cArr : []);
-      setCalculistas(Array.isArray(caArr) ? caArr : []);
       setPresupuestos(Array.isArray(prArr) ? prArr : []);
     }
-    cargarRelaciones();
+    cargar();
   }, []);
 
   const ALCANCES = [
@@ -569,6 +811,17 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
             <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} style={shared.inp} placeholder={f.ph} />
           </div>
         ))}
+
+        <div style={{ marginBottom: 12 }}>
+          <span style={shared.lbl}>🏢 Cliente</span>
+          <Combobox
+            options={clientesCRM.map(c => ({ value: c.id, label: c.empresa }))}
+            value={form.cliente_id}
+            onChange={val => setForm(p => ({ ...p, cliente_id: val }))}
+            placeholder="Buscar cliente..."
+            emptyLabel="Sin vincular"
+          />
+        </div>
 
         <div style={{ marginBottom: 12 }}>
           <span style={shared.lbl}>Sistema constructivo</span>
@@ -607,24 +860,11 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
           </div>
         )}
 
-        {/* Cliente CRM */}
-        <div style={{ marginBottom: 12 }}>
-          <span style={shared.lbl}>🏢 Cliente</span>
-          <Combobox
-            options={clientesCRM.map(c => ({ value: c.id, label: c.empresa }))}
-            value={form.cliente_id}
-            onChange={val => setForm(p => ({ ...p, cliente_id: val }))}
-            placeholder="Buscar cliente..."
-            emptyLabel="Sin vincular"
-          />
-        </div>
-
-        {/* Cruces con otros módulos */}
-        <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#888", marginBottom: 12, textTransform: "uppercase", letterSpacing: .5 }}>Vínculos</div>
-
+        {/* Vínculos */}
+        <div style={{ background: "#f8f8f8", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", marginBottom: 12, textTransform: "uppercase", letterSpacing: .5 }}>Vínculos</div>
           <div style={{ marginBottom: 10 }}>
-            <span style={shared.lbl}>📋 Proyecto (Ingeniería)</span>
+            <span style={shared.lbl}>📋 Proyecto</span>
             <Combobox
               options={proyectos.map(p => ({ value: p.id, label: `${p.numero_proyecto || ""} — ${p.descripcion || ""}`.trim() }))}
               value={form.proyecto_id}
@@ -633,22 +873,10 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
               emptyLabel="Sin vincular"
             />
           </div>
-
-          <div style={{ marginBottom: 10 }}>
-            <span style={shared.lbl}>👷 Calculista responsable</span>
-            <Combobox
-              options={calculistas.map(c => ({ value: c.id, label: c.nombre }))}
-              value={form.calculista_id}
-              onChange={val => setForm(p => ({ ...p, calculista_id: val }))}
-              placeholder="Buscar calculista..."
-              emptyLabel="Sin vincular"
-            />
-          </div>
-
           <div style={{ marginBottom: 0 }}>
-            <span style={shared.lbl}>💰 Presupuesto aprobado</span>
+            <span style={shared.lbl}>💰 Presupuesto</span>
             <Combobox
-              options={presupuestos.map(p => ({ value: p.id, label: `${p.cliente || ""} — ${p.descripcion || ""}`.trim() }))}
+              options={presupuestos.map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}`.trim() }))}
               value={form.presupuesto_id}
               onChange={val => setForm(p => ({ ...p, presupuesto_id: val }))}
               placeholder="Buscar presupuesto..."
@@ -684,13 +912,13 @@ function VistaAdmin() {
   const [avancesObra,   setAvancesObra]   = useState({});
   const [loading,       setLoading]       = useState(true);
   const [savingTarea,   setSavingTarea]   = useState(null);
-  const [panelTareaAdmin, setPanelTareaAdmin] = useState(null); // { tarea, pct }
+  const [panelTarea,    setPanelTarea]    = useState(null);
   const [showModal,     setShowModal]     = useState(false);
   const [showEditObra,  setShowEditObra]  = useState(false);
   const [showTareaM,    setShowTareaM]    = useState(false);
   const [jefesList,     setJefesList]     = useState([]);
-  const [nuevaObra,     setNuevaObra]     = useState({ nombre: "", cliente: "", direccion: "", codigo: "", sistema_constructivo: "Steel Frame", alcance: "obra_completa", fecha_inicio_plan: "", fecha_fin_plan: "", jefe_id: "" });
-  const [nuevaTarea,    setNuevaTarea]    = useState({ nombre: "", etapa: "", fecha_inicio_plan: "", fecha_fin_plan: "" });
+  const [nuevaObra,     setNuevaObra]     = useState({ nombre: "", cliente_id: "", direccion: "", codigo: "", sistema_constructivo: "Steel Frame", alcance: "obra_completa", fecha_inicio_plan: "", fecha_fin_plan: "", jefe_id: "" });
+  const [nuevaTarea,    setNuevaTarea]    = useState({ nombre: "", etapa: "", descripcion: "", fecha_inicio_plan: "", fecha_fin_plan: "" });
   const [msg,           setMsg]           = useState("");
   const [isMobile,      setIsMobile]      = useState(window.innerWidth < 768);
 
@@ -711,6 +939,7 @@ function VistaAdmin() {
     const obrasArr = Array.isArray(obrasData) ? obrasData : [];
     setJefesList(Array.isArray(jefesData) ? jefesData : []);
 
+    // Avance por obra
     const avMap = {};
     await Promise.all(obrasArr.map(async o => {
       const tk2 = await getToken();
@@ -730,7 +959,7 @@ function VistaAdmin() {
   }
 
   async function seleccionar(o) {
-    setSelected(o); setTareas([]); setAvancesTareas({}); setPartes([]); setArchivosMap({});
+    setSelected(o); setTareas([]); setAvancesTareas({}); setArchivosMap({}); setPartes([]);
     const tk = await getToken();
     const [tArr, pArr] = await Promise.all([
       fetch(`${SUPA_URL}/tareas_obra?obra_id=eq.${o.id}&order=orden.asc`, { headers: hdrs(tk) }).then(r => r.json()),
@@ -740,25 +969,13 @@ function VistaAdmin() {
     setTareas(tFinal);
     setPartes(Array.isArray(pArr) ? pArr : []);
 
-    if (tFinal.length > 0) {
-      const ids = tFinal.map(t => t.id).join(",");
-      const avArr = await fetch(`${SUPA_URL}/avances_tarea?tarea_id=in.(${ids})&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
-      const avMap = {};
-      (Array.isArray(avArr) ? avArr : []).forEach(a => { if (!avMap[a.tarea_id]) avMap[a.tarea_id] = a; });
-      setAvancesTareas(avMap);
-
-      // Cargar archivos de cada avance
-      const avIds = Object.values(avMap).map(a => a.id).join(",");
-      if (avIds) {
-        const archArr = await fetch(`${SUPA_URL}/archivos_avance?avance_id=in.(${avIds})`, { headers: hdrs(tk) }).then(r => r.json());
-        const archMap = {};
-        (Array.isArray(archArr) ? archArr : []).forEach(ar => {
-          if (!archMap[ar.avance_id]) archMap[ar.avance_id] = [];
-          archMap[ar.avance_id].push(ar);
-        });
-        setArchivosMap(archMap);
-      }
-    }
+    const { avMap, archMap } = await cargarAvancesYArchivos(tFinal);
+    const archByTarea = {};
+    Object.entries(avMap).forEach(([tareaId, av]) => {
+      archByTarea[tareaId] = archMap[av.id] || [];
+    });
+    setAvancesTareas(avMap);
+    setArchivosMap(archByTarea);
   }
 
   async function guardarAvanceTarea(tareaId, pct, nota = null, archivoData = null) {
@@ -766,60 +983,37 @@ function VistaAdmin() {
     try {
       const tk = await getToken();
       const hoy = new Date().toISOString().slice(0, 10);
-
-      // Obtener el uid del usuario logueado para el parte
       const { data: { user } } = await supabase.auth.getUser();
       const uid = user?.id;
 
-      // Buscar parte de hoy para esta obra (cualquier jefe)
       let parteHoy = partes.find(p => p.fecha === hoy);
       if (!parteHoy) {
-        // Verificar si ya existe en DB (puede haberlo creado Yonyali)
-        const existentes = await fetch(
-          `${SUPA_URL}/partes_diarios?obra_id=eq.${selected.id}&fecha=eq.${hoy}`,
-          { headers: hdrs(tk) }
-        ).then(r => r.json());
-
+        const existentes = await fetch(`${SUPA_URL}/partes_diarios?obra_id=eq.${selected.id}&fecha=eq.${hoy}`, { headers: hdrs(tk) }).then(r => r.json());
         if (Array.isArray(existentes) && existentes.length > 0) {
           parteHoy = existentes[0];
         } else {
-          // Crear parte con el uid del admin como jefe
-          const r = await fetch(`${SUPA_URL}/partes_diarios`, {
-            method: "POST", headers: hdrs(tk),
-            body: JSON.stringify({ obra_id: selected.id, fecha: hoy, jefe_id: uid })
-          });
+          const r = await fetch(`${SUPA_URL}/partes_diarios`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ obra_id: selected.id, fecha: hoy, jefe_id: uid }) });
           const rows = await r.json();
           parteHoy = rows[0];
         }
         setPartes(prev => [parteHoy, ...prev.filter(p => p.fecha !== hoy)]);
       }
 
-      // Buscar avance existente para esta tarea en CUALQUIER parte
-      // (no solo el de hoy — queremos el más reciente)
       const existing = avancesTareas[tareaId];
       let avanceId;
-
       if (existing) {
-        await fetch(`${SUPA_URL}/avances_tarea?id=eq.${existing.id}`, {
-          method: "PATCH", headers: hdrs(tk),
-          body: JSON.stringify({ porcentaje: pct, ...(nota !== null ? { nota } : {}) })
-        });
+        await fetch(`${SUPA_URL}/avances_tarea?id=eq.${existing.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ porcentaje: pct, ...(nota !== null ? { nota } : {}) }) });
         avanceId = existing.id;
       } else {
-        const r = await fetch(`${SUPA_URL}/avances_tarea`, {
-          method: "POST", headers: hdrs(tk),
-          body: JSON.stringify({ parte_id: parteHoy.id, tarea_id: tareaId, porcentaje: pct, nota })
-        });
+        const r = await fetch(`${SUPA_URL}/avances_tarea`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ parte_id: parteHoy.id, tarea_id: tareaId, porcentaje: pct, nota }) });
         const rows = await r.json();
         avanceId = rows[0].id;
       }
 
-      // Guardar archivo si existe
       if (archivoData && avanceId) {
-        await fetch(`${SUPA_URL}/archivos_avance`, {
-          method: "POST", headers: hdrs(tk),
-          body: JSON.stringify({ avance_id: avanceId, tipo: archivoData.tipo, url: archivoData.url, nombre_archivo: archivoData.nombre, storage_path: archivoData.path })
-        });
+        await fetch(`${SUPA_URL}/archivos_avance`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ avance_id: avanceId, tipo: archivoData.tipo, url: archivoData.path, nombre_archivo: archivoData.nombre, storage_path: archivoData.path }) });
+        const url = await getUrlFirmada(archivoData.path);
+        setArchivosMap(prev => ({ ...prev, [tareaId]: [...(prev[tareaId] || []), { ...archivoData, id: Date.now(), signedUrl: url }] }));
       }
 
       const newAv = { ...avancesTareas, [tareaId]: { ...avancesTareas[tareaId], id: avanceId, porcentaje: pct, nota: nota || avancesTareas[tareaId]?.nota } };
@@ -844,7 +1038,7 @@ function VistaAdmin() {
     const tk = await getToken();
     await fetch(`${SUPA_URL}/obras_campo`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(nuevaObra) });
     setShowModal(false);
-    setNuevaObra({ nombre: "", cliente: "", direccion: "", codigo: "", sistema_constructivo: "Steel Frame", alcance: "obra_completa", fecha_inicio_plan: "", fecha_fin_plan: "", jefe_id: "" });
+    setNuevaObra({ nombre: "", cliente_id: "", direccion: "", codigo: "", sistema_constructivo: "Steel Frame", alcance: "obra_completa", fecha_inicio_plan: "", fecha_fin_plan: "", jefe_id: "" });
     cargarTodo();
   }
 
@@ -853,7 +1047,7 @@ function VistaAdmin() {
     const tk = await getToken();
     await fetch(`${SUPA_URL}/tareas_obra`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ ...nuevaTarea, obra_id: selected.id, orden: tareas.length + 1 }) });
     setShowTareaM(false);
-    setNuevaTarea({ nombre: "", etapa: "", fecha_inicio_plan: "", fecha_fin_plan: "" });
+    setNuevaTarea({ nombre: "", etapa: "", descripcion: "", fecha_inicio_plan: "", fecha_fin_plan: "" });
     seleccionar(selected);
   }
 
@@ -862,11 +1056,6 @@ function VistaAdmin() {
     await fetch(`${SUPA_URL}/obras_campo?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ estado }) });
     cargarTodo();
     if (selected?.id === id) setSelected(prev => ({ ...prev, estado }));
-  }
-
-  async function abrirArchivo(arch) {
-    const url = await getUrlFirmada(arch.storage_path);
-    if (url) window.open(url, "_blank");
   }
 
   const porEtapa = {};
@@ -899,16 +1088,12 @@ function VistaAdmin() {
           </div>
           {loading ? <p style={{ padding: 20, color: "#aaa", fontSize: 13 }}>Cargando…</p> : obras.map(o => {
             const pct = avancesObra[o.id] || 0;
-            const jefe = jefesList.find(j => j.id === o.jefe_id);
             return (
               <div key={o.id} style={{ borderBottom: "1px solid #f0f0f0", background: !isMobile && selected?.id === o.id ? "#111" : "#fff" }}>
-                {/* Área clickeable para seleccionar obra */}
                 <div onClick={() => seleccionar(o)} style={{ padding: "12px 16px 6px", cursor: "pointer" }}>
                   {o.codigo && <div style={{ fontSize: 10, fontWeight: 700, color: !isMobile && selected?.id === o.id ? "#666" : "#aaa", marginBottom: 2 }}>{o.codigo}</div>}
                   <div style={{ fontWeight: 600, fontSize: 13, color: !isMobile && selected?.id === o.id ? "#fff" : "#111" }}>{o.nombre}</div>
-                  {o.cliente && <div style={{ fontSize: 11, color: !isMobile && selected?.id === o.id ? "#aaa" : "#888", marginTop: 2 }}>{o.cliente}</div>}
                 </div>
-                {/* Selector responsable — fuera del div clickeable */}
                 <div style={{ padding: "0 12px 6px" }}>
                   <select
                     value={o.jefe_id || ""}
@@ -919,13 +1104,7 @@ function VistaAdmin() {
                       setObras(prev => prev.map(ob => ob.id === o.id ? { ...ob, jefe_id: nuevoJefeId || null } : ob));
                       if (selected?.id === o.id) setSelected(prev => ({ ...prev, jefe_id: nuevoJefeId || null }));
                     }}
-                    style={{
-                      fontSize: 11, padding: "4px 8px",
-                      border: "1px solid " + (!isMobile && selected?.id === o.id ? "#444" : "#e0e0e0"),
-                      borderRadius: 6, background: !isMobile && selected?.id === o.id ? "#222" : "#f8f8f8",
-                      color: !isMobile && selected?.id === o.id ? "#ccc" : "#555",
-                      cursor: "pointer", width: "100%",
-                    }}
+                    style={{ fontSize: 11, padding: "4px 8px", border: "1px solid " + (!isMobile && selected?.id === o.id ? "#444" : "#e0e0e0"), borderRadius: 6, background: !isMobile && selected?.id === o.id ? "#222" : "#f8f8f8", color: !isMobile && selected?.id === o.id ? "#ccc" : "#555", cursor: "pointer", width: "100%" }}
                   >
                     <option value="">👷 Sin responsable</option>
                     {jefesList.map(j => <option key={j.id} value={j.id}>👷 {j.nombre}</option>)}
@@ -953,7 +1132,6 @@ function VistaAdmin() {
       {(!isMobile || selected) && (
         <div style={S.detail}>
           {!selected ? (
-            /* Dashboard */
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
                 <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700 }}>Dashboard de obras</h2>
@@ -971,10 +1149,9 @@ function VistaAdmin() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                         <div style={{ flex: 1, marginRight: 10 }}>
                           <div style={{ fontWeight: 700, fontSize: 14 }}>{o.nombre}</div>
-                          {o.cliente && <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{o.cliente}</div>}
                           {jefe && <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>👷 {jefe.nombre}</div>}
                         </div>
-                        <span style={{ fontSize: 22, fontWeight: 800, color: pct === 100 ? "#22c55e" : "#111" }}>{pct}%</span>
+                        <span style={{ fontSize: 24, fontWeight: 800, color: pct === 100 ? "#22c55e" : "#111" }}>{pct}%</span>
                       </div>
                       <div style={{ height: 8, background: "#f0f0f0", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
                         <div style={{ height: "100%", width: `${pct}%`, background: pct === 100 ? "#22c55e" : "#111" }} />
@@ -992,26 +1169,22 @@ function VistaAdmin() {
               </div>
             </div>
           ) : (
-            /* Detalle obra */
             <>
               {/* Header obra */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <button onClick={() => setSelected(null)} style={{ fontSize: 13, color: "#888", background: "none", border: "none", cursor: "pointer", padding: "0 0 6px", display: "block" }}>← Volver</button>
                   {selected.codigo && <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", marginBottom: 2 }}>{selected.codigo}</div>}
-                  <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700 }}>{selected.nombre}</h2>
-                  {selected.cliente && <p style={{ margin: "3px 0 0", color: "#888", fontSize: 13 }}>{selected.cliente}</p>}
+                  <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700 }}>{selected.nombre}</h2>
                   {selected.direccion && <p style={{ margin: "2px 0 0", color: "#aaa", fontSize: 12 }}>{selected.direccion}</p>}
-                  {/* Responsable visible */}
                   {jefeNombre && (
-                    <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, background: "#f5f5f5", borderRadius: 20, padding: "4px 12px", display: "inline-flex" }}>
+                    <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: "#f5f5f5", borderRadius: 20, padding: "4px 12px" }}>
                       <span style={{ fontSize: 12 }}>👷</span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: "#555" }}>{jefeNombre}</span>
                     </div>
                   )}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {/* Hamburguesa */}
                   <button onClick={() => setShowEditObra(true)} style={{ ...S.btnSm, padding: "8px 12px", fontSize: 16 }} title="Editar obra">☰</button>
                   {selected.estado !== "activa"     && <button onClick={() => cambiarEstado(selected.id, "activa")}     style={{ ...S.btn, background: "#22c55e", padding: "7px 12px", fontSize: 12 }}>Activar</button>}
                   {selected.estado !== "pausada"    && <button onClick={() => cambiarEstado(selected.id, "pausada")}    style={{ ...S.btn, background: "#f59e0b", padding: "7px 12px", fontSize: 12 }}>Pausar</button>}
@@ -1021,13 +1194,12 @@ function VistaAdmin() {
 
               {msg && <div style={{ background: "#d4edda", color: "#155724", padding: "10px 16px", borderRadius: 10, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
-              {/* Vínculos de la obra */}
-              {(selected.cliente_id || selected.proyecto_id || selected.calculista_id || selected.presupuesto_id) && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-                  {selected.proyecto_id    && <span style={{ fontSize: 12, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "4px 12px" }}>📋 Proyecto vinculado</span>}
-                  {selected.cliente_id     && <span style={{ fontSize: 12, background: "#fdf4ff", color: "#7e22ce", borderRadius: 20, padding: "4px 12px" }}>🏢 Cliente CRM vinculado</span>}
-                  {selected.calculista_id  && <span style={{ fontSize: 12, background: "#f0fdf4", color: "#15803d", borderRadius: 20, padding: "4px 12px" }}>👷 Calculista vinculado</span>}
-                  {selected.presupuesto_id && <span style={{ fontSize: 12, background: "#fff7ed", color: "#c2410c", borderRadius: 20, padding: "4px 12px" }}>💰 Presupuesto vinculado</span>}
+              {/* Vínculos activos */}
+              {(selected.cliente_id || selected.proyecto_id || selected.presupuesto_id) && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                  {selected.proyecto_id    && <span style={{ fontSize: 12, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "4px 12px" }}>📋 Proyecto</span>}
+                  {selected.cliente_id     && <span style={{ fontSize: 12, background: "#fdf4ff", color: "#7e22ce", borderRadius: 20, padding: "4px 12px" }}>🏢 Cliente</span>}
+                  {selected.presupuesto_id && <span style={{ fontSize: 12, background: "#fff7ed", color: "#c2410c", borderRadius: 20, padding: "4px 12px" }}>💰 Presupuesto</span>}
                 </div>
               )}
 
@@ -1040,7 +1212,6 @@ function VistaAdmin() {
                 <div style={{ height: 10, background: "#f0f0f0", borderRadius: 5, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${avancesObra[selected.id] || 0}%`, background: "#111", transition: "width .5s" }} />
                 </div>
-                {/* Pills etapa */}
                 {Object.keys(porEtapa).length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
                     {ETAPAS_ORDEN.filter(e => porEtapa[e]).map(etapa => {
@@ -1083,62 +1254,18 @@ function VistaAdmin() {
                           <span style={{ fontWeight: 700, fontSize: 14, flex: 1 }}>{etapa}</span>
                           <span style={{ fontSize: 14, fontWeight: 700, color }}>{pctE}%</span>
                         </div>
-                        {tArr.map(t => {
-                          const av = avancesTareas[t.id];
-                          const pctT = av?.porcentaje || 0;
-                          const archivos = av ? (archivosMap[av.id] || []) : [];
-                          const isSaving = savingTarea === t.id;
-                          const inicioRel = fechaRelativa(t.fecha_inicio_plan);
-                          return (
-                            <div key={t.id} style={{ ...shared.card, marginBottom: 10, borderLeft: `4px solid ${color}` }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <span style={{ fontSize: 14, fontWeight: 600 }}>{t.nombre}</span>
-                                    {t.etapa && <span style={{ fontSize: 10, fontWeight: 700, background: color + "22", color, borderRadius: 6, padding: "2px 7px" }}>{t.etapa}</span>}
-                                  </div>
-                                  <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
-                                    {t.fecha_inicio_plan && <span style={{ fontSize: 11, color: "#aaa" }}>📅 Inicio: {new Date(t.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")} {inicioRel ? `(${inicioRel})` : ""}</span>}
-                                    {t.fecha_fin_plan    && <span style={{ fontSize: 11, color: "#aaa" }}>🏁 Fin: {new Date(t.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
-                                  </div>
-                                  {av?.nota && <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic", background: "#f8f8f8", borderRadius: 6, padding: "4px 8px" }}>💬 {av.nota}</div>}
-                                </div>
-                                <span style={{ fontSize: 20, fontWeight: 800, color: pctT === 100 ? "#22c55e" : "#111", marginLeft: 12, flexShrink: 0 }}>{pctT}%</span>
-                              </div>
-                              <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
-                                <div style={{ height: "100%", width: `${pctT}%`, background: pctT === 100 ? "#22c55e" : color }} />
-                              </div>
-                              {/* Botones % — abren panel con nota + archivo */}
-                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: archivos.length > 0 ? 10 : 0 }}>
-                                {PCT_BTNS.map(pct => (
-                                  <button key={pct} onClick={() => setPanelTareaAdmin({ tarea: t, pct })} disabled={isSaving} style={{
-                                    ...S.btnSm, minWidth: isMobile ? 44 : 40, fontWeight: 600,
-                                    background: av?.porcentaje === pct ? color : "#f0f0f0",
-                                    color: av?.porcentaje === pct ? "#fff" : "#333",
-                                    opacity: isSaving ? .5 : 1,
-                                  }}>{pct}%</button>
-                                ))}
-                              </div>
-                              {/* Archivos adjuntos */}
-                              {archivos.length > 0 && (
-                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                                  {archivos.map(ar => (
-                                    <button key={ar.id} onClick={() => abrirArchivo(ar)} style={{ ...S.btnSm, fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
-                                      {ar.tipo === "foto" ? "📷" : ar.tipo === "video" ? "🎥" : "🎙️"}
-                                      {ar.nombre_archivo?.split("/").pop()?.substring(0, 20) || ar.tipo}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              {(t.fecha_inicio_plan || t.fecha_fin_plan) && (
-                                <div style={{ marginTop: 8, fontSize: 11, color: "#aaa", display: "flex", gap: 12 }}>
-                                  {t.fecha_inicio_plan && <span>Inicio: {new Date(t.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
-                                  {t.fecha_fin_plan    && <span>Fin: {new Date(t.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {tArr.map(t => (
+                          <TareaCard
+                            key={t.id}
+                            tarea={t}
+                            avance={avancesTareas[t.id]}
+                            archivos={archivosMap[t.id]}
+                            color={color}
+                            isMobile={isMobile}
+                            onMarcarAvance={pct => setPanelTarea({ tarea: t, pct, mode: "avance" })}
+                            onVerHistorial={() => setPanelTarea({ tarea: t, mode: "historial" })}
+                          />
+                        ))}
                       </div>
                     );
                   })
@@ -1164,7 +1291,7 @@ function VistaAdmin() {
         </div>
       )}
 
-      {/* Modal nueva obra */}
+      {/* Modales */}
       {showModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, maxHeight: "90vh", overflowY: "auto" }}>
@@ -1172,12 +1299,11 @@ function VistaAdmin() {
             {[
               { lbl: "Código", key: "codigo", ph: "2026-SF-531" },
               { lbl: "Nombre *", key: "nombre", ph: "Nombre de la obra" },
-              { lbl: "Cliente", key: "cliente", ph: "Empresa o persona" },
               { lbl: "Dirección", key: "direccion", ph: "Dirección de la obra" },
             ].map(f => (
               <div key={f.key} style={{ marginBottom: 10 }}>
                 <span style={S.lbl}>{f.lbl}</span>
-                <input value={nuevaObra[f.key]} onChange={e => setNuevaObra(p => ({ ...p, [f.key]: e.target.value }))} style={S.inp} placeholder={f.ph} />
+                <input value={nuevaObra[f.key] || ""} onChange={e => setNuevaObra(p => ({ ...p, [f.key]: e.target.value }))} style={S.inp} placeholder={f.ph} />
               </div>
             ))}
             <div style={{ marginBottom: 10 }}>
@@ -1194,7 +1320,7 @@ function VistaAdmin() {
             </div>
             {jefesList.length > 0 && (
               <div style={{ marginBottom: 10 }}>
-                <span style={S.lbl}>Responsable de obra</span>
+                <span style={S.lbl}>Responsable</span>
                 <select value={nuevaObra.jefe_id} onChange={e => setNuevaObra(p => ({ ...p, jefe_id: e.target.value }))} style={S.inp}>
                   <option value="">Sin asignar</option>
                   {jefesList.map(j => <option key={j.id} value={j.id}>{j.nombre}</option>)}
@@ -1209,7 +1335,6 @@ function VistaAdmin() {
         </div>
       )}
 
-      {/* Modal nueva tarea */}
       {showTareaM && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 400 }}>
@@ -1222,12 +1347,12 @@ function VistaAdmin() {
             <span style={S.lbl}>Nombre *</span>
             <input value={nuevaTarea.nombre} onChange={e => setNuevaTarea(p => ({ ...p, nombre: e.target.value }))} style={{ ...S.inp, marginBottom: 10 }} placeholder="Ej: Fabricar paneles" />
             <span style={S.lbl}>Descripción</span>
-            <input value={nuevaTarea.descripcion || ""} onChange={e => setNuevaTarea(p => ({ ...p, descripcion: e.target.value }))} style={{ ...S.inp, marginBottom: 10 }} placeholder="Detalle de la tarea (opcional)" />
+            <input value={nuevaTarea.descripcion || ""} onChange={e => setNuevaTarea(p => ({ ...p, descripcion: e.target.value }))} style={{ ...S.inp, marginBottom: 10 }} placeholder="Detalle (opcional)" />
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ flex: 1 }}><span style={S.lbl}>Inicio plan</span><input type="date" value={nuevaTarea.fecha_inicio_plan} onChange={e => setNuevaTarea(p => ({ ...p, fecha_inicio_plan: e.target.value }))} style={S.inp} /></div>
               <div style={{ flex: 1 }}><span style={S.lbl}>Fin plan</span><input type="date" value={nuevaTarea.fecha_fin_plan} onChange={e => setNuevaTarea(p => ({ ...p, fecha_fin_plan: e.target.value }))} style={S.inp} /></div>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button onClick={crearTarea} disabled={!nuevaTarea.nombre} style={{ ...S.btn, flex: 1 }}>Agregar</button>
               <button onClick={() => setShowTareaM(false)} style={{ ...S.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
             </div>
@@ -1235,22 +1360,31 @@ function VistaAdmin() {
         </div>
       )}
 
-      {/* Modal editar obra */}
       {showEditObra && selected && (
         <ModalEditarObra obra={selected} jefesList={jefesList} onGuardar={editarObra} onClose={() => setShowEditObra(false)} />
       )}
 
-      {/* Panel avance admin — mismo que mobile */}
-      {panelTareaAdmin && (
+      {/* Panel avance — admin */}
+      {panelTarea?.mode === "avance" && (
         <PanelAvance
-          tarea={panelTareaAdmin.tarea}
-          avanceActual={panelTareaAdmin.pct}
+          tarea={panelTarea.tarea}
+          avanceActual={panelTarea.pct}
+          notaActual={avancesTareas[panelTarea.tarea.id]?.nota}
           obraCodigo={selected?.codigo}
           onGuardar={async (pct, nota, arch) => {
-            await guardarAvanceTarea(panelTareaAdmin.tarea.id, pct, nota, arch);
-            setPanelTareaAdmin(null);
+            await guardarAvanceTarea(panelTarea.tarea.id, pct, nota, arch);
+            setPanelTarea(null);
           }}
-          onClose={() => setPanelTareaAdmin(null)}
+          onClose={() => setPanelTarea(null)}
+        />
+      )}
+
+      {/* Panel historial — admin */}
+      {panelTarea?.mode === "historial" && (
+        <PanelHistorial
+          tarea={panelTarea.tarea}
+          obraCodigo={selected?.codigo}
+          onClose={() => setPanelTarea(null)}
         />
       )}
     </div>
