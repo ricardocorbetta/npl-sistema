@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Combobox from "./Combobox.jsx";
 import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
@@ -162,21 +163,17 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
           {/* Cliente */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <span style={shared.lbl}>Cliente *</span>
               <button onClick={() => setShowNuevoCli(true)} style={{ ...shared.btnSm, fontSize: 11, padding: "3px 8px" }}>+ Nuevo cliente</button>
             </div>
-            <select
+            <Combobox
+              options={clientes.map(c => ({ value: c.id, label: c.empresa }))}
               value={form.cliente_id}
-              onChange={e => {
-                const cli = clientes.find(c => c.id === e.target.value);
-                setForm(p => ({ ...p, cliente_id: e.target.value, cliente: cli?.empresa || "" }));
-              }}
-              style={shared.inp}
-            >
-              <option value="">Seleccionar cliente…</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.empresa}</option>)}
-            </select>
+              onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
+              placeholder="Buscar cliente..."
+              emptyLabel="Sin cliente asignado"
+            />
           </div>
 
           {/* Código y descripción */}
@@ -366,6 +363,7 @@ export default function App() {
                   </div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 3 }}>{p.descripcion || "Sin descripción"}</div>
                   <div style={{ fontSize: 13, color: "#888" }}>{p.cliente}</div>
+                  {p.tipo && !p.tipo_servicio && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{p.tipo}</div>}
                   {p.obs && <div style={{ fontSize: 12, color: "#aaa", marginTop: 4, fontStyle: "italic" }}>{p.obs}</div>}
                 </div>
 
