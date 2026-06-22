@@ -55,31 +55,25 @@ const shared = {
 
 /* ─── Upload archivo a Supabase Storage ─── */
 async function uploadArchivo(file, codigoObra, tipo) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const tk = session?.access_token || ANON_KEY;
   const ext = file.name.split(".").pop();
   const fecha = new Date().toISOString().slice(0, 10);
-  const path = `obras/${codigoObra}/${fecha}/${tipo}/${Date.now()}.${ext}`;
+  const path = `obras/${codigoObra || "sin-codigo"}/${fecha}/${tipo}/${Date.now()}.${ext}`;
 
-  const r = await fetch(`${SUPA_STORAGE}/object/npl-obras/${path}`, {
-    method: "POST",
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": file.type },
-    body: file,
-  });
-  if (!r.ok) throw new Error("Error al subir archivo");
-  return { path, url: `${SUPA_STORAGE}/object/npl-obras/${path}` };
+  const { data, error } = await supabase.storage
+    .from("npl-obras")
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (error) throw new Error("Error al subir: " + error.message);
+  return { path, url: path, tipo, nombre: file.name };
 }
 
 /* ─── URL firmada para ver archivo privado ─── */
 async function getUrlFirmada(path) {
-  const tk = await getToken();
-  const r = await fetch(`${SUPA_STORAGE}/object/sign/npl-obras/${path}`, {
-    method: "POST",
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ expiresIn: 3600 }),
-  });
-  const d = await r.json();
-  return d.signedURL ? `${SUPA_STORAGE}${d.signedURL}` : null;
+  const { data, error } = await supabase.storage
+    .from("npl-obras")
+    .createSignedUrl(path, 3600);
+  if (error) { console.error(error); return null; }
+  return data.signedUrl;
 }
 
 /* ─── Formatear fecha relativa ─── */
