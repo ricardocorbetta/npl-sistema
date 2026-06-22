@@ -772,29 +772,62 @@ function VistaAdmin() {
     try {
       const tk = await getToken();
       const hoy = new Date().toISOString().slice(0, 10);
+
+      // Obtener el uid del usuario logueado para el parte
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id;
+
+      // Buscar parte de hoy para esta obra (cualquier jefe)
       let parteHoy = partes.find(p => p.fecha === hoy);
       if (!parteHoy) {
-        const r = await fetch(`${SUPA_URL}/partes_diarios`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ obra_id: selected.id, fecha: hoy, jefe_id: selected.jefe_id }) });
-        const rows = await r.json();
-        parteHoy = rows[0];
-        setPartes(prev => [parteHoy, ...prev]);
+        // Verificar si ya existe en DB (puede haberlo creado Yonyali)
+        const existentes = await fetch(
+          `${SUPA_URL}/partes_diarios?obra_id=eq.${selected.id}&fecha=eq.${hoy}`,
+          { headers: hdrs(tk) }
+        ).then(r => r.json());
+
+        if (Array.isArray(existentes) && existentes.length > 0) {
+          parteHoy = existentes[0];
+        } else {
+          // Crear parte con el uid del admin como jefe
+          const r = await fetch(`${SUPA_URL}/partes_diarios`, {
+            method: "POST", headers: hdrs(tk),
+            body: JSON.stringify({ obra_id: selected.id, fecha: hoy, jefe_id: uid })
+          });
+          const rows = await r.json();
+          parteHoy = rows[0];
+        }
+        setPartes(prev => [parteHoy, ...prev.filter(p => p.fecha !== hoy)]);
       }
+
+      // Buscar avance existente para esta tarea en CUALQUIER parte
+      // (no solo el de hoy — queremos el más reciente)
       const existing = avancesTareas[tareaId];
       let avanceId;
+
       if (existing) {
-        await fetch(`${SUPA_URL}/avances_tarea?id=eq.${existing.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ porcentaje: pct }) });
+        // Actualizar el avance existente
+        await fetch(`${SUPA_URL}/avances_tarea?id=eq.${existing.id}`, {
+          method: "PATCH", headers: hdrs(tk),
+          body: JSON.stringify({ porcentaje: pct })
+        });
         avanceId = existing.id;
       } else {
-        const r = await fetch(`${SUPA_URL}/avances_tarea`, { method: "POST", headers: hdrs(tk), body: JSON.stringify({ parte_id: parteHoy.id, tarea_id: tareaId, porcentaje: pct }) });
+        // Crear nuevo avance en el parte de hoy
+        const r = await fetch(`${SUPA_URL}/avances_tarea`, {
+          method: "POST", headers: hdrs(tk),
+          body: JSON.stringify({ parte_id: parteHoy.id, tarea_id: tareaId, porcentaje: pct })
+        });
         const rows = await r.json();
         avanceId = rows[0].id;
       }
+
       const newAv = { ...avancesTareas, [tareaId]: { ...avancesTareas[tareaId], id: avanceId, porcentaje: pct } };
       setAvancesTareas(newAv);
       const vals = tareas.map(t => newAv[t.id]?.porcentaje || 0);
       setAvancesObra(prev => ({ ...prev, [selected.id]: Math.round(vals.reduce((s, v) => s + v, 0) / tareas.length) }));
       setMsg("✓ Guardado"); setTimeout(() => setMsg(""), 2000);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); setMsg("Error al guardar"); setTimeout(() => setMsg(""), 3000); }
     setSavingTarea(null);
   }
 
