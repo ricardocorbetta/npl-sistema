@@ -39,7 +39,20 @@ export default function Root() {
   const [session, setSession]   = useState(null)
   const [perfil, setPerfil]     = useState(null)
   const [loading, setLoading]   = useState(true)
-  const [current, setCurrent]   = useState(null)
+  const [current, setCurrent]   = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash || null;
+  })
+
+  // Sincronizar con el botón atrás/adelante del browser
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      setCurrent(hash || null);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -58,13 +71,22 @@ export default function Root() {
   const cargarPerfil = async (uid) => {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
     setPerfil(data)
-    if (data?.rol === 'jefe_obra') setCurrent('obras')
+    if (data?.rol === 'jefe_obra') navTo('obras')
     setLoading(false)
+  }
+
+  const navTo = (modulo) => {
+    setCurrent(modulo)
+    if (modulo) {
+      window.location.hash = modulo
+    } else {
+      window.history.pushState(null, '', window.location.pathname)
+    }
   }
 
   const logout = async () => {
     await supabase.auth.signOut()
-    setCurrent(null)
+    navTo(null)
   }
 
   if (loading) return (
@@ -78,14 +100,14 @@ export default function Root() {
 
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
-  if (current === 'presupuestos') return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><App /></Layout>
-  if (current === 'proyectos')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Proyectos /></Layout>
-  if (current === 'calculistas')  return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Calculistas /></Layout>
-  if (current === 'crm')          return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
-  if (current === 'dashboard')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
-  if (current === 'obras')        return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Obras perfil={perfil} onLogout={logout} /></Layout>
-  if (current === 'biblioteca')    return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Biblioteca /></Layout>
-  if (current === 'usuarios')     return <Layout current={current} onNav={setCurrent} apps={apps} onLogout={logout} perfil={perfil}><Usuarios session={session} /></Layout>
+  if (current === 'presupuestos') return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><App /></Layout>
+  if (current === 'proyectos')    return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Proyectos /></Layout>
+  if (current === 'calculistas')  return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Calculistas /></Layout>
+  if (current === 'crm')          return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
+  if (current === 'dashboard')    return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
+  if (current === 'obras')        return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Obras perfil={perfil} onLogout={logout} /></Layout>
+  if (current === 'biblioteca')    return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Biblioteca /></Layout>
+  if (current === 'usuarios')     return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Usuarios session={session} /></Layout>
 
   return (
     <div style={{ ...s.sans, minHeight: '100vh', background: '#f9f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -96,7 +118,7 @@ export default function Root() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, width: '100%', maxWidth: 600 }}>
         {apps.map(a => (
-          <button key={a.id} onClick={() => setCurrent(a.id)}
+          <button key={a.id} onClick={() => navTo(a.id)}
             style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 14, padding: '20px 16px', cursor: 'pointer', textAlign: 'left' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = '#111'}
             onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e5e5'}>
