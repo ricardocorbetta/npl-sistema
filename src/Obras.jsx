@@ -398,12 +398,11 @@ function VistaJefe({ perfil, onLogout }) {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                         <div style={{ flex: 1 }}>
                           <span style={{ fontWeight: 600, fontSize: 15 }}>{t.nombre}</span>
-                          {inicioRel && (
-                            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
-                              🗓 Inicio: {inicioRel}
-                            </div>
-                          )}
-                          {nota && <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic" }}>"{nota}"</div>}
+                          <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
+                            {t.fecha_inicio_plan && <span style={{ fontSize: 11, color: "#aaa" }}>📅 {inicioRel || new Date(t.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
+                            {t.fecha_fin_plan    && <span style={{ fontSize: 11, color: "#aaa" }}>🏁 {new Date(t.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
+                          </div>
+                          {nota && <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic", background: "#f5f5f5", borderRadius: 6, padding: "4px 8px" }}>💬 {nota}</div>}
                         </div>
                         <span style={{ fontWeight: 800, fontSize: 18, color: pctT === 100 ? "#22c55e" : color, marginLeft: 10 }}>{pctT}%</span>
                       </div>
@@ -569,7 +568,6 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
         {[
           { lbl: "Código", key: "codigo", ph: "2026-SF-531" },
           { lbl: "Nombre *", key: "nombre", ph: "Nombre de la obra" },
-          { lbl: "Cliente", key: "cliente", ph: "Empresa o persona" },
           { lbl: "Dirección", key: "direccion", ph: "Dirección de la obra" },
         ].map(f => (
           <div key={f.key} style={{ marginBottom: 12 }}>
@@ -615,20 +613,21 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
           </div>
         )}
 
+        {/* Cliente CRM */}
+        <div style={{ marginBottom: 12 }}>
+          <span style={shared.lbl}>🏢 Cliente</span>
+          <Combobox
+            options={clientesCRM.map(c => ({ value: c.id, label: c.empresa }))}
+            value={form.cliente_id}
+            onChange={val => setForm(p => ({ ...p, cliente_id: val }))}
+            placeholder="Buscar cliente..."
+            emptyLabel="Sin vincular"
+          />
+        </div>
+
         {/* Cruces con otros módulos */}
         <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "14px", marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#888", marginBottom: 12, textTransform: "uppercase", letterSpacing: .5 }}>Vínculos</div>
-
-          <div style={{ marginBottom: 10 }}>
-            <span style={shared.lbl}>🏢 Cliente (CRM)</span>
-            <Combobox
-              options={clientesCRM.map(c => ({ value: c.id, label: c.empresa }))}
-              value={form.cliente_id}
-              onChange={val => setForm(p => ({ ...p, cliente_id: val }))}
-              placeholder="Buscar cliente..."
-              emptyLabel="Sin vincular"
-            />
-          </div>
 
           <div style={{ marginBottom: 10 }}>
             <span style={shared.lbl}>📋 Proyecto (Ingeniería)</span>
@@ -691,6 +690,7 @@ function VistaAdmin() {
   const [avancesObra,   setAvancesObra]   = useState({});
   const [loading,       setLoading]       = useState(true);
   const [savingTarea,   setSavingTarea]   = useState(null);
+  const [panelTareaAdmin, setPanelTareaAdmin] = useState(null); // { tarea, pct }
   const [showModal,     setShowModal]     = useState(false);
   const [showEditObra,  setShowEditObra]  = useState(false);
   const [showTareaM,    setShowTareaM]    = useState(false);
@@ -767,7 +767,7 @@ function VistaAdmin() {
     }
   }
 
-  async function guardarAvanceTarea(tareaId, pct) {
+  async function guardarAvanceTarea(tareaId, pct, nota = null, archivoData = null) {
     setSavingTarea(tareaId);
     try {
       const tk = await getToken();
@@ -806,23 +806,29 @@ function VistaAdmin() {
       let avanceId;
 
       if (existing) {
-        // Actualizar el avance existente
         await fetch(`${SUPA_URL}/avances_tarea?id=eq.${existing.id}`, {
           method: "PATCH", headers: hdrs(tk),
-          body: JSON.stringify({ porcentaje: pct })
+          body: JSON.stringify({ porcentaje: pct, ...(nota !== null ? { nota } : {}) })
         });
         avanceId = existing.id;
       } else {
-        // Crear nuevo avance en el parte de hoy
         const r = await fetch(`${SUPA_URL}/avances_tarea`, {
           method: "POST", headers: hdrs(tk),
-          body: JSON.stringify({ parte_id: parteHoy.id, tarea_id: tareaId, porcentaje: pct })
+          body: JSON.stringify({ parte_id: parteHoy.id, tarea_id: tareaId, porcentaje: pct, nota })
         });
         const rows = await r.json();
         avanceId = rows[0].id;
       }
 
-      const newAv = { ...avancesTareas, [tareaId]: { ...avancesTareas[tareaId], id: avanceId, porcentaje: pct } };
+      // Guardar archivo si existe
+      if (archivoData && avanceId) {
+        await fetch(`${SUPA_URL}/archivos_avance`, {
+          method: "POST", headers: hdrs(tk),
+          body: JSON.stringify({ avance_id: avanceId, tipo: archivoData.tipo, url: archivoData.url, nombre_archivo: archivoData.nombre, storage_path: archivoData.path })
+        });
+      }
+
+      const newAv = { ...avancesTareas, [tareaId]: { ...avancesTareas[tareaId], id: avanceId, porcentaje: pct, nota: nota || avancesTareas[tareaId]?.nota } };
       setAvancesTareas(newAv);
       const vals = tareas.map(t => newAv[t.id]?.porcentaje || 0);
       setAvancesObra(prev => ({ ...prev, [selected.id]: Math.round(vals.reduce((s, v) => s + v, 0) / tareas.length) }));
@@ -1092,20 +1098,26 @@ function VistaAdmin() {
                           return (
                             <div key={t.id} style={{ ...shared.card, marginBottom: 10, borderLeft: `4px solid ${color}` }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                                <div>
-                                  <span style={{ fontSize: 14, fontWeight: 600 }}>{t.nombre}</span>
-                                  {inicioRel && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>🗓 Inicio: {inicioRel}</div>}
-                                  {av?.nota && <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic" }}>"{av.nota}"</div>}
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span style={{ fontSize: 14, fontWeight: 600 }}>{t.nombre}</span>
+                                    {t.etapa && <span style={{ fontSize: 10, fontWeight: 700, background: color + "22", color, borderRadius: 6, padding: "2px 7px" }}>{t.etapa}</span>}
+                                  </div>
+                                  <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
+                                    {t.fecha_inicio_plan && <span style={{ fontSize: 11, color: "#aaa" }}>📅 Inicio: {new Date(t.fecha_inicio_plan + "T12:00").toLocaleDateString("es-AR")} {inicioRel ? `(${inicioRel})` : ""}</span>}
+                                    {t.fecha_fin_plan    && <span style={{ fontSize: 11, color: "#aaa" }}>🏁 Fin: {new Date(t.fecha_fin_plan + "T12:00").toLocaleDateString("es-AR")}</span>}
+                                  </div>
+                                  {av?.nota && <div style={{ fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic", background: "#f8f8f8", borderRadius: 6, padding: "4px 8px" }}>💬 {av.nota}</div>}
                                 </div>
-                                <span style={{ fontSize: 18, fontWeight: 800, color: pctT === 100 ? "#22c55e" : "#111" }}>{pctT}%</span>
+                                <span style={{ fontSize: 20, fontWeight: 800, color: pctT === 100 ? "#22c55e" : "#111", marginLeft: 12, flexShrink: 0 }}>{pctT}%</span>
                               </div>
                               <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
                                 <div style={{ height: "100%", width: `${pctT}%`, background: pctT === 100 ? "#22c55e" : color }} />
                               </div>
-                              {/* Botones % */}
+                              {/* Botones % — abren panel con nota + archivo */}
                               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: archivos.length > 0 ? 10 : 0 }}>
                                 {PCT_BTNS.map(pct => (
-                                  <button key={pct} onClick={() => guardarAvanceTarea(t.id, pct)} disabled={isSaving} style={{
+                                  <button key={pct} onClick={() => setPanelTareaAdmin({ tarea: t, pct })} disabled={isSaving} style={{
                                     ...S.btnSm, minWidth: isMobile ? 44 : 40, fontWeight: 600,
                                     background: av?.porcentaje === pct ? color : "#f0f0f0",
                                     color: av?.porcentaje === pct ? "#fff" : "#333",
@@ -1215,6 +1227,8 @@ function VistaAdmin() {
             </select>
             <span style={S.lbl}>Nombre *</span>
             <input value={nuevaTarea.nombre} onChange={e => setNuevaTarea(p => ({ ...p, nombre: e.target.value }))} style={{ ...S.inp, marginBottom: 10 }} placeholder="Ej: Fabricar paneles" />
+            <span style={S.lbl}>Descripción</span>
+            <input value={nuevaTarea.descripcion || ""} onChange={e => setNuevaTarea(p => ({ ...p, descripcion: e.target.value }))} style={{ ...S.inp, marginBottom: 10 }} placeholder="Detalle de la tarea (opcional)" />
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ flex: 1 }}><span style={S.lbl}>Inicio plan</span><input type="date" value={nuevaTarea.fecha_inicio_plan} onChange={e => setNuevaTarea(p => ({ ...p, fecha_inicio_plan: e.target.value }))} style={S.inp} /></div>
               <div style={{ flex: 1 }}><span style={S.lbl}>Fin plan</span><input type="date" value={nuevaTarea.fecha_fin_plan} onChange={e => setNuevaTarea(p => ({ ...p, fecha_fin_plan: e.target.value }))} style={S.inp} /></div>
@@ -1230,6 +1244,20 @@ function VistaAdmin() {
       {/* Modal editar obra */}
       {showEditObra && selected && (
         <ModalEditarObra obra={selected} jefesList={jefesList} onGuardar={editarObra} onClose={() => setShowEditObra(false)} />
+      )}
+
+      {/* Panel avance admin — mismo que mobile */}
+      {panelTareaAdmin && (
+        <PanelAvance
+          tarea={panelTareaAdmin.tarea}
+          avanceActual={panelTareaAdmin.pct}
+          obraCodigo={selected?.codigo}
+          onGuardar={async (pct, nota, arch) => {
+            await guardarAvanceTarea(panelTareaAdmin.tarea.id, pct, nota, arch);
+            setPanelTareaAdmin(null);
+          }}
+          onClose={() => setPanelTareaAdmin(null)}
+        />
       )}
     </div>
   );
