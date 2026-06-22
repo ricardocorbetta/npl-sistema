@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import Combobox from "./Combobox.jsx";
 import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
@@ -620,34 +621,46 @@ function ModalEditarObra({ obra, jefesList, onGuardar, onClose }) {
 
           <div style={{ marginBottom: 10 }}>
             <span style={shared.lbl}>🏢 Cliente (CRM)</span>
-            <select value={form.cliente_id} onChange={e => setForm(p => ({ ...p, cliente_id: e.target.value }))} style={shared.inp}>
-              <option value="">Sin vincular</option>
-              {clientesCRM.map(c => <option key={c.id} value={c.id}>{c.empresa}</option>)}
-            </select>
+            <Combobox
+              options={clientesCRM.map(c => ({ value: c.id, label: c.empresa }))}
+              value={form.cliente_id}
+              onChange={val => setForm(p => ({ ...p, cliente_id: val }))}
+              placeholder="Buscar cliente..."
+              emptyLabel="Sin vincular"
+            />
           </div>
 
           <div style={{ marginBottom: 10 }}>
             <span style={shared.lbl}>📋 Proyecto (Ingeniería)</span>
-            <select value={form.proyecto_id} onChange={e => setForm(p => ({ ...p, proyecto_id: e.target.value }))} style={shared.inp}>
-              <option value="">Sin vincular</option>
-              {proyectos.map(p => <option key={p.id} value={p.id}>{p.numero_proyecto} — {p.descripcion}</option>)}
-            </select>
+            <Combobox
+              options={proyectos.map(p => ({ value: p.id, label: `${p.numero_proyecto || ""} — ${p.descripcion || ""}`.trim() }))}
+              value={form.proyecto_id}
+              onChange={val => setForm(p => ({ ...p, proyecto_id: val }))}
+              placeholder="Buscar proyecto..."
+              emptyLabel="Sin vincular"
+            />
           </div>
 
           <div style={{ marginBottom: 10 }}>
             <span style={shared.lbl}>👷 Calculista responsable</span>
-            <select value={form.calculista_id} onChange={e => setForm(p => ({ ...p, calculista_id: e.target.value }))} style={shared.inp}>
-              <option value="">Sin vincular</option>
-              {calculistas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+            <Combobox
+              options={calculistas.map(c => ({ value: c.id, label: c.nombre }))}
+              value={form.calculista_id}
+              onChange={val => setForm(p => ({ ...p, calculista_id: val }))}
+              placeholder="Buscar calculista..."
+              emptyLabel="Sin vincular"
+            />
           </div>
 
           <div style={{ marginBottom: 0 }}>
             <span style={shared.lbl}>💰 Presupuesto aprobado</span>
-            <select value={form.presupuesto_id} onChange={e => setForm(p => ({ ...p, presupuesto_id: e.target.value }))} style={shared.inp}>
-              <option value="">Sin vincular</option>
-              {presupuestos.map(p => <option key={p.id} value={p.id}>{p.cliente} — {p.descripcion}</option>)}
-            </select>
+            <Combobox
+              options={presupuestos.map(p => ({ value: p.id, label: `${p.cliente || ""} — ${p.descripcion || ""}`.trim() }))}
+              value={form.presupuesto_id}
+              onChange={val => setForm(p => ({ ...p, presupuesto_id: val }))}
+              placeholder="Buscar presupuesto..."
+              emptyLabel="Sin vincular"
+            />
           </div>
         </div>
 
