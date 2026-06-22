@@ -1,13 +1,13 @@
 import React from "react";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase.js";
+import Combobox from "./Combobox.jsx";
 
 const ESTADOS = [
   { id: "activo",    label: "Activo",    color: "#e8f5e9", text: "#2e7d32" },
   { id: "entregado", label: "Entregado", color: "#e3f2fd", text: "#1565c0" },
   { id: "revision",  label: "Revision",  color: "#fff8e1", text: "#f57f17" },
 ];
-const ENCARGADOS_FIJOS = ["LUCAS", "JOACO", "NPL", "LUCAS/JOACO", "EDU Y LUCAS", "EDY Y LUCAS", "CAMI"];
 const CATEGORIAS = ["proyecto", "obra", "revision"];
 const CHECKS = [
   { key: "anticipo",          label: "Anticipo",    abbr: "A" },
@@ -97,7 +97,10 @@ function ProyectoCard({ p, onEdit, onDelete }) {
           style={{ background: "none", border: "none", cursor: "pointer", color: "#d0d0d0", fontSize: 17, padding: 0 }}
         >x</button>
       </div>
-      <p style={{ margin: "0 0 7px", fontSize: 12, color: "#888" }}>{p.cliente || "-"}</p>
+      <p style={{ margin: "0 0 4px", fontSize: 12, color: "#888" }}>{p.cliente || "-"}</p>
+      {p.encargado && (
+        <p style={{ margin: "0 0 7px", fontSize: 11, color: "#666", fontWeight: 600 }}>👷 {p.encargado}</p>
+      )}
       {p.proxima_tarea && (
         <p style={{ margin: "0 0 8px", fontSize: 11, color: "#444", background: "#f7f7f7", borderRadius: 6, padding: "4px 8px", borderLeft: "3px solid #111" }}>
           {p.proxima_tarea}
@@ -175,24 +178,61 @@ function Lista({ items, onEdit, onDelete }) {
   );
 }
 
-const EMPTY = { numero_proyecto: "", descripcion: "", cliente: "", encargado: "NPL", estado: "activo", categoria: "proyecto", anticipo: false, check_diagnostico: false, proyecto_ok: false, entregado: false, cobrado: false, proxima_tarea: "" };
+const EMPTY = {
+  numero_proyecto: "", descripcion: "", cliente: "", encargado: "",
+  estado: "activo", categoria: "proyecto",
+  anticipo: false, check_diagnostico: false, proyecto_ok: false,
+  entregado: false, cobrado: false, proxima_tarea: "",
+  cliente_id: "", presupuesto_id: "",
+};
 
 function Form({ item, onSave, onCancel }) {
-  const [form, setForm] = useState(item ? { ...item } : { ...EMPTY });
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
+  const [form,        setForm]        = useState(item ? { ...item } : { ...EMPTY });
+  const [saving,      setSaving]      = useState(false);
+  const [err,         setErr]         = useState(null);
+  const [calculistas, setCalculistas] = useState([]);
+  const [clientes,    setClientes]    = useState([]);
+  const [presups,     setPresups]     = useState([]);
+
+  useEffect(() => {
+    async function cargar() {
+      const [cArr, clArr, prArr] = await Promise.all([
+        supabase.from("calculistas").select("id,nombre,tipo,freelance").order("nombre").then(r => r.data || []),
+        supabase.from("clientes").select("id,empresa").order("empresa").then(r => r.data || []),
+        supabase.from("presupuestos").select("id,codigo,descripcion,cliente").order("created_at", { ascending: false }).then(r => r.data || []),
+      ]);
+      setCalculistas(cArr);
+      setClientes(clArr);
+      setPresups(prArr);
+    }
+    cargar();
+  }, []);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
   const submit = async () => {
     if (!form.descripcion.trim()) { setErr("La descripcion es requerida"); return; }
     setSaving(true); setErr(null);
     try {
-      const { id, created_at, ...data } = form;
+      const { id, created_at, updated_at, ...data } = form;
       if (item && item.id) await api.update(item.id, data);
       else await api.insert(data);
       onSave();
     } catch (e) { setErr(e.message); }
     setSaving(false);
   };
+
+  // Opciones para Combobox
+  const optsCalculistas = [
+    // Primero internos
+    ...calculistas.filter(c => !c.freelance).map(c => ({ value: c.nombre, label: `${c.nombre} (interno)` })),
+    // Luego externos
+    ...calculistas.filter(c => c.freelance).map(c => ({ value: c.nombre, label: `${c.nombre} (externo)` })),
+  ];
+
+  const optsClientes = clientes.map(c => ({ value: c.id, label: c.empresa }));
+  const optsPresups  = presups.map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}`.trim() }));
+
   return (
     <div style={{ ...s.sans, maxWidth: 620, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -201,49 +241,78 @@ function Form({ item, onSave, onCancel }) {
         </h2>
         <button onClick={onCancel} style={{ ...s.btn, background: "#f5f5f5", color: "#555" }}>Cancelar</button>
       </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
-          <label style={s.label}>Numero</label>
+          <label style={s.label}>Número</label>
           <input style={s.input} value={form.numero_proyecto || ""} onChange={e => set("numero_proyecto", e.target.value)} placeholder="ej: 539" />
         </div>
         <div>
           <label style={s.label}>Estado</label>
           <select style={s.input} value={form.estado} onChange={e => set("estado", e.target.value)}>
-            {ESTADOS.map(e => (
-              <option key={e.id} value={e.id}>{e.label}</option>
-            ))}
+            {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
           </select>
         </div>
+
         <div style={{ gridColumn: "1 / -1" }}>
-          <label style={s.label}>Descripcion *</label>
+          <label style={s.label}>Descripción *</label>
           <input style={s.input} value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Vivienda Abasto" />
         </div>
+
+        {/* Cliente texto libre + vínculo CRM */}
         <div>
-          <label style={s.label}>Cliente</label>
+          <label style={s.label}>Cliente (texto)</label>
           <input style={s.input} value={form.cliente || ""} onChange={e => set("cliente", e.target.value)} placeholder="Ej: Arq. Nievas" />
         </div>
         <div>
-          <label style={s.label}>Encargado</label>
-          <select style={s.input} value={form.encargado || ""} onChange={e => set("encargado", e.target.value)}>
-            <option value="">Sin asignar</option>
-            {ENCARGADOS_FIJOS.map(e => (
-              <option key={e} value={e}>{e}</option>
-            ))}
-          </select>
+          <label style={s.label}>Cliente (CRM)</label>
+          <Combobox
+            options={optsClientes}
+            value={form.cliente_id || ""}
+            onChange={val => set("cliente_id", val)}
+            placeholder="Buscar en CRM..."
+            emptyLabel="Sin vincular"
+          />
         </div>
+
+        {/* Encargado desde calculistas */}
         <div>
-          <label style={s.label}>Categoria</label>
+          <label style={s.label}>Encargado / Calculista</label>
+          <Combobox
+            options={optsCalculistas}
+            value={form.encargado || ""}
+            onChange={(val) => set("encargado", val)}
+            placeholder="Buscar calculista..."
+            emptyLabel="Sin asignar"
+          />
+        </div>
+
+        <div>
+          <label style={s.label}>Categoría</label>
           <select style={s.input} value={form.categoria || "proyecto"} onChange={e => set("categoria", e.target.value)}>
-            {CATEGORIAS.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
+            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+
+        {/* Presupuesto vinculado */}
         <div style={{ gridColumn: "1 / -1" }}>
-          <label style={s.label}>Proxima tarea</label>
-          <input style={s.input} value={form.proxima_tarea || ""} onChange={e => set("proxima_tarea", e.target.value)} placeholder="Ej: Entregar" />
+          <label style={s.label}>Presupuesto vinculado</label>
+          <Combobox
+            options={optsPresups}
+            value={form.presupuesto_id || ""}
+            onChange={val => set("presupuesto_id", val)}
+            placeholder="Buscar presupuesto..."
+            emptyLabel="Sin vincular"
+          />
+        </div>
+
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={s.label}>Próxima tarea</label>
+          <input style={s.input} value={form.proxima_tarea || ""} onChange={e => set("proxima_tarea", e.target.value)} placeholder="Ej: Entregar planos" />
         </div>
       </div>
+
+      {/* Avance */}
       <div style={{ marginTop: 16 }}>
         <label style={s.label}>Avance del proyecto</label>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
@@ -255,6 +324,7 @@ function Form({ item, onSave, onCancel }) {
           ))}
         </div>
       </div>
+
       {err && <p style={{ color: "#c00", fontSize: 13, marginTop: 12 }}>{err}</p>}
       <button
         onClick={submit}
@@ -268,14 +338,14 @@ function Form({ item, onSave, onCancel }) {
 }
 
 export default function Proyectos() {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [vista, setVista] = useState("kanban");
-  const [editando, setEditando] = useState(null);
-  const [busq, setBusq] = useState("");
-  const [filtroEst, setFiltroEst] = useState("todos");
-  const [filtroEnc, setFiltroEnc] = useState("todos");
+  const [items,      setItems]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(null);
+  const [vista,      setVista]      = useState("kanban");
+  const [editando,   setEditando]   = useState(null);
+  const [busq,       setBusq]       = useState("");
+  const [filtroEst,  setFiltroEst]  = useState("todos");
+  const [filtroEnc,  setFiltroEnc]  = useState("todos");
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -287,7 +357,7 @@ export default function Proyectos() {
   useEffect(() => { load(); }, [load]);
 
   const eliminar = async (id) => {
-    if (!confirm("Eliminar este proyecto?")) return;
+    if (!confirm("¿Eliminar este proyecto?")) return;
     try { await api.remove(id); setItems(i => i.filter(x => x.id !== id)); }
     catch (e) { alert("Error: " + e.message); }
   };
@@ -338,6 +408,7 @@ export default function Proyectos() {
           <button onClick={() => setEditando(false)} style={{ ...s.btn, background: "#111", color: "#fff" }}>+ Nuevo</button>
         </div>
       </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 10, marginBottom: 14 }}>
         {[["Activos", kpis.activos, "#fff"], ["Revision", kpis.revision, "#fffcf0"], ["Entregados", kpis.entregados, "#f5f9ff"], ["Sin cobrar", kpis.sinCobrar, "#fff5f5"]].map(([l, v, bg]) => (
           <div key={l} style={{ background: bg, borderRadius: 8, padding: "10px 14px", border: "1px solid #eee" }}>
@@ -346,6 +417,7 @@ export default function Proyectos() {
           </div>
         ))}
       </div>
+
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <input
           placeholder="Buscar proyecto, cliente, numero..."
@@ -355,25 +427,19 @@ export default function Proyectos() {
         />
         <select value={filtroEst} onChange={e => setFiltroEst(e.target.value)} style={{ ...s.input, width: "auto" }}>
           <option value="todos">Todos los estados</option>
-          {ESTADOS.map(e => (
-            <option key={e.id} value={e.id}>{e.label}</option>
-          ))}
+          {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
         </select>
         <select value={filtroEnc} onChange={e => setFiltroEnc(e.target.value)} style={{ ...s.input, width: "auto" }}>
           <option value="todos">Todos los encargados</option>
-          {encargadosUnicos.map(e => (
-            <option key={e} value={e}>{e}</option>
-          ))}
+          {encargadosUnicos.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
         {(busq || filtroEst !== "todos" || filtroEnc !== "todos") && (
-          <button
-            onClick={() => { setBusq(""); setFiltroEst("todos"); setFiltroEnc("todos"); }}
-            style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}
-          >
+          <button onClick={() => { setBusq(""); setFiltroEst("todos"); setFiltroEnc("todos"); }} style={{ ...s.btn, background: "#f5f5f5", color: "#888", border: "1px solid #e5e5e5", fontSize: 12 }}>
             Limpiar
           </button>
         )}
       </div>
+
       {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando proyectos...</p>}
       {error && (
         <div style={{ textAlign: "center", padding: 40 }}>
@@ -381,12 +447,8 @@ export default function Proyectos() {
           <button onClick={load} style={{ ...s.btn, background: "#f5f5f5", border: "1px solid #ddd", color: "#333" }}>Reintentar</button>
         </div>
       )}
-      {!loading && !error && vista === "kanban" && (
-        <Kanban items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />
-      )}
-      {!loading && !error && vista === "lista" && (
-        <Lista items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />
-      )}
+      {!loading && !error && vista === "kanban" && <Kanban items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
+      {!loading && !error && vista === "lista"  && <Lista  items={filtrados} onEdit={p => setEditando(p)} onDelete={eliminar} />}
     </div>
   );
 }
