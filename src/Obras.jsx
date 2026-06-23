@@ -60,94 +60,91 @@ const shared = {
 };
 
 /* ════════════════════════════════════════════
-   GANTT CUSTOM — Carpeta 4 (sin dependencias externas)
+   GANTT CUSTOM — Carpeta 4
+   SVG puro, responsive, edición inline
 ════════════════════════════════════════════ */
 function GanttObra({ obra, onClose }) {
   const [tareas, setTareas] = useState([]);
-  const [rendimientos, setRendimientos] = useState({});
-  const [avances, setAvances] = useState({});
+  const [deps, setDeps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [panelTarea, setPanelTarea] = useState(null);
+  const [showAddTarea, setShowAddTarea] = useState(false);
   const [msg, setMsg] = useState("");
-  const [zoom, setZoom] = useState("semana"); // semana | mes
+  const [zoom, setZoom] = useState("semana");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const containerRef = useRef();
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => { cargar(); }, [obra.id]);
 
   async function cargar() {
     setLoading(true);
     const tk = await getToken();
-    const tArr = await fetch(`${SUPA_URL}/tareas_obra?obra_id=eq.${obra.id}&order=orden.asc`, { headers:hdrs(tk) }).then(r=>r.json());
-    const tFinal = Array.isArray(tArr) ? tArr : [];
-    setTareas(tFinal);
-
-    if (tFinal.length > 0) {
-      const ids = tFinal.map(t=>t.id).join(",");
-      const [avArr, sArr] = await Promise.all([
-        fetch(`${SUPA_URL}/avances_tarea?tarea_id=in.(${ids})&order=created_at.desc`, { headers:hdrs(tk) }).then(r=>r.json()),
-        fetch(`${SUPA_URL}/subtareas_obra?tarea_id=in.(${ids})&select=id,tarea_id`, { headers:hdrs(tk) }).then(r=>r.json()),
-      ]);
-      const pctMap = {};
-      (Array.isArray(avArr)?avArr:[]).forEach(a => { if(!pctMap[a.tarea_id]) pctMap[a.tarea_id]=a.porcentaje; });
-      setAvances(pctMap);
-
-      const subs = Array.isArray(sArr) ? sArr : [];
-      if (subs.length > 0) {
-        const sIds = subs.map(s=>s.id).join(",");
-        const rArr = await fetch(`${SUPA_URL}/subtarea_registros?subtarea_id=in.(${sIds})`, { headers:hdrs(tk) }).then(r=>r.json());
-        const diasPorSub = {};
-        (Array.isArray(rArr)?rArr:[]).forEach(r => { diasPorSub[r.subtarea_id]=(diasPorSub[r.subtarea_id]||0)+(parseFloat(r.dias)||0); });
-        const rMap = {};
-        subs.forEach(s => { rMap[s.tarea_id]=(rMap[s.tarea_id]||0)+(diasPorSub[s.id]||0); });
-        setRendimientos(rMap);
-      }
-    }
+    const [tArr, dArr] = await Promise.all([
+      fetch(`${SUPA_URL}/vista_gantt?obra_id=eq.${obra.id}&order=orden.asc`, { headers:hdrs(tk) }).then(r=>r.json()),
+      fetch(`${SUPA_URL}/tarea_dependencias?select=tarea_id,depende_de_id,tipo,lag_dias`, { headers:hdrs(tk) }).then(r=>r.json()),
+    ]);
+    setTareas(Array.isArray(tArr) ? tArr : []);
+    setDeps(Array.isArray(dArr) ? dArr : []);
     setLoading(false);
   }
 
-  // Calcular rango de fechas del proyecto
-  const fechas = tareas.flatMap(t => [t.fecha_inicio_plan, t.fecha_fin_plan].filter(Boolean).map(f => new Date(f)));
+  async function guardarTarea(id, campos) {
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/tareas_obra?id=eq.${id}`, { method:"PATCH", headers:hdrs(tk), body:JSON.stringify(campos) });
+    await cargar();
+    setMsg("✓ Guardado"); setTimeout(()=>setMsg(""),1500);
+  }
+
+  // Rango fechas
+  const todasFechas = tareas.flatMap(t => [
+    t.fecha_inicio_plan, t.fecha_fin_plan, t.fecha_inicio_real
+  ].filter(Boolean).map(f => new Date(f+"T12:00")));
   const hoy = new Date();
-  const minFecha = fechas.length ? new Date(Math.min(...fechas)) : hoy;
-  const maxFecha = fechas.length ? new Date(Math.max(...fechas)) : new Date(hoy.getTime() + 60*86400000);
-  // Padding
-  minFecha.setDate(minFecha.getDate() - 7);
-  maxFecha.setDate(maxFecha.getDate() + 14);
-  const totalDias = Math.ceil((maxFecha - minFecha) / 86400000);
-  const pxPorDia = zoom === "semana" ? 30 : 14;
-  const anchoTimeline = totalDias * pxPorDia;
-  const anchoGrid = 220;
+  const minF = todasFechas.length ? new Date(Math.min(...todasFechas)) : new Date(hoy.getTime() - 7*86400000);
+  const maxF = todasFechas.length ? new Date(Math.max(...todasFechas)) : new Date(hoy.getTime() + 60*86400000);
+  minF.setDate(minF.getDate() - 7);
+  maxF.setDate(maxF.getDate() + 21);
 
-  function xDesdeFecha(fecha) {
-    if (!fecha) return 0;
-    return Math.ceil((new Date(fecha) - minFecha) / 86400000) * pxPorDia;
+  const totalDias = Math.ceil((maxF - minF) / 86400000);
+  const pxD = zoom === "semana" ? 28 : 12;
+  const anchoTL = Math.max(totalDias * pxD, 600);
+  const anchoGrid = isMobile ? 140 : 220;
+  const altFila = isMobile ? 32 : 36;
+  const altEtapa = isMobile ? 28 : 32;
+  const gap = 4;
+
+  function xF(fecha) {
+    if (!fecha) return -999;
+    return Math.ceil((new Date(fecha+"T12:00") - minF) / 86400000) * pxD;
   }
-  function anchoDesdeDias(ini, fin) {
+  function wF(ini, fin) {
     if (!ini || !fin) return 0;
-    return Math.max(4, Math.ceil((new Date(fin) - new Date(ini)) / 86400000) * pxPorDia);
+    return Math.max(6, Math.ceil((new Date(fin+"T12:00") - new Date(ini+"T12:00")) / 86400000) * pxD);
   }
 
-  // Generar marcas de tiempo (semanas o meses)
-  function generarMarcas() {
-    const marcas = [];
-    const cur = new Date(minFecha);
-    if (zoom === "semana") {
-      // Avanzar al lunes más cercano
-      while (cur.getDay() !== 1) cur.setDate(cur.getDate() + 1);
-      while (cur < maxFecha) {
-        marcas.push({ fecha: new Date(cur), x: xDesdeFecha(cur), label: `${cur.getDate()}/${cur.getMonth()+1}` });
-        cur.setDate(cur.getDate() + 7);
-      }
-    } else {
-      cur.setDate(1);
-      while (cur < maxFecha) {
-        marcas.push({ fecha: new Date(cur), x: xDesdeFecha(cur), label: cur.toLocaleDateString("es-AR",{month:"short",year:"2-digit"}) });
-        cur.setMonth(cur.getMonth() + 1);
-      }
+  // Marcas timeline
+  const marcas = [];
+  const cur = new Date(minF);
+  if (zoom === "semana") {
+    while (cur.getDay() !== 1) cur.setDate(cur.getDate()+1);
+    while (cur < maxF) {
+      marcas.push({ x: xF(cur.toISOString().slice(0,10)), label: `${cur.getDate()}/${cur.getMonth()+1}` });
+      cur.setDate(cur.getDate()+7);
     }
-    return marcas;
+  } else {
+    cur.setDate(1);
+    while (cur < maxF) {
+      marcas.push({ x: xF(cur.toISOString().slice(0,10)), label: cur.toLocaleDateString("es-AR",{month:"short"}) });
+      cur.setMonth(cur.getMonth()+1);
+    }
   }
-  const marcas = generarMarcas();
-  const xHoy = xDesdeFecha(hoy);
+  const xHoy = xF(hoy.toISOString().slice(0,10));
 
   // Agrupar por etapa
   const porEtapa = {};
@@ -157,206 +154,412 @@ function GanttObra({ obra, onClose }) {
     porEtapa[e].push(t);
   });
 
-  const ALTURA_ETAPA = 32;
-  const ALTURA_TAREA = 36;
-  const ALTURA_GAP = 6;
-
-  // Calcular posiciones Y
-  let filas = [];
+  // Calcular filas con posición Y
+  const filas = [];
   let y = 0;
   Object.entries(porEtapa).forEach(([etapa, tArr]) => {
-    filas.push({ tipo:"etapa", etapa, y, h:ALTURA_ETAPA });
-    y += ALTURA_ETAPA + ALTURA_GAP;
+    filas.push({ tipo:"etapa", etapa, tareas:tArr, y, h:altEtapa });
+    y += altEtapa + gap;
     tArr.forEach(t => {
-      filas.push({ tipo:"tarea", tarea:t, y, h:ALTURA_TAREA });
-      y += ALTURA_TAREA + ALTURA_GAP;
+      filas.push({ tipo:"tarea", tarea:t, y, h:altFila });
+      y += altFila + gap;
     });
-    y += 4;
+    y += 6;
   });
-  const alturaTotal = y;
+  const altTotal = Math.max(y, 200);
 
-  if (loading) return <div style={{padding:60,textAlign:"center",color:"#aaa",fontFamily:"system-ui"}}>Cargando Gantt…</div>;
-  if (tareas.length === 0) return (
-    <div style={{padding:60,textAlign:"center",fontFamily:"system-ui"}}>
-      <p style={{color:"#aaa",marginBottom:16}}>No hay tareas cargadas.</p>
-      <button onClick={onClose} style={shared.btnSm}>Volver</button>
+  // Calcular líneas de dependencia en SVG
+  function calcDeps() {
+    const posY = {};
+    filas.forEach(f => { if(f.tipo==="tarea") posY[f.tarea.id] = f.y + f.h/2; });
+    return deps.map(d => {
+      const src = tareas.find(t=>t.id===d.depende_de_id);
+      const dst = tareas.find(t=>t.id===d.tarea_id);
+      if (!src || !dst || !src.fecha_fin_plan || !dst.fecha_inicio_plan) return null;
+      const x1 = xF(src.fecha_fin_plan) + wF(src.fecha_inicio_plan, src.fecha_fin_plan);
+      const y1 = posY[src.id] || 0;
+      const x2 = xF(dst.fecha_inicio_plan);
+      const y2 = posY[dst.id] || 0;
+      return { x1, y1, x2, y2, tipo: d.tipo };
+    }).filter(Boolean);
+  }
+  const depLines = calcDeps();
+
+  // KPIs globales
+  const totalTeorico = tareas.reduce((s,t) => s+(t.dias_teoricos||0), 0);
+  const totalReal = tareas.reduce((s,t) => s+(t.dias_reales||0), 0);
+  const avanceGeneral = tareas.length ? Math.round(tareas.reduce((s,t)=>s+(t.porcentaje_avance||0),0)/tareas.length) : 0;
+  const completadas = tareas.filter(t=>t.completada).length;
+
+  if (loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"system-ui",color:"#aaa"}}>
+      Cargando Gantt…
     </div>
   );
 
   return (
-    <div style={{fontFamily:"system-ui",height:"100vh",display:"flex",flexDirection:"column",background:"#f8f8f8"}}>
-      {/* Header */}
-      <div style={{background:"#111",color:"#fff",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-        <div style={{fontWeight:700,fontSize:15}}>📅 Plan de trabajo — {obra.nombre}</div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>setZoom(z=>z==="semana"?"mes":"semana")} style={{...shared.btnSm,fontSize:12,background:"#333",color:"#fff"}}>
-            {zoom==="semana"?"Vista mes":"Vista semana"}
-          </button>
-          {obra.drive_carpeta_4 && (
-            <a href={`https://drive.google.com/drive/folders/${obra.drive_carpeta_4}`} target="_blank" rel="noreferrer"
-               style={{...shared.btnSm,textDecoration:"none",fontSize:12,background:"#1a73e8",color:"#fff"}}>
-              📂 Drive
-            </a>
-          )}
-          <button onClick={onClose} style={{...shared.btnSm,fontSize:12}}>✕ Cerrar</button>
-        </div>
-      </div>
+    <div ref={containerRef} style={{fontFamily:"system-ui, -apple-system, sans-serif",height:"100vh",display:"flex",flexDirection:"column",background:"#f8f9fa"}}>
 
-      {msg && <div style={{background:"#d4edda",color:"#155724",padding:"6px 20px",fontSize:13,flexShrink:0}}>{msg}</div>}
-
-      {/* KPIs desvíos */}
-      <div style={{display:"flex",gap:8,padding:"8px 16px",background:"#fff",borderBottom:"1px solid #eee",flexShrink:0,flexWrap:"wrap"}}>
-        {tareas.filter(t=>t.dias_teoricos && rendimientos[t.id]).map(t => {
-          const dr = rendimientos[t.id]||0;
-          const desvio = dr - t.dias_teoricos;
-          const rend = Math.round((t.dias_teoricos/dr)*100);
-          return (
-            <div key={t.id} style={{background:desvio>0?"#fef2f2":"#f0fdf4",borderRadius:8,padding:"4px 10px",fontSize:11,border:`1px solid ${desvio>0?"#fecaca":"#bbf7d0"}`,cursor:"pointer"}} onClick={()=>setPanelTarea(t)}>
-              <span style={{fontWeight:600}}>{t.nombre}</span>
-              <span style={{color:desvio>0?"#ef4444":"#22c55e",marginLeft:6}}>{desvio>0?"+":""}{desvio}d · ⚡{rend}%</span>
+      {/* ── Header ── */}
+      <div style={{background:"#111",color:"#fff",padding:isMobile?"10px 12px":"12px 20px",flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:isMobile?13:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              📅 {obra.nombre}
             </div>
-          );
-        })}
-      </div>
-
-      {/* Gantt */}
-      <div style={{flex:1,overflow:"auto",display:"flex"}}>
-        {/* Grid izquierda — nombres */}
-        <div style={{width:anchoGrid,flexShrink:0,borderRight:"2px solid #e0e0e0",background:"#fff",position:"sticky",left:0,zIndex:10}}>
-          {/* Header */}
-          <div style={{height:40,background:"#f0f0f0",borderBottom:"1px solid #ddd",display:"flex",alignItems:"center",paddingLeft:12,fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase"}}>Tarea</div>
-          {/* Filas */}
-          <div style={{position:"relative",height:alturaTotal}}>
-            {filas.map((f,i) => {
-              if (f.tipo==="etapa") {
-                const color = ETAPA_COLOR[f.etapa]||"#888";
-                return (
-                  <div key={i} style={{position:"absolute",top:f.y,left:0,right:0,height:f.h,display:"flex",alignItems:"center",paddingLeft:12,background:color+"15",borderLeft:`4px solid ${color}`}}>
-                    <span style={{fontWeight:700,fontSize:13,color:"#333"}}>{f.etapa}</span>
-                  </div>
-                );
-              }
-              const t = f.tarea;
-              const pct = avances[t.id]||0;
-              const dr = rendimientos[t.id]||0;
-              return (
-                <div key={i} onClick={()=>setPanelTarea(t)} style={{position:"absolute",top:f.y,left:0,right:0,height:f.h,display:"flex",alignItems:"center",paddingLeft:20,cursor:"pointer",borderBottom:"1px solid #f5f5f5",background:"#fff"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#f8f8f8"}
-                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.nombre}</div>
-                    <div style={{fontSize:10,color:"#aaa"}}>{pct}% {dr>0?`· ${dr}d real`:""}</div>
-                  </div>
-                </div>
-              );
-            })}
+          </div>
+          <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap"}}>
+            {!isMobile && <button onClick={()=>setZoom(z=>z==="semana"?"mes":"semana")} style={{...shared.btnSm,fontSize:11,background:"#333",color:"#aaa"}}>
+              {zoom==="semana"?"→ Mes":"→ Semana"}
+            </button>}
+            <button onClick={()=>setShowAddTarea(true)} style={{...shared.btnSm,fontSize:11,background:"#22c55e",color:"#fff"}}>+ Tarea</button>
+            {obra.drive_carpeta_4 && (
+              <a href={`https://drive.google.com/drive/folders/${obra.drive_carpeta_4}`} target="_blank" rel="noreferrer"
+                 style={{...shared.btnSm,fontSize:11,background:"#1a73e8",color:"#fff",textDecoration:"none"}}>📂</a>
+            )}
+            <button onClick={onClose} style={{...shared.btnSm,fontSize:11}}>✕</button>
           </div>
         </div>
 
-        {/* Timeline derecha */}
-        <div style={{overflowX:"auto",flex:1}}>
-          <svg width={anchoTimeline} height={alturaTotal+40} style={{display:"block"}}>
-            {/* Header fechas */}
-            <rect x={0} y={0} width={anchoTimeline} height={40} fill="#f0f0f0"/>
-            {marcas.map((m,i) => (
-              <g key={i}>
-                <line x1={m.x} y1={0} x2={m.x} y2={alturaTotal+40} stroke="#e0e0e0" strokeWidth={1}/>
-                <text x={m.x+4} y={25} fontSize={10} fill="#888" fontFamily="system-ui">{m.label}</text>
-              </g>
-            ))}
-
-            {/* Línea hoy */}
-            <line x1={xHoy} y1={0} x2={xHoy} y2={alturaTotal+40} stroke="#ef4444" strokeWidth={2} strokeDasharray="4,3"/>
-            <text x={xHoy+3} y={14} fontSize={9} fill="#ef4444" fontFamily="system-ui">HOY</text>
-
-            {/* Barras */}
-            {filas.map((f,i) => {
-              if (f.tipo==="etapa") {
-                // Barra resumen de etapa
-                const tArr = porEtapa[f.etapa];
-                const fIni = tArr.map(t=>t.fecha_inicio_plan).filter(Boolean).sort()[0];
-                const fFin = tArr.map(t=>t.fecha_fin_plan).filter(Boolean).sort().pop();
-                if (!fIni || !fFin) return null;
-                const x = xDesdeFecha(fIni);
-                const w = anchoDesdeDias(fIni, fFin);
-                const color = ETAPA_COLOR[f.etapa]||"#888";
-                return (
-                  <g key={i}>
-                    <rect x={x} y={f.y+8} width={w} height={16} rx={4} fill={color} opacity={0.3}/>
-                    <rect x={x} y={f.y+8} width={4} height={16} rx={2} fill={color}/>
-                    <rect x={x+w-4} y={f.y+8} width={4} height={16} rx={2} fill={color}/>
-                  </g>
-                );
-              }
-
-              const t = f.tarea;
-              const color = ETAPA_COLOR[t.etapa]||"#888";
-              const pct = avances[t.id]||0;
-              const dr = rendimientos[t.id]||0;
-
-              // Barra plan
-              const xPlan = xDesdeFecha(t.fecha_inicio_plan);
-              const wPlan = anchoDesdeDias(t.fecha_inicio_plan, t.fecha_fin_plan);
-
-              // Barra real (estimada desde fecha_inicio_real + días reales)
-              const xReal = t.fecha_inicio_real ? xDesdeFecha(t.fecha_inicio_real) : xPlan;
-              const wReal = dr > 0 ? dr * pxPorDia : 0;
-
-              const desvio = t.dias_teoricos && dr ? dr - t.dias_teoricos : null;
-
-              return (
-                <g key={i} onClick={()=>setPanelTarea(t)} style={{cursor:"pointer"}}>
-                  {/* Barra plan (gris) */}
-                  {xPlan > 0 && wPlan > 0 && (
-                    <g>
-                      <rect x={xPlan} y={f.y+6} width={wPlan} height={10} rx={3} fill="#e0e0e0"/>
-                      {/* Progreso % sobre barra plan */}
-                      <rect x={xPlan} y={f.y+6} width={wPlan*(pct/100)} height={10} rx={3} fill={color} opacity={0.5}/>
-                    </g>
-                  )}
-                  {/* Barra real (sólida debajo) */}
-                  {wReal > 0 && (
-                    <rect x={xReal} y={f.y+20} width={wReal} height={8} rx={3}
-                      fill={desvio>0?"#ef4444":"#22c55e"} opacity={0.9}/>
-                  )}
-                  {/* % label */}
-                  {wPlan > 40 && (
-                    <text x={xPlan+6} y={f.y+15} fontSize={9} fill="#555" fontFamily="system-ui" fontWeight="bold">{pct}%</text>
-                  )}
-                  {/* Desvío badge */}
-                  {desvio!==null && wReal>0 && (
-                    <text x={xReal+wReal+4} y={f.y+27} fontSize={9} fill={desvio>0?"#ef4444":"#22c55e"} fontFamily="system-ui" fontWeight="bold">
-                      {desvio>0?"+":""}{desvio}d
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
+        {/* KPIs */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:10}}>
+          {[
+            { label:"Avance", value:`${avanceGeneral}%`, color:"#22c55e" },
+            { label:"Completadas", value:`${completadas}/${tareas.length}`, color:"#6366f1" },
+            { label:"Días teóricos", value:totalTeorico||"—", color:"#f59e0b" },
+            { label:"Días reales", value:totalReal||"—", color:totalReal>totalTeorico&&totalTeorico?"#ef4444":"#22c55e" },
+          ].map(k=>(
+            <div key={k.label} style={{background:"rgba(255,255,255,.08)",borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+              <div style={{fontSize:isMobile?14:16,fontWeight:800,color:k.color}}>{k.value}</div>
+              <div style={{fontSize:9,color:"#666",marginTop:1}}>{k.label}</div>
+            </div>
+          ))}
         </div>
       </div>
+
+      {msg && <div style={{background:"#d4edda",color:"#155724",padding:"6px 16px",fontSize:12,flexShrink:0}}>{msg}</div>}
+
+      {/* ── Gantt body ── */}
+      {tareas.length === 0 ? (
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+          <p style={{color:"#aaa",fontSize:14}}>No hay tareas. Agregá la primera.</p>
+          <button onClick={()=>setShowAddTarea(true)} style={shared.btn}>+ Agregar tarea</button>
+        </div>
+      ) : (
+        <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+
+          {/* Grid izquierda — fija */}
+          <div style={{width:anchoGrid,flexShrink:0,background:"#fff",borderRight:"2px solid #e8e8e8",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            {/* Header */}
+            <div style={{height:40,background:"#f5f5f5",borderBottom:"1px solid #e0e0e0",display:"flex",alignItems:"center",paddingLeft:12,fontSize:10,fontWeight:700,color:"#999",textTransform:"uppercase",flexShrink:0}}>
+              Tarea
+            </div>
+            {/* Filas scroll sync */}
+            <div style={{flex:1,overflowY:"auto",overflowX:"hidden"}} id="gantt-left">
+              <div style={{position:"relative",height:altTotal}}>
+                {filas.map((f,i) => {
+                  if (f.tipo==="etapa") {
+                    const color = ETAPA_COLOR[f.etapa]||"#888";
+                    const pctEtapa = f.tareas.length ? Math.round(f.tareas.reduce((s,t)=>s+(t.porcentaje_avance||0),0)/f.tareas.length) : 0;
+                    return (
+                      <div key={i} style={{position:"absolute",top:f.y,left:0,right:0,height:f.h,display:"flex",alignItems:"center",paddingLeft:10,background:color+"12",borderLeft:`3px solid ${color}`,gap:6}}>
+                        <span style={{fontWeight:700,fontSize:isMobile?11:12,color:"#333",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.etapa}</span>
+                        <span style={{fontSize:10,fontWeight:700,color,paddingRight:6}}>{pctEtapa}%</span>
+                      </div>
+                    );
+                  }
+                  const t = f.tarea;
+                  return (
+                    <div key={i} onClick={()=>setPanelTarea(t)}
+                      style={{position:"absolute",top:f.y,left:0,right:0,height:f.h,display:"flex",alignItems:"center",paddingLeft:isMobile?10:16,cursor:"pointer",borderBottom:"1px solid #f5f5f5",background:t.completada?"#f0fdf4":"#fff",gap:6}}
+                      onMouseEnter={e=>!isMobile&&(e.currentTarget.style.background=t.completada?"#dcfce7":"#f8f8f8")}
+                      onMouseLeave={e=>!isMobile&&(e.currentTarget.style.background=t.completada?"#f0fdf4":"#fff")}>
+                      {/* Check completada */}
+                      <div style={{width:14,height:14,borderRadius:"50%",background:t.completada?"#22c55e":t.porcentaje_avance>0?"#f59e0b":"#e0e0e0",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        {t.completada && <span style={{color:"#fff",fontSize:8,fontWeight:900}}>✓</span>}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:isMobile?10:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:t.completada?"#16a34a":"#111",textDecoration:t.completada?"line-through":"none"}}>{t.nombre}</div>
+                        <div style={{fontSize:9,color:"#aaa",marginTop:1}}>{t.porcentaje_avance||0}%{t.dias_teoricos?` · ${t.dias_teoricos}d`:""}{t.dias_reales>0?` · ${t.dias_reales}d real`:""}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline derecha — scroll horizontal */}
+          <div style={{flex:1,overflow:"auto"}} id="gantt-right"
+            onScroll={e => { const left = document.getElementById("gantt-left"); if(left) left.scrollTop = e.target.scrollTop; }}>
+            <svg width={anchoTL} height={altTotal+40} style={{display:"block"}}>
+              {/* Header fechas */}
+              <rect x={0} y={0} width={anchoTL} height={40} fill="#f5f5f5"/>
+              <line x1={0} y1={40} x2={anchoTL} y2={40} stroke="#e0e0e0" strokeWidth={1}/>
+
+              {/* Columnas alternas fin de semana */}
+              {zoom==="semana" && marcas.map((m,i) => (
+                <rect key={`bg-${i}`} x={m.x} y={40} width={pxD*2} height={altTotal} fill="rgba(0,0,0,.015)"/>
+              ))}
+
+              {/* Marcas */}
+              {marcas.map((m,i) => (
+                <g key={i}>
+                  <line x1={m.x} y1={0} x2={m.x} y2={altTotal+40} stroke="#e8e8e8" strokeWidth={1}/>
+                  <text x={m.x+3} y={26} fontSize={isMobile?8:10} fill="#999" fontFamily="system-ui">{m.label}</text>
+                </g>
+              ))}
+
+              {/* Línea HOY */}
+              <line x1={xHoy} y1={0} x2={xHoy} y2={altTotal+40} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4,3" opacity={0.7}/>
+              <rect x={xHoy-12} y={2} width={24} height={14} rx={3} fill="#ef4444"/>
+              <text x={xHoy} y={12} fontSize={8} fill="#fff" fontFamily="system-ui" textAnchor="middle" fontWeight="bold">HOY</text>
+
+              {/* Líneas de dependencia */}
+              {depLines.map((d,i) => {
+                const mx = (d.x1+d.x2)/2;
+                return (
+                  <path key={i}
+                    d={`M${d.x1},${d.y1+40} C${mx},${d.y1+40} ${mx},${d.y2+40} ${d.x2},${d.y2+40}`}
+                    fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4,2" markerEnd="url(#arrow)"/>
+                );
+              })}
+
+              {/* Flecha para dependencias */}
+              <defs>
+                <marker id="arrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L6,3 z" fill="#94a3b8"/>
+                </marker>
+              </defs>
+
+              {/* Barras */}
+              {filas.map((f,i) => {
+                if (f.tipo==="etapa") {
+                  const tArr = f.tareas;
+                  const fechasIni = tArr.map(t=>t.fecha_inicio_plan).filter(Boolean).sort();
+                  const fechasFin = tArr.map(t=>t.fecha_fin_plan).filter(Boolean).sort();
+                  if (!fechasIni.length || !fechasFin.length) return null;
+                  const x = xF(fechasIni[0]);
+                  const w = xF(fechasFin[fechasFin.length-1]) + wF(fechasFin[fechasFin.length-1], fechasFin[fechasFin.length-1]) - x;
+                  const color = ETAPA_COLOR[f.etapa]||"#888";
+                  const pctE = tArr.length ? tArr.reduce((s,t)=>s+(t.porcentaje_avance||0),0)/tArr.length : 0;
+                  return (
+                    <g key={i}>
+                      {/* Barra fondo etapa */}
+                      <rect x={x} y={f.y+40+8} width={w} height={12} rx={3} fill={color} opacity={0.15}/>
+                      {/* Progreso etapa */}
+                      <rect x={x} y={f.y+40+8} width={Math.max(0,w*(pctE/100))} height={12} rx={3} fill={color} opacity={0.4}/>
+                      {/* Diamantes extremos */}
+                      <polygon points={`${x},${f.y+40+14} ${x+6},${f.y+40+8} ${x+12},${f.y+40+14} ${x+6},${f.y+40+20}`} fill={color}/>
+                      <polygon points={`${x+w-12},${f.y+40+14} ${x+w-6},${f.y+40+8} ${x+w},${f.y+40+14} ${x+w-6},${f.y+40+20}`} fill={color}/>
+                    </g>
+                  );
+                }
+
+                const t = f.tarea;
+                const color = ETAPA_COLOR[t.etapa]||"#6366f1";
+                const pct = t.porcentaje_avance||0;
+                const xP = xF(t.fecha_inicio_plan);
+                const wP = wF(t.fecha_inicio_plan, t.fecha_fin_plan);
+                const xR = t.fecha_inicio_real ? xF(t.fecha_inicio_real) : xP;
+                const wR = t.dias_reales > 0 ? t.dias_reales * pxD : 0;
+                const desvio = t.dias_teoricos && t.dias_reales ? t.dias_reales - t.dias_teoricos : null;
+                const sinFechas = xP < 0 || wP === 0;
+
+                return (
+                  <g key={i} onClick={()=>setPanelTarea(t)} style={{cursor:"pointer"}}>
+                    {sinFechas ? (
+                      // Sin fechas → placeholder punteado
+                      <g>
+                        <rect x={10} y={f.y+40+8} width={80} height={10} rx={3} fill="none" stroke="#ddd" strokeWidth={1} strokeDasharray="4,2"/>
+                        <text x={16} y={f.y+40+16} fontSize={9} fill="#ccc" fontFamily="system-ui">sin fechas</text>
+                      </g>
+                    ) : (
+                      <g>
+                        {/* Barra plan — fondo */}
+                        <rect x={xP} y={f.y+40+6} width={wP} height={12} rx={3} fill={t.completada?"#22c55e":color} opacity={0.18}/>
+                        {/* Progreso % */}
+                        <rect x={xP} y={f.y+40+6} width={Math.max(0,wP*(pct/100))} height={12} rx={3} fill={t.completada?"#22c55e":color} opacity={0.75}/>
+                        {/* Borde */}
+                        <rect x={xP} y={f.y+40+6} width={wP} height={12} rx={3} fill="none" stroke={color} strokeWidth={1} opacity={0.5}/>
+                        {/* % label dentro de barra si hay espacio */}
+                        {wP > 35 && pct > 0 && (
+                          <text x={xP+wP*(pct/100)/2+xP*(1-pct/100<0?0:0)} y={f.y+40+15} fontSize={8} fill={t.completada?"#fff":color} fontFamily="system-ui" fontWeight="bold" textAnchor="middle"
+                            x={xP + Math.max(wP*(pct/100)/2, 12)}>{pct}%</text>
+                        )}
+                        {/* Barra real debajo */}
+                        {wR > 0 && (
+                          <g>
+                            <rect x={xR} y={f.y+40+20} width={wR} height={6} rx={2} fill={desvio>0?"#ef4444":"#22c55e"} opacity={0.85}/>
+                            {desvio !== null && wR > 20 && (
+                              <text x={xR+wR+3} y={f.y+40+26} fontSize={8} fill={desvio>0?"#ef4444":"#22c55e"} fontFamily="system-ui" fontWeight="bold">
+                                {desvio>0?"+":""}{desvio}d
+                              </text>
+                            )}
+                          </g>
+                        )}
+                        {/* Check si completada */}
+                        {t.completada && (
+                          <text x={xP+wP+3} y={f.y+40+15} fontSize={10} fill="#22c55e" fontFamily="system-ui">✓</text>
+                        )}
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      )}
 
       {/* Panel tarea */}
       {panelTarea && (
         <PanelTareaDetalle
           tarea={panelTarea}
           onClose={() => { setPanelTarea(null); cargar(); }}
+          onGuardar={guardarTarea}
+          tareas={tareas}
+          deps={deps}
+          onRecargar={cargar}
+        />
+      )}
+
+      {/* Modal nueva tarea */}
+      {showAddTarea && (
+        <ModalNuevaTarea
+          obraId={obra.id}
+          onClose={() => setShowAddTarea(false)}
+          onCreada={async () => { setShowAddTarea(false); await cargar(); }}
         />
       )}
     </div>
   );
 }
 
+/* ── Modal nueva tarea ── */
+function ModalNuevaTarea({ obraId, onClose, onCreada }) {
+  const [form, setForm] = useState({ nombre:"", etapa:"", dias_teoricos:"", fecha_inicio_plan:"", fecha_fin_plan:"" });
+  const [saving, setSaving] = useState(false);
+
+  async function crear() {
+    setSaving(true);
+    const tk = await getToken();
+    const r = await fetch(`${SUPA_URL}/tareas_obra`, {
+      method:"POST", headers:hdrs(tk),
+      body: JSON.stringify({
+        obra_id: obraId,
+        nombre: form.nombre,
+        etapa: form.etapa || null,
+        dias_teoricos: parseInt(form.dias_teoricos)||null,
+        fecha_inicio_plan: form.fecha_inicio_plan||null,
+        fecha_fin_plan: form.fecha_fin_plan||null,
+        orden: 999,
+      })
+    }).then(r=>r.json());
+    await onCreada();
+    setSaving(false);
+  }
+
+  // Auto-calcular fecha_fin si hay inicio y días
+  useEffect(() => {
+    if (form.fecha_inicio_plan && form.dias_teoricos && !form.fecha_fin_plan) {
+      const fin = new Date(form.fecha_inicio_plan+"T12:00");
+      fin.setDate(fin.getDate() + parseInt(form.dias_teoricos));
+      setForm(f => ({ ...f, fecha_fin_plan: fin.toISOString().slice(0,10) }));
+    }
+  }, [form.fecha_inicio_plan, form.dias_teoricos]);
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,padding:16}}>
+      <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:420}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+          <h3 style={{margin:0,fontSize:16}}>Nueva tarea</h3>
+          <button onClick={onClose} style={{...shared.btnSm,padding:"4px 8px"}}>✕</button>
+        </div>
+        <div style={{marginBottom:12}}>
+          <span style={shared.lbl}>Nombre *</span>
+          <input value={form.nombre} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))} style={shared.inp} placeholder="Nombre de la tarea"/>
+        </div>
+        <div style={{display:"flex",gap:10,marginBottom:12}}>
+          <div style={{flex:1}}>
+            <span style={shared.lbl}>Etapa</span>
+            <select value={form.etapa} onChange={e=>setForm(f=>({...f,etapa:e.target.value}))} style={shared.inp}>
+              <option value="">— Sin etapa —</option>
+              {Object.keys(ETAPA_COLOR).filter(e=>e!=="Sin etapa").map(e=><option key={e} value={e}>{e}</option>)}
+            </select>
+          </div>
+          <div style={{flex:1}}>
+            <span style={shared.lbl}>Días teóricos</span>
+            <input type="number" min="1" value={form.dias_teoricos} onChange={e=>setForm(f=>({...f,dias_teoricos:e.target.value}))} style={shared.inp} placeholder="0"/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <div style={{flex:1}}>
+            <span style={shared.lbl}>Inicio plan</span>
+            <input type="date" value={form.fecha_inicio_plan} onChange={e=>setForm(f=>({...f,fecha_inicio_plan:e.target.value}))} style={shared.inp}/>
+          </div>
+          <div style={{flex:1}}>
+            <span style={shared.lbl}>Fin plan</span>
+            <input type="date" value={form.fecha_fin_plan} onChange={e=>setForm(f=>({...f,fecha_fin_plan:e.target.value}))} style={shared.inp}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={crear} disabled={saving||!form.nombre} style={{...shared.btn,flex:1}}>{saving?"Creando…":"Crear tarea"}</button>
+          <button onClick={onClose} style={{...shared.btnSm,flex:1,padding:"10px"}}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 /* ════════════════════════════════════════════
    PANEL LATERAL TAREA — subtareas + registro días
 ════════════════════════════════════════════ */
-function PanelTareaDetalle({ tarea, onClose }) {
+function PanelTareaDetalle({ tarea, onClose, onGuardar, tareas = [], deps = [], onRecargar }) {
   const [subtareas, setSubtareas] = useState([]);
   const [diasPorSub, setDiasPorSub] = useState({});
   const [panelSub, setPanelSub] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showDatos, setShowDatos] = useState(false);
   const [biblioSubs, setBiblioSubs] = useState([]);
   const [nueva, setNueva] = useState({ nombre:"", codigo:"", dias_teoricos:"", desde_biblioteca:false, biblioteca_subtarea_id:"" });
+  const [editForm, setEditForm] = useState({
+    dias_teoricos: tarea.dias_teoricos||"",
+    fecha_inicio_plan: tarea.fecha_inicio_plan||"",
+    fecha_fin_plan: tarea.fecha_fin_plan||"",
+    fecha_inicio_real: tarea.fecha_inicio_real||"",
+    fecha_fin_real: tarea.fecha_fin_real||"",
+    dias_no_trabajados: tarea.dias_no_trabajados||"",
+    porcentaje_avance: tarea.porcentaje_avance||0,
+    completada: tarea.completada||false,
+  });
+  const [savingDatos, setSavingDatos] = useState(false);
+
+  async function guardarDatos() {
+    setSavingDatos(true);
+    await onGuardar(tarea.id, {
+      dias_teoricos: parseInt(editForm.dias_teoricos)||null,
+      fecha_inicio_plan: editForm.fecha_inicio_plan||null,
+      fecha_fin_plan: editForm.fecha_fin_plan||null,
+      fecha_inicio_real: editForm.fecha_inicio_real||null,
+      fecha_fin_real: editForm.fecha_fin_real||null,
+      dias_no_trabajados: parseInt(editForm.dias_no_trabajados)||null,
+      porcentaje_avance: parseInt(editForm.porcentaje_avance)||0,
+      completada: editForm.completada,
+    });
+    setSavingDatos(false);
+    setShowDatos(false);
+  }
+
+  // Auto-calcular fecha_fin desde inicio + días
+  useEffect(() => {
+    if (editForm.fecha_inicio_plan && editForm.dias_teoricos && !editForm.fecha_fin_plan) {
+      const fin = new Date(editForm.fecha_inicio_plan+"T12:00");
+      fin.setDate(fin.getDate() + parseInt(editForm.dias_teoricos));
+      setEditForm(f => ({ ...f, fecha_fin_plan: fin.toISOString().slice(0,10) }));
+    }
+  }, [editForm.fecha_inicio_plan, editForm.dias_teoricos]);
   const [saving, setSaving] = useState(false);
   const color = ETAPA_COLOR[tarea.etapa] || "#888";
 
@@ -442,6 +645,44 @@ function PanelTareaDetalle({ tarea, onClose }) {
 
         {/* Subtareas */}
         <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+
+          {/* Datos de la tarea — colapsable */}
+          <div style={{marginBottom:14}}>
+            <button onClick={()=>setShowDatos(!showDatos)} style={{...shared.btnSm,width:"100%",textAlign:"left",fontSize:12,display:"flex",justifyContent:"space-between"}}>
+              <span>📋 Fechas y datos</span><span>{showDatos?"▲":"▼"}</span>
+            </button>
+            {showDatos && (
+              <div style={{background:"#f8f8f8",borderRadius:10,padding:14,marginTop:8,border:"1px solid #e0e0e0"}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                  {[
+                    {lbl:"Días teóricos",key:"dias_teoricos",type:"number"},
+                    {lbl:"Días no trabajados",key:"dias_no_trabajados",type:"number"},
+                    {lbl:"Inicio plan",key:"fecha_inicio_plan",type:"date"},
+                    {lbl:"Fin plan",key:"fecha_fin_plan",type:"date"},
+                    {lbl:"Inicio real",key:"fecha_inicio_real",type:"date"},
+                    {lbl:"Fin real",key:"fecha_fin_real",type:"date"},
+                  ].map(f=>(
+                    <div key={f.key}>
+                      <label style={{fontSize:10,color:"#888",display:"block",marginBottom:3}}>{f.lbl}</label>
+                      <input type={f.type} value={editForm[f.key]} onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))} style={shared.inp}/>
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginBottom:10}}>
+                  <label style={{fontSize:10,color:"#888",display:"block",marginBottom:3}}>Avance % ({editForm.porcentaje_avance}%)</label>
+                  <input type="range" min="0" max="100" step="5" value={editForm.porcentaje_avance} onChange={e=>setEditForm(p=>({...p,porcentaje_avance:parseInt(e.target.value),completada:parseInt(e.target.value)===100}))} style={{width:"100%"}}/>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <input type="checkbox" checked={editForm.completada} onChange={e=>setEditForm(p=>({...p,completada:e.target.checked,porcentaje_avance:e.target.checked?100:p.porcentaje_avance}))} style={{width:16,height:16}}/>
+                  <label style={{fontSize:13,fontWeight:600}}>Tarea completada</label>
+                </div>
+                <button onClick={guardarDatos} disabled={savingDatos} style={{...shared.btn,width:"100%",fontSize:13}}>
+                  {savingDatos?"Guardando…":"Guardar datos"}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <span style={shared.lbl}>Subtareas ({subtareas.length})</span>
             <button onClick={()=>setShowAdd(!showAdd)} style={{...shared.btnSm,fontSize:12}}>
