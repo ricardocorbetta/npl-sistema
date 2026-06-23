@@ -1,410 +1,330 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
-const HDR = { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation" };
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
 
-const api = {
-  get: () => fetch(`${SUPA_URL}/calculistas?select=*&order=numero.asc.nullslast`, { headers: HDR }).then(r => r.json()),
-  post: (d) => fetch(`${SUPA_URL}/calculistas`, { method: "POST", headers: HDR, body: JSON.stringify(d) }).then(r => r.json()),
-  patch: (id, d) => fetch(`${SUPA_URL}/calculistas?id=eq.${id}`, { method: "PATCH", headers: HDR, body: JSON.stringify(d) }).then(r => r.json()),
-  delete: (id) => fetch(`${SUPA_URL}/calculistas?id=eq.${id}`, { method: "DELETE", headers: HDR }),
+async function getToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || ANON_KEY;
+}
+function hdrs(tk) {
+  return { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json", Prefer: "return=representation" };
+}
+
+const NIVEL_COLOR = { Senior: "#6366f1", Semi: "#f59e0b", Junior: "#22c55e" };
+const TIPO_COLOR  = { interno: "#111", externo: "#3b82f6" };
+
+const shared = {
+  btn:   { padding: "10px 18px", background: "#111", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" },
+  btnSm: { padding: "7px 12px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" },
+  inp:   { width: "100%", padding: "10px 12px", border: "1px solid #e0e0e0", borderRadius: 10, fontSize: 14, boxSizing: "border-box" },
+  card:  { background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,.07)" },
+  lbl:   { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5, display: "block" },
 };
 
-const ESTADOS = [
-  { id: "activo",     label: "Activo",        color: "#3B6D11", bg: "#EAF3DE" },
-  { id: "evaluacion", label: "En evaluación", color: "#854F0B", bg: "#FAEEDA" },
-  { id: "postulante", label: "Postulante",    color: "#185FA5", bg: "#E6F1FB" },
-  { id: "inactivo",   label: "Inactivo",      color: "#888",    bg: "#f5f5f5" },
-];
+const SISTEMAS_LIST = ["CypeCad", "AutoCad", "SketchUp", "Otros"];
 
-const NIVELES = ["Junior", "Semi-Senior", "Senior"];
-const SOFT = ["No lo uso", "Básico", "Intermedio", "Avanzado"];
-const DISPONIBILIDAD = ["Menos de 10 hs semanales", "Entre 10 y 20 hs semanales", "Más de 20 hs semanales"];
-const EXPERIENCIA = ["No tengo", "Menos de 5 proyectos", "Entre 5 y 20 proyectos", "Más de 20 proyectos"];
-
-const inp = { width: "100%", fontSize: 13, padding: "6px 10px", border: "1px solid #e5e5e5", borderRadius: 8, boxSizing: "border-box", background: "#fff" };
-
-function Badge({ estado }) {
-  const e = ESTADOS.find(x => x.id === estado) || ESTADOS[0];
-  return <span style={{ background: e.bg, color: e.color, fontSize: 11, fontWeight: 500, padding: "2px 10px", borderRadius: 99 }}>{e.label}</span>;
-}
-
-function NivelDot({ nivel }) {
-  const colors = { "Junior": "#854F0B", "Semi-Senior": "#185FA5", "Senior": "#3B6D11" };
-  return <span style={{ fontSize: 11, fontWeight: 500, color: colors[nivel] || "#888", background: "#f5f5f5", padding: "2px 8px", borderRadius: 99 }}>{nivel}</span>;
-}
-
-function SoftBadge({ label, nivel }) {
-  const colors = { "No lo uso": "#f0f0f0", "Básico": "#FAEEDA", "Intermedio": "#E6F1FB", "Avanzado": "#EAF3DE" };
-  const text = { "No lo uso": "#aaa", "Básico": "#854F0B", "Intermedio": "#185FA5", "Avanzado": "#3B6D11" };
-  return (
-    <div style={{ textAlign: "center" }}>
-      <p style={{ margin: 0, fontSize: 10, color: "#aaa", marginBottom: 3 }}>{label}</p>
-      <span style={{ fontSize: 11, fontWeight: 500, background: colors[nivel] || "#f5f5f5", color: text[nivel] || "#888", padding: "2px 8px", borderRadius: 99 }}>{nivel || "—"}</span>
-    </div>
-  );
-}
-
-function Grid({ children }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>{children}</div>;
-}
-
-function Section({ title, children }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111", borderBottom: "1px solid #f0f0f0", paddingBottom: 8 }}>{title}</p>
-      {children}
-    </div>
-  );
-}
-
-function F({ label, children }) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 5 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-const emptyForm = () => ({
-  nombre: "", estudio: "", nivel: "Junior", ciudad: "", estado: "postulante",
-  wsp: "", mail: "", ig: "", disponible: true,
-  cypecad: "No lo uso", autocad: "No lo uso", sketchup: "No lo uso",
-  otros_software: "", experiencia: "No tengo", sistemas: "",
-  freelance: false, factura: false, disponibilidad: "", observaciones: "", puntaje: 0,
-});
-
-export default function Calculistas() {
-  const [items, setItems]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [saving, setSaving]     = useState(false);
-  const [vista, setVista]       = useState("lista");
-  const [selected, setSelected] = useState(null);
-  const [editando, setEditando] = useState(null);
-  const [busq, setBusq]         = useState("");
-  const [tab, setTab]           = useState("activos");
-
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const data = await api.get();
-      if (data?.message) throw new Error(data.message);
-      setItems(data || []);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const saveForm = async (f) => {
-    setSaving(true);
-    try {
-      const body = {
-        nombre: f.nombre, estudio: f.estudio, nivel: f.nivel, ciudad: f.ciudad,
-        estado: f.estado, wsp: f.wsp, mail: f.mail, ig: f.ig, disponible: f.disponible,
-        cypecad: f.cypecad, autocad: f.autocad, sketchup: f.sketchup,
-        otros_software: f.otros_software, experiencia: f.experiencia, sistemas: f.sistemas,
-        freelance: f.freelance, factura: f.factura, disponibilidad: f.disponibilidad,
-        observaciones: f.observaciones, puntaje: f.puntaje,
-      };
-      if (f.id) {
-        const res = await api.patch(f.id, body);
-        const upd = Array.isArray(res) ? res[0] : res;
-        setItems(prev => prev.map(x => x.id === f.id ? upd : x));
-        if (selected?.id === f.id) setSelected(upd);
-      } else {
-        const res = await api.post(body);
-        const created = Array.isArray(res) ? res[0] : res;
-        setItems(prev => [...prev, created]);
-      }
-      setVista("lista"); setEditando(null);
-    } catch (e) { alert("Error: " + e.message); }
-    setSaving(false);
-  };
-
-  const eliminar = async (id) => {
-    if (!confirm("¿Eliminar este calculista?")) return;
-    setItems(prev => prev.filter(x => x.id !== id));
-    try { await api.delete(id); } catch (_) { load(); }
-  };
-
-  const activos    = items.filter(x => x.estado === "activo");
-  const evaluacion = items.filter(x => ["evaluacion", "postulante"].includes(x.estado));
-  const inactivos  = items.filter(x => x.estado === "inactivo");
-  const tabItems   = tab === "activos" ? activos : tab === "evaluacion" ? evaluacion : inactivos;
-
-  const filtrados = tabItems.filter(c => {
-    const q = busq.toLowerCase();
-    return !q || [c.nombre, c.estudio, c.ciudad].some(v => v?.toLowerCase().includes(q));
+/* ─── Modal crear/editar ─── */
+function ModalCalculista({ calc, onClose, onGuardar }) {
+  const esNuevo = !calc?.id;
+  const [form, setForm] = useState({
+    nombre: calc?.nombre || "",
+    nivel: calc?.nivel || "Junior",
+    tipo: calc?.tipo || "externo",
+    ciudad: calc?.ciudad || "",
+    mail: calc?.mail || "",
+    wsp: calc?.wsp || "",
+    disponible: calc?.disponible ?? true,
+    disponibilidad: calc?.disponibilidad || "",
+    freelance: calc?.freelance ?? false,
+    factura: calc?.factura ?? false,
+    puntaje: calc?.puntaje || 0,
+    sistemas: calc?.sistemas || "",
+    observaciones: calc?.observaciones || "",
+    experiencia: calc?.experiencia || "",
   });
+  const [saving, setSaving] = useState(false);
 
-  const kpis = {
-    activos: activos.length,
-    disponibles: activos.filter(x => x.disponible).length,
-    evaluacion: evaluacion.length,
-  };
+  async function guardar() {
+    setSaving(true);
+    const tk = await getToken();
+    if (esNuevo) {
+      await fetch(`${SUPA_URL}/calculistas`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(form) });
+    } else {
+      await fetch(`${SUPA_URL}/calculistas?id=eq.${calc.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(form) });
+    }
+    await onGuardar();
+    setSaving(false);
+  }
 
-  if (vista === "form") return (
-    <FormView
-      inicial={editando || emptyForm()}
-      onSave={saveForm}
-      onCancel={() => { setVista("lista"); setEditando(null); }}
-      saving={saving}
-    />
-  );
-
-  if (vista === "detalle" && selected) return (
-    <DetalleView
-      c={selected}
-      onBack={() => { setVista("lista"); setSelected(null); }}
-      onEdit={() => { setEditando(selected); setVista("form"); }}
-      onEliminar={() => { eliminar(selected.id); setVista("lista"); setSelected(null); }}
-    />
+  const F = ({ lbl, children }) => (
+    <div style={{ marginBottom: 12 }}>
+      <span style={shared.lbl}>{lbl}</span>
+      {children}
+    </div>
   );
 
   return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "20px", maxWidth: 1000, margin: "0 auto" }}>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 12, color: "#999", fontWeight: 500 }}>NPL · APP 03</p>
-          <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, color: "#111" }}>Calculistas</h1>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 17 }}>{esNuevo ? "Nuevo calculista" : "Editar calculista"}</h3>
+          <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 10px" }}>✕</button>
         </div>
+
+        <F lbl="Nombre *"><input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} style={shared.inp} placeholder="Nombre completo" /></F>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div>
+            <span style={shared.lbl}>Nivel</span>
+            <select value={form.nivel} onChange={e => setForm(f => ({ ...f, nivel: e.target.value }))} style={shared.inp}>
+              {["Junior", "Semi", "Senior"].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <span style={shared.lbl}>Tipo</span>
+            <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} style={shared.inp}>
+              <option value="interno">Interno</option>
+              <option value="externo">Externo</option>
+            </select>
+          </div>
+          <div>
+            <span style={shared.lbl}>Ciudad</span>
+            <input value={form.ciudad} onChange={e => setForm(f => ({ ...f, ciudad: e.target.value }))} style={shared.inp} placeholder="Ciudad" />
+          </div>
+          <div>
+            <span style={shared.lbl}>Puntaje (0–10)</span>
+            <input type="number" min="0" max="10" value={form.puntaje} onChange={e => setForm(f => ({ ...f, puntaje: parseInt(e.target.value) || 0 }))} style={shared.inp} />
+          </div>
+          <div>
+            <span style={shared.lbl}>Mail</span>
+            <input type="email" value={form.mail} onChange={e => setForm(f => ({ ...f, mail: e.target.value }))} style={shared.inp} placeholder="mail@ejemplo.com" />
+          </div>
+          <div>
+            <span style={shared.lbl}>WhatsApp</span>
+            <input value={form.wsp} onChange={e => setForm(f => ({ ...f, wsp: e.target.value }))} style={shared.inp} placeholder="+54 9 ..." />
+          </div>
+        </div>
+
+        <F lbl="Disponibilidad / notas">
+          <input value={form.disponibilidad} onChange={e => setForm(f => ({ ...f, disponibilidad: e.target.value }))} style={shared.inp} placeholder="Ej: Lunes a viernes tarde" />
+        </F>
+
+        <F lbl="Software">
+          <input value={form.sistemas} onChange={e => setForm(f => ({ ...f, sistemas: e.target.value }))} style={shared.inp} placeholder="CypeCad, AutoCad, SketchUp..." />
+        </F>
+
+        <F lbl="Experiencia">
+          <textarea value={form.experiencia} onChange={e => setForm(f => ({ ...f, experiencia: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} placeholder="Descripción de experiencia..." />
+        </F>
+
+        <F lbl="Observaciones">
+          <textarea value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} rows={2} style={{ ...shared.inp, resize: "vertical" }} />
+        </F>
+
+        {/* Flags */}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+          {[
+            { key: "disponible", label: "✅ Disponible" },
+            { key: "freelance",  label: "💼 Freelance" },
+            { key: "factura",    label: "🧾 Factura" },
+          ].map(f => (
+            <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
+              <input type="checkbox" checked={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.checked }))} style={{ width: 16, height: 16 }} />
+              {f.label}
+            </label>
+          ))}
+        </div>
+
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={load} style={{ padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "1px solid #e5e5e5", background: "#f5f5f5", color: "#555" }}>↻</button>
-          <button onClick={() => { setEditando(null); setVista("form"); }} style={{ padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "none", background: "#111", color: "#fff" }}>+ Nuevo</button>
+          <button onClick={guardar} disabled={saving || !form.nombre} style={{ ...shared.btn, flex: 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
+          <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Card calculista ─── */
+function CardCalculista({ calc, onClick }) {
+  const nivelColor = NIVEL_COLOR[calc.nivel] || "#888";
+  const estrellas = Math.round((calc.puntaje || 0) / 2);
+
+  return (
+    <div onClick={onClick} style={{ ...shared.card, cursor: "pointer", borderTop: `4px solid ${nivelColor}`, transition: "box-shadow .15s" }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.12)"}
+      onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 6px rgba(0,0,0,.07)"}>
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{calc.nombre}</div>
+          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{calc.ciudad || "—"}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: nivelColor, background: nivelColor + "18", borderRadius: 6, padding: "2px 8px" }}>{calc.nivel}</span>
+          <span style={{ fontSize: 11, color: TIPO_COLOR[calc.tipo] || "#888", background: "#f0f0f0", borderRadius: 6, padding: "2px 8px" }}>{calc.tipo}</span>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, marginBottom: 20 }}>
-        {[["Activos", kpis.activos], ["Disponibles", kpis.disponibles], ["En evaluación", kpis.evaluacion]].map(([l, v]) => (
-          <div key={l} style={{ background: "#f9f9f9", borderRadius: 8, padding: "10px 14px", border: "1px solid #eee" }}>
-            <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{l}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 600, color: "#111" }}>{loading ? "..." : v}</p>
+      {/* Puntaje estrellas */}
+      {calc.puntaje > 0 && (
+        <div style={{ fontSize: 14, marginBottom: 8, color: "#f59e0b" }}>
+          {"★".repeat(estrellas)}{"☆".repeat(5 - estrellas)}
+          <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{calc.puntaje}/10</span>
+        </div>
+      )}
+
+      {/* Badges */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: calc.disponible ? "#f0fdf4" : "#fef2f2", color: calc.disponible ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+          {calc.disponible ? "✅ Disponible" : "❌ No disponible"}
+        </span>
+        {calc.freelance && <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#f0f4ff", color: "#6366f1" }}>💼 Freelance</span>}
+        {calc.factura   && <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#fffbeb", color: "#d97706" }}>🧾 Factura</span>}
+      </div>
+
+      {/* Software */}
+      {calc.sistemas && (
+        <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+          💻 {calc.sistemas}
+        </div>
+      )}
+
+      {/* Contacto */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {calc.mail && (
+          <a href={`mailto:${calc.mail}`} onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: "#6366f1", textDecoration: "none" }}>
+            ✉️ {calc.mail}
+          </a>
+        )}
+        {calc.wsp && (
+          <a href={`https://wa.me/${calc.wsp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: "#22c55e", textDecoration: "none" }}>
+            💬 WhatsApp
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Principal ─── */
+export default function Calculistas() {
+  const [calculistas, setCalculistas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null); // null | "nuevo" | calc obj
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroNivel, setFiltroNivel] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroDisp, setFiltroDisp] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => { cargar(); }, []);
+
+  async function cargar() {
+    setLoading(true);
+    const tk = await getToken();
+    const r = await fetch(`${SUPA_URL}/calculistas?order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json());
+    setCalculistas(Array.isArray(r) ? r : []);
+    setLoading(false);
+  }
+
+  async function eliminar(id) {
+    if (!confirm("¿Eliminar calculista?")) return;
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/calculistas?id=eq.${id}`, { method: "DELETE", headers: hdrs(tk) });
+    setMsg("Eliminado"); setTimeout(() => setMsg(""), 2000);
+    await cargar();
+  }
+
+  // Filtros
+  const filtrados = calculistas.filter(c => {
+    const q = busqueda.toLowerCase();
+    const matchQ = !q || c.nombre?.toLowerCase().includes(q) || c.ciudad?.toLowerCase().includes(q) || c.mail?.toLowerCase().includes(q);
+    const matchN = !filtroNivel || c.nivel === filtroNivel;
+    const matchT = !filtroTipo  || c.tipo  === filtroTipo;
+    const matchD = !filtroDisp  || (filtroDisp === "si" ? c.disponible : !c.disponible);
+    return matchQ && matchN && matchT && matchD;
+  });
+
+  // Stats
+  const total      = calculistas.length;
+  const disponibles = calculistas.filter(c => c.disponible).length;
+  const seniors    = calculistas.filter(c => c.nivel === "Senior").length;
+  const externos   = calculistas.filter(c => c.tipo === "externo").length;
+
+  return (
+    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "24px 24px", maxWidth: 1200, margin: "0 auto" }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>👷 Calculistas</h1>
+        <button onClick={() => setModal("nuevo")} style={shared.btn}>+ Nuevo calculista</button>
+      </div>
+
+      {msg && <div style={{ background: "#d4edda", color: "#155724", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>{msg}</div>}
+
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+        {[
+          { label: "Total", value: total, color: "#6366f1" },
+          { label: "Disponibles", value: disponibles, color: "#22c55e" },
+          { label: "Seniors", value: seniors, color: "#f59e0b" },
+          { label: "Externos", value: externos, color: "#3b82f6" },
+        ].map(k => (
+          <div key={k.label} style={{ background: "#fff", borderRadius: 12, padding: "16px", boxShadow: "0 1px 6px rgba(0,0,0,.06)", textAlign: "center" }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: k.color }}>{k.value}</div>
+            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{k.label}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: "flex", marginBottom: 16, border: "1px solid #e5e5e5", borderRadius: 8, overflow: "hidden", width: "fit-content" }}>
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+        <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="🔍 Buscar…" style={{ ...shared.inp, width: 220 }} />
         {[
-          { id: "activos",    label: `Equipo activo (${activos.length})` },
-          { id: "evaluacion", label: `En evaluación (${evaluacion.length})` },
-          { id: "inactivos",  label: `Inactivos (${inactivos.length})` },
-        ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ padding: "6px 16px", fontSize: 12, fontWeight: 500, background: tab === t.id ? "#111" : "#fff", color: tab === t.id ? "#fff" : "#888", border: "none", cursor: "pointer" }}>
-            {t.label}
-          </button>
+          { val: filtroNivel, set: setFiltroNivel, opts: ["", "Junior", "Semi", "Senior"], placeholder: "Nivel" },
+          { val: filtroTipo,  set: setFiltroTipo,  opts: ["", "interno", "externo"], placeholder: "Tipo" },
+          { val: filtroDisp,  set: setFiltroDisp,  opts: ["", "si", "no"], placeholder: "Disponibilidad" },
+        ].map((f, i) => (
+          <select key={i} value={f.val} onChange={e => f.set(e.target.value)} style={{ ...shared.inp, width: 150 }}>
+            {f.opts.map(o => <option key={o} value={o}>{o || f.placeholder}</option>)}
+          </select>
         ))}
+        {(busqueda || filtroNivel || filtroTipo || filtroDisp) && (
+          <button onClick={() => { setBusqueda(""); setFiltroNivel(""); setFiltroTipo(""); setFiltroDisp(""); }} style={shared.btnSm}>✕ Limpiar</button>
+        )}
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <input placeholder="Buscar por nombre, estudio, ciudad..." value={busq} onChange={e => setBusq(e.target.value)}
-          style={{ ...inp, maxWidth: 400 }} />
-      </div>
+      <div style={{ fontSize: 12, color: "#aaa", marginBottom: 12 }}>{filtrados.length} de {total} calculistas</div>
 
-      {loading && <p style={{ textAlign: "center", padding: 40, color: "#999" }}>Cargando...</p>}
-      {error && <p style={{ textAlign: "center", padding: 40, color: "#c00" }}>Error: {error}</p>}
-
-      {!loading && !error && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+      {/* Grid */}
+      {loading ? (
+        <p style={{ color: "#aaa" }}>Cargando…</p>
+      ) : filtrados.length === 0 ? (
+        <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>No hay resultados.</p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
           {filtrados.map(c => (
-            <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}
-              onClick={() => { setSelected(c); setVista("detalle"); }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#111" }}>{c.nombre}</p>
-                  {c.estudio && <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{c.estudio}</p>}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                  <Badge estado={c.estado} />
-                  <span style={{ fontSize: 10, color: c.disponible ? "#3B6D11" : "#A32D2D" }}>
-                    {c.disponible ? "● Disponible" : "● Ocupado"}
-                  </span>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                <NivelDot nivel={c.nivel} />
-                {c.ciudad && <span style={{ fontSize: 11, color: "#888", background: "#f5f5f5", padding: "2px 8px", borderRadius: 99 }}>📍 {c.ciudad}</span>}
-              </div>
-              <div style={{ display: "flex", gap: 12, justifyContent: "space-between" }}>
-                <SoftBadge label="CYPECAD" nivel={c.cypecad} />
-                <SoftBadge label="AUTOCAD" nivel={c.autocad} />
-                <SoftBadge label="SKETCHUP" nivel={c.sketchup} />
-              </div>
-              {c.observaciones && (
-                <p style={{ margin: "10px 0 0", fontSize: 11, color: "#888", borderTop: "1px solid #f0f0f0", paddingTop: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {c.observaciones}
-                </p>
-              )}
-              <div style={{ display: "flex", gap: 6, marginTop: 10, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
-                {c.wsp && <a href={`https://wa.me/${c.wsp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: 11, padding: "3px 10px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#f5f5f5", color: "#333", textDecoration: "none" }}>WSP</a>}
-                {c.mail && <a href={`mailto:${c.mail}`}
-                  style={{ fontSize: 11, padding: "3px 10px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#f5f5f5", color: "#333", textDecoration: "none" }}>Mail</a>}
-                <button onClick={() => { setEditando(c); setVista("form"); }}
-                  style={{ fontSize: 11, padding: "3px 10px", border: "1px solid #e5e5e5", borderRadius: 6, background: "#fff", cursor: "pointer" }}>Editar</button>
-              </div>
-            </div>
-          ))}
-          {filtrados.length === 0 && (
-            <p style={{ textAlign: "center", padding: 40, color: "#999", gridColumn: "1/-1" }}>No hay calculistas en esta categoría.</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DetalleView({ c, onBack, onEdit, onEliminar }) {
-  return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "20px", maxWidth: 800, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button onClick={onBack} style={{ fontSize: 13, color: "#666", background: "none", border: "none", cursor: "pointer", padding: 0 }}>← Volver</button>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#111", flex: 1 }}>{c.nombre}</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onEdit} style={{ padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, background: "#f5f5f5", color: "#555", border: "1px solid #e5e5e5", cursor: "pointer" }}>Editar</button>
-          <button onClick={onEliminar} style={{ padding: "6px 16px", fontSize: 13, fontWeight: 500, borderRadius: 8, background: "#fff", color: "#c00", border: "1px solid #e5e5e5", cursor: "pointer" }}>Eliminar</button>
-        </div>
-      </div>
-
-      <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "16px", marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <Badge estado={c.estado} />
-          <NivelDot nivel={c.nivel} />
-          <span style={{ fontSize: 11, color: c.disponible ? "#3B6D11" : "#A32D2D", fontWeight: 500 }}>
-            {c.disponible ? "● Disponible" : "● Ocupado"}
-          </span>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
-          {[
-            ["Estudio", c.estudio || "—"], ["Ciudad", c.ciudad || "—"],
-            ["Experiencia", c.experiencia || "—"], ["Disponibilidad", c.disponibilidad || "—"],
-            ["Freelance", c.freelance ? "Sí" : "No"], ["Factura", c.factura ? "Sí" : "No"],
-          ].map(([l, v]) => (
-            <div key={l}>
-              <p style={{ margin: 0, fontSize: 11, color: "#aaa" }}>{l}</p>
-              <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 500, color: "#111" }}>{v}</p>
+            <div key={c.id} style={{ position: "relative" }}>
+              <CardCalculista calc={c} onClick={() => setModal(c)} />
+              <button onClick={e => { e.stopPropagation(); eliminar(c.id); }}
+                style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#ccc", lineHeight: 1 }}
+                title="Eliminar">🗑</button>
             </div>
           ))}
         </div>
-      </div>
-
-      <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "16px", marginBottom: 16 }}>
-        <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111" }}>Software</p>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <SoftBadge label="CYPECAD" nivel={c.cypecad} />
-          <SoftBadge label="AUTOCAD" nivel={c.autocad} />
-          <SoftBadge label="SKETCHUP" nivel={c.sketchup} />
-        </div>
-        {c.otros_software && <p style={{ margin: "10px 0 0", fontSize: 12, color: "#666" }}>Otros: {c.otros_software}</p>}
-        {c.sistemas && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#666" }}>Sistemas: {c.sistemas}</p>}
-      </div>
-
-      <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: "16px", marginBottom: 16 }}>
-        <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#111" }}>Contacto</p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {c.wsp && <a href={`https://wa.me/${c.wsp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-            style={{ padding: "6px 14px", fontSize: 12, borderRadius: 8, background: "#EAF3DE", color: "#3B6D11", textDecoration: "none", fontWeight: 500 }}>💬 WhatsApp</a>}
-          {c.mail && <a href={`mailto:${c.mail}`}
-            style={{ padding: "6px 14px", fontSize: 12, borderRadius: 8, background: "#E6F1FB", color: "#185FA5", textDecoration: "none", fontWeight: 500 }}>✉️ {c.mail}</a>}
-          {c.ig && <span style={{ padding: "6px 14px", fontSize: 12, borderRadius: 8, background: "#f5f5f5", color: "#555", fontWeight: 500 }}>📸 {c.ig}</span>}
-        </div>
-      </div>
-
-      {c.observaciones && (
-        <div style={{ background: "#fffbe6", border: "1px solid #f0e68c", borderRadius: 10, padding: "14px 16px" }}>
-          <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "#888" }}>Observaciones internas</p>
-          <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{c.observaciones}</p>
-        </div>
       )}
-    </div>
-  );
-}
 
-function FormView({ inicial, onSave, onCancel, saving }) {
-  const [f, setF] = useState({ ...inicial });
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-
-  return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "20px", maxWidth: 800, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <button onClick={onCancel} style={{ fontSize: 13, color: "#666", background: "none", border: "none", cursor: "pointer", padding: 0 }}>← Volver</button>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#111" }}>
-          {f.id ? `Editar — ${f.nombre}` : "Nuevo calculista"}
-        </h2>
-      </div>
-
-      <Section title="Datos personales">
-        <Grid>
-          <F label="Nombre y apellido *"><input style={inp} value={f.nombre} onChange={e => set("nombre", e.target.value)} placeholder="Nombre completo" /></F>
-          <F label="Estudio / empresa"><input style={inp} value={f.estudio} onChange={e => set("estudio", e.target.value)} placeholder="Nombre del estudio" /></F>
-          <F label="Nivel"><select style={inp} value={f.nivel} onChange={e => set("nivel", e.target.value)}>{NIVELES.map(n => <option key={n}>{n}</option>)}</select></F>
-          <F label="Ciudad"><input style={inp} value={f.ciudad} onChange={e => set("ciudad", e.target.value)} placeholder="Ciudad" /></F>
-          <F label="Estado"><select style={inp} value={f.estado} onChange={e => set("estado", e.target.value)}>{ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</select></F>
-          <F label="Disponibilidad">
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" checked={f.disponible} onChange={e => set("disponible", e.target.checked)} id="disp" />
-              <label htmlFor="disp" style={{ fontSize: 13, color: "#333" }}>Disponible ahora</label>
-            </div>
-          </F>
-        </Grid>
-      </Section>
-
-      <Section title="Contacto">
-        <Grid>
-          <F label="WhatsApp"><input style={inp} value={f.wsp} onChange={e => set("wsp", e.target.value)} placeholder="54 9 11 1234-5678" /></F>
-          <F label="Mail"><input style={inp} value={f.mail} onChange={e => set("mail", e.target.value)} placeholder="mail@ejemplo.com" /></F>
-          <F label="Instagram"><input style={inp} value={f.ig} onChange={e => set("ig", e.target.value)} placeholder="@usuario" /></F>
-        </Grid>
-      </Section>
-
-      <Section title="Software">
-        <Grid>
-          <F label="CYPECAD"><select style={inp} value={f.cypecad} onChange={e => set("cypecad", e.target.value)}>{SOFT.map(s => <option key={s}>{s}</option>)}</select></F>
-          <F label="AUTOCAD"><select style={inp} value={f.autocad} onChange={e => set("autocad", e.target.value)}>{SOFT.map(s => <option key={s}>{s}</option>)}</select></F>
-          <F label="SKETCHUP"><select style={inp} value={f.sketchup} onChange={e => set("sketchup", e.target.value)}>{SOFT.map(s => <option key={s}>{s}</option>)}</select></F>
-          <F label="Otros software"><input style={inp} value={f.otros_software} onChange={e => set("otros_software", e.target.value)} placeholder="CYPE 3D, SAP2000, etc." /></F>
-          <F label="Sistemas constructivos"><input style={inp} value={f.sistemas} onChange={e => set("sistemas", e.target.value)} placeholder="Hormigón, Steel Frame, etc." /></F>
-        </Grid>
-      </Section>
-
-      <Section title="Experiencia y modalidad">
-        <Grid>
-          <F label="Experiencia en viviendas"><select style={inp} value={f.experiencia} onChange={e => set("experiencia", e.target.value)}>{EXPERIENCIA.map(s => <option key={s}>{s}</option>)}</select></F>
-          <F label="Disponibilidad horaria">
-            <select style={inp} value={f.disponibilidad} onChange={e => set("disponibilidad", e.target.value)}>
-              <option value="">Sin especificar</option>
-              {DISPONIBILIDAD.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </F>
-          <F label="Modalidad">
-            <div style={{ display: "flex", gap: 16 }}>
-              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-                <input type="checkbox" checked={f.freelance} onChange={e => set("freelance", e.target.checked)} /> Freelance
-              </label>
-              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-                <input type="checkbox" checked={f.factura} onChange={e => set("factura", e.target.checked)} /> Factura
-              </label>
-            </div>
-          </F>
-        </Grid>
-      </Section>
-
-      <Section title="Observaciones internas">
-        <textarea style={{ ...inp, resize: "vertical" }} value={f.observaciones} onChange={e => set("observaciones", e.target.value)} rows={3} placeholder="Notas internas sobre este calculista..." />
-      </Section>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
-        <button onClick={() => { if (!f.nombre?.trim()) return alert("El nombre es obligatorio"); onSave(f); }} disabled={saving}
-          style={{ padding: "8px 24px", fontSize: 14, fontWeight: 500, borderRadius: 8, cursor: saving ? "not-allowed" : "pointer", border: "none", background: "#111", color: "#fff", opacity: saving ? 0.6 : 1 }}>
-          {saving ? "Guardando..." : f.id ? "Guardar cambios" : "Crear calculista"}
-        </button>
-        <button onClick={onCancel} style={{ padding: "8px 18px", fontSize: 14, fontWeight: 500, borderRadius: 8, cursor: "pointer", border: "1px solid #e5e5e5", background: "#f5f5f5", color: "#555" }}>Cancelar</button>
-      </div>
+      {/* Modal */}
+      {modal && (
+        <ModalCalculista
+          calc={modal === "nuevo" ? null : modal}
+          onClose={() => setModal(null)}
+          onGuardar={async () => { setModal(null); setMsg("✓ Guardado"); setTimeout(() => setMsg(""), 2000); await cargar(); }}
+        />
+      )}
     </div>
   );
 }
