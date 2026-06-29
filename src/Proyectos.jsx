@@ -454,6 +454,78 @@ function CronogramaMensual({ proyectos }) {
 }
 
 /* ════════════════════════════════════════════
+   ACORDEÓN DE GRUPOS POR ESTADO
+════════════════════════════════════════════ */
+function GruposAcordeon({ grupos, archivados, mostrarArchivados, onEditar, onChecklist, onArchivar }) {
+  // Inicialmente todos abiertos excepto archivados
+  const [abiertos, setAbiertos] = useState(() => {
+    const init = {};
+    ["onboarding","activo","revision"].forEach(e => { init[e] = true; });
+    init["archivado"] = false;
+    return init;
+  });
+
+  function toggle(estado) {
+    setAbiertos(prev => ({ ...prev, [estado]: !prev[estado] }));
+  }
+
+  const todoGrupos = [
+    ...grupos,
+    ...(mostrarArchivados && archivados.length > 0 ? [{
+      estado: "archivado",
+      config: { v:"archivado", label:"Archivados / Entregados", color:"#888", icon:"📦" },
+      items: archivados,
+    }] : []),
+  ];
+
+  if (todoGrupos.length === 0) {
+    return <p style={{ color:"#aaa", textAlign:"center", padding:40 }}>No hay proyectos activos.</p>;
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {todoGrupos.map(g => {
+        const abierto = abiertos[g.estado] !== false;
+        return (
+          <div key={g.estado} style={{ borderRadius:14, overflow:"hidden", boxShadow:"0 1px 5px rgba(0,0,0,.06)" }}>
+            {/* Cabecera acordeón — clickeable */}
+            <div
+              onClick={() => toggle(g.estado)}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"13px 16px", background:g.config.color+"18", cursor:"pointer", userSelect:"none", borderLeft:`4px solid ${g.config.color}` }}>
+              <span style={{ fontSize:16 }}>{g.config.icon}</span>
+              <span style={{ fontWeight:700, fontSize:14, color:g.config.color, flex:1 }}>{g.config.label}</span>
+              <span style={{ fontSize:12, color:g.config.color, fontWeight:700, background:g.config.color+"22", borderRadius:20, padding:"2px 10px" }}>
+                {g.items.length}
+              </span>
+              <span style={{ fontSize:13, color:g.config.color, marginLeft:4, transition:"transform .2s", display:"inline-block", transform: abierto ? "rotate(0deg)" : "rotate(-90deg)" }}>
+                ▼
+              </span>
+            </div>
+
+            {/* Contenido desplegable */}
+            {abierto && (
+              <div style={{ background:"#f8f9fa", padding:"10px 10px 4px" }}>
+                {g.items.length === 0 ? (
+                  <p style={{ color:"#bbb", textAlign:"center", padding:"16px 0", fontSize:13 }}>Sin proyectos en este estado.</p>
+                ) : g.items.map(p => (
+                  <FilaProyecto
+                    key={p.id}
+                    proyecto={p}
+                    onEditar={onEditar}
+                    onChecklist={onChecklist}
+                    onArchivar={onArchivar}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
    COMPONENTE PRINCIPAL
 ════════════════════════════════════════════ */
 export default function Proyectos() {
@@ -552,45 +624,15 @@ export default function Proyectos() {
 
       {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
         <>
-          {/* Grupos por estado */}
-          {grupos.map(g => (
-            <div key={g.estado} style={{ marginBottom: 28 }}>
-              {/* Header grupo */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "8px 14px", background: g.config.color + "12", borderRadius: 10 }}>
-                <span style={{ fontSize: 16 }}>{g.config.icon}</span>
-                <span style={{ fontWeight: 700, fontSize: 14, color: g.config.color, flex: 1 }}>{g.config.label}</span>
-                <span style={{ fontSize: 12, color: g.config.color, fontWeight: 700 }}>{g.items.length}</span>
-              </div>
-              {/* Lista proyectos */}
-              {g.items.map(p => (
-                <FilaProyecto
-                  key={p.id}
-                  proyecto={p}
-                  onEditar={proj => setModal(proj)}
-                  onChecklist={proj => setPanelChecklist(proj)}
-                  onArchivar={archivar}
-                />
-              ))}
-            </div>
-          ))}
-
-          {/* Archivados (entregados) */}
-          {mostrarArchivados && archivados.length > 0 && (
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "8px 14px", background: "#f5f5f5", borderRadius: 10 }}>
-                <span style={{ fontSize: 16 }}>📦</span>
-                <span style={{ fontWeight: 700, fontSize: 14, color: "#888", flex: 1 }}>Archivados / Entregados</span>
-                <span style={{ fontSize: 12, color: "#888", fontWeight: 700 }}>{archivados.length}</span>
-              </div>
-              {archivados.map(p => (
-                <FilaProyecto key={p.id} proyecto={p} onEditar={proj => setModal(proj)} onChecklist={proj => setPanelChecklist(proj)} onArchivar={archivar} />
-              ))}
-            </div>
-          )}
-
-          {grupos.length === 0 && !mostrarArchivados && (
-            <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>No hay proyectos activos.</p>
-          )}
+          {/* Acordeón por estado */}
+          <GruposAcordeon
+            grupos={grupos}
+            archivados={archivados}
+            mostrarArchivados={mostrarArchivados}
+            onEditar={proj => setModal(proj)}
+            onChecklist={proj => setPanelChecklist(proj)}
+            onArchivar={archivar}
+          />
 
           {/* Cronograma mensual */}
           <CronogramaMensual proyectos={filtrados.filter(p => !p.archivado)} />
