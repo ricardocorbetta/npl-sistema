@@ -746,9 +746,17 @@ function DetalleObra({ obra: obraInicial, jefesList, onVolver }) {
 }
 
 /* ════════════════ VISTA ADMIN ════════════════ */
-function VistaAdmin() {
+function VistaAdmin({ deepLinkId }) {
   const [obras,setObras]=useState([]);const [avances,setAvances]=useState({});const [loading,setLoading]=useState(true);const [jefesList,setJefesList]=useState([]);const [obraDetalle,setObraDetalle]=useState(null);const [showModal,setShowModal]=useState(false);const [nuevaObra,setNuevaObra]=useState({nombre:"",codigo:"",sistema_constructivo:"Steel Frame",alcance:"obra_completa",fecha_inicio_plan:"",fecha_fin_plan:"",jefe_id:""});const [saving,setSaving]=useState(false);const [msg,setMsg]=useState("");
   useEffect(()=>{cargarTodo();},[]);
+
+  // Deep link: abrir obra específica al llegar desde el buscador global
+  useEffect(()=>{
+    if(deepLinkId && obras.length>0){
+      const o = obras.find(ob=>ob.id===deepLinkId);
+      if(o) setObraDetalle(o);
+    }
+  },[deepLinkId, obras]);
   async function cargarTodo(){
     setLoading(true);const tk=await getToken();
     const[od,jd,avd]=await Promise.all([fetch(`${SUPA_URL}/obras_campo?order=created_at.desc&select=*`,{headers:hdrs(tk)}).then(r=>r.json()),fetch(`${SUPA_URL}/perfiles?rol=eq.jefe_obra&select=id,nombre`,{headers:hdrs(tk)}).then(r=>r.json()),fetch(`${SUPA_URL}/vista_avance_obra`,{headers:hdrs(tk)}).then(r=>r.json())]);
@@ -906,8 +914,8 @@ function VistaJefe({ perfil, onLogout }) {
 }
 
 /* ════════════════ EXPORT ════════════════ */
-export default function Obras({ perfil, onLogout }) {
+export default function Obras({ perfil, onLogout, deepLinkId }) {
   if(!perfil)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#aaa",fontFamily:"system-ui"}}>Cargando…</div>;
   if(perfil.rol==="jefe_obra")return<VistaJefe perfil={perfil} onLogout={onLogout}/>;
-  return<VistaAdmin/>;
+  return<VistaAdmin deepLinkId={deepLinkId}/>;
 }
