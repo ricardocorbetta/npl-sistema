@@ -146,51 +146,79 @@ function PanelChecklist({ proyectoId, onClose }) {
 
   const done = items.filter(i => i.completado).length;
   const pct = items.length ? Math.round(done / items.length * 100) : 0;
+  const pendientes = items.filter(i => !i.completado);
+  const completadas = items.filter(i => i.completado);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", justifyContent: "center", alignItems: "flex-end", zIndex: 200 }}>
-      <div style={{ width: "100%", maxWidth: 620, maxHeight: "84vh", overflowY: "auto", background: "#fff", borderRadius: "18px 18px 0 0", padding: "18px 18px 28px", boxShadow: "0 -16px 48px rgba(0,0,0,.18)" }}>
-        <div style={{ width: 42, height: 4, background: "#ddd", borderRadius: 10, margin: "0 auto 16px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 18 }}>Checklist</h3>
-            <p style={{ margin: "3px 0 0", color: "#777", fontSize: 13 }}>{items.length ? `${done}/${items.length} tareas completadas` : "Sin tareas cargadas"}</p>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(17,17,17,.48)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 200, padding: 24 }}>
+      <div style={{ width: "min(1040px, 100%)", maxHeight: "88vh", overflow: "hidden", background: "#fff", borderRadius: 14, boxShadow: "0 24px 80px rgba(0,0,0,.28)", display: "grid", gridTemplateRows: "auto auto 1fr" }}>
+        <div style={{ padding: "22px 24px 14px", borderBottom: "1px solid #eee" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 21, letterSpacing: 0 }}>Checklist de comunicacion</h3>
+              <p style={{ margin: "5px 0 0", color: "#777", fontSize: 13 }}>
+                {items.length ? `${done}/${items.length} tareas completadas` : "Sin tareas cargadas"} - Director / calculista
+              </p>
+            </div>
+            <button onClick={onClose} style={ui.secondary}>Cerrar</button>
           </div>
-          <button onClick={onClose} style={ui.secondary}>Cerrar</button>
-        </div>
-        <ErrorBanner message={error} />
-        {items.length > 0 && <div style={{ height: 7, background: "#eee", borderRadius: 999, overflow: "hidden", marginBottom: 14 }}><div style={{ width: `${pct}%`, height: "100%", background: "#16a34a" }} /></div>}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, marginBottom: 16 }}>
-          <input ref={inputRef} value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => e.key === "Enter" && agregar()} placeholder="Nueva tarea" style={ui.input} />
-          <button onClick={agregar} disabled={saving || !nuevo.trim()} style={{ ...ui.button, opacity: saving || !nuevo.trim() ? 0.5 : 1 }}>Agregar</button>
-        </div>
-        {loading ? <p style={{ color: "#888" }}>Cargando...</p> : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-            {[
-              ["Pendientes", items.filter(i => !i.completado), "#f8fafc"],
-              ["Completadas", items.filter(i => i.completado), "#f0fdf4"],
-            ].map(([title, list, bg]) => (
-              <div key={title} style={{ background: bg, border: "1px solid #e5e7eb", borderRadius: 10, padding: 10, minHeight: 180 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <strong style={{ fontSize: 13 }}>{title}</strong>
-                  <span style={{ fontSize: 11, color: "#666", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 999, padding: "2px 7px" }}>{list.length}</span>
-                </div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {list.map(item => (
-                    <div key={item.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "start", gap: 8 }}>
-                        <input type="checkbox" checked={!!item.completado} onChange={() => toggle(item)} style={{ width: 18, height: 18, marginTop: 1 }} />
-                        <span style={{ fontSize: 14, lineHeight: 1.35, color: item.completado ? "#15803d" : "#222", textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</span>
-                      </div>
-                      <button onClick={() => eliminar(item.id)} style={{ marginTop: 8, background: "none", border: "none", color: "#777", fontSize: 12, padding: 0, cursor: "pointer" }}>Eliminar</button>
-                    </div>
-                  ))}
-                  {!list.length && <div style={{ border: "1px dashed #d4d4d8", borderRadius: 8, padding: 18, textAlign: "center", color: "#999", fontSize: 13 }}>Sin tarjetas</div>}
-                </div>
-              </div>
-            ))}
+          <div style={{ height: 7, background: "#eee", borderRadius: 999, overflow: "hidden", marginTop: 16 }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: "#16a34a", transition: "width .2s ease" }} />
           </div>
-        )}
+        </div>
+
+        <div style={{ padding: "14px 24px", borderBottom: "1px solid #eee", background: "#fafafa" }}>
+          <ErrorBanner message={error} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
+            <input ref={inputRef} value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => e.key === "Enter" && agregar()} placeholder="Nueva observacion, ajuste o tarea tecnica" style={{ ...ui.input, fontSize: 15 }} />
+            <button onClick={agregar} disabled={saving || !nuevo.trim()} style={{ ...ui.button, opacity: saving || !nuevo.trim() ? 0.5 : 1 }}>Agregar</button>
+          </div>
+        </div>
+
+        <div style={{ overflowY: "auto", padding: 24, background: "#f6f7f9" }}>
+          {loading ? <p style={{ color: "#888" }}>Cargando...</p> : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(280px,1fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
+              <ChecklistColumn title="Pendientes" count={pendientes.length} tone="#f8fafc">
+                {pendientes.map(item => <ChecklistCard key={item.id} item={item} onToggle={toggle} onDelete={eliminar} />)}
+              </ChecklistColumn>
+              <ChecklistColumn title="Completadas" count={completadas.length} tone="#f0fdf4">
+                {completadas.map(item => <ChecklistCard key={item.id} item={item} onToggle={toggle} onDelete={eliminar} />)}
+              </ChecklistColumn>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChecklistColumn({ title, count, tone, children }) {
+  return (
+    <div style={{ background: tone, border: "1px solid #e1e5ea", borderRadius: 12, padding: 12, minHeight: 280 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <strong style={{ fontSize: 14 }}>{title}</strong>
+        <span style={{ fontSize: 12, color: "#555", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 999, padding: "2px 8px" }}>{count}</span>
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {React.Children.count(children) ? children : <div style={{ border: "1px dashed #cfd5dd", borderRadius: 10, padding: 28, textAlign: "center", color: "#8a8f98", fontSize: 13, background: "rgba(255,255,255,.48)" }}>Sin tarjetas</div>}
+      </div>
+    </div>
+  );
+}
+
+function ChecklistCard({ item, onToggle, onDelete }) {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e1e5ea", borderRadius: 10, padding: 12, boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "start", gap: 10 }}>
+        <input type="checkbox" checked={!!item.completado} onChange={() => onToggle(item)} style={{ width: 18, height: 18, marginTop: 1 }} />
+        <div>
+          <div style={{ fontSize: 14, lineHeight: 1.38, color: item.completado ? "#15803d" : "#222", textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</div>
+          {item.ultimo_comentario && <div style={{ marginTop: 8, padding: "7px 9px", background: "#f8fafc", borderRadius: 8, color: "#555", fontSize: 12 }}>{item.ultimo_comentario}</div>}
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+        <span style={{ fontSize: 11, color: "#777" }}>{item.responsable || "Sin responsable"}</span>
+        <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", color: "#777", fontSize: 12, padding: 0, cursor: "pointer" }}>Eliminar</button>
       </div>
     </div>
   );
