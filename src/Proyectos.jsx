@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase.js";
 import Combobox from "./Combobox.jsx";
+import { COLORS, FUNC, FONT_MONO, shared, SectionHeader, KpiGrid, Badge, ProgressBar, FilterBar, EmptyState, Toast, Acordeon } from "./uiKit.jsx";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
@@ -9,221 +10,410 @@ async function getToken() {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token || ANON_KEY;
 }
-function hdrs(tk) {
-  return { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json", Prefer: "return=representation" };
+function hdrs(token) {
+  return { apikey: ANON_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "return=representation" };
+}
+async function api(path, options = {}) {
+  const token = await getToken();
+  const res = await fetch(`${SUPA_URL}${path}`, { ...options, headers: { ...hdrs(token), ...(options.headers || {}) } });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok || data?.error || data?.message || data?.code) {
+    throw new Error(data?.message || data?.error || `Error HTTP ${res.status}`);
+  }
+  return data;
 }
 
-/* ─── Constantes ─── */
-const ESTADOS = [
-  { v: "onboarding", label: "Onboarding", color: "#f59e0b", icon: "🟡", desc: "Relevamiento inicial" },
-  { v: "activo",     label: "Activo",     color: "#22c55e", icon: "🟢", desc: "En desarrollo" },
-  { v: "revision",   label: "Revisión",   color: "#3b82f6", icon: "🔵", desc: "En corrección" },
-  { v: "entregado",  label: "Entregado",  color: "#888",    icon: "⚪", desc: "Finalizado" },
-];
-const ESTADO_ORDER = ["onboarding", "activo", "revision"];
-const TIPOS_OBRA = ["Steel Frame", "Wood Frame", "Hormigón", "Madera", "Panel SIP", "Metálica", "Mixta"];
-
-const shared = {
-  btn:   { padding: "10px 18px", background: "#111", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" },
-  btnSm: { padding: "7px 12px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" },
-  inp:   { width: "100%", padding: "10px 12px", border: "1px solid #e0e0e0", borderRadius: 10, fontSize: 14, boxSizing: "border-box" },
-  card:  { background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 1px 6px rgba(0,0,0,.07)" },
-  lbl:   { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5, display: "block" },
+/* ─── Estados — colores funcionales del kit ─── */
+const ESTADOS = {
+  onboarding: { label: "Onboarding", color: FUNC.warning },
+  activo:     { label: "Activo",     color: FUNC.success },
+  revision:   { label: "Revisión",   color: FUNC.info },
+  entregado:  { label: "Entregado",  color: COLORS.textMuted },
 };
 
+const TABS = [
+  { id: "onboarding",  label: "Onboarding" },
+  { id: "activos",     label: "Activos" },
+  { id: "revision",    label: "Revisión" },
+  { id: "entregados",  label: "Entregados" },
+  { id: "archivados",  label: "Archivados" },
+  { id: "todos",       label: "Todos" },
+];
+
+const TIPOS_OBRA = ["Steel Frame", "Wood Frame", "Hormigón", "Madera", "Panel SIP", "Metálica", "Mixta"];
+
+const emptyToNull = value => value === "" || value === undefined ? null : value;
+const normalizeEstado = p => p?.estado === "en_curso" ? "activo" : (p?.estado || "activo");
+const isArchived = p => !!p?.archivado;
+const isDelivered = p => !!(p?.entregado || normalizeEstado(p) === "entregado");
+const isVisibleDelivered = p => isDelivered(p) && !isArchived(p);
+const statusMeta = p => ESTADOS[isDelivered(p) ? "entregado" : normalizeEstado(p)] || ESTADOS.activo;
+const dueDays = date => Math.ceil((new Date(`${date}T12:00`) - new Date()) / 86400000);
+
 /* ════════════════════════════════════════════
-   CHECKLIST PANEL
+   ERROR BANNER — usa Toast del kit
+════════════════════════════════════════════ */
+function ErrorBanner({ message }) {
+  if (!message) return null;
+  return <Toast tipo="error" texto={message} />;
+}
+
+/* ════════════════════════════════════════════
+   STATUS PILL — usa Badge del kit
+════════════════════════════════════════════ */
+function StatusPill({ proyecto }) {
+  const meta = statusMeta(proyecto);
+  return <Badge color={meta.color} label={meta.label} />;
+}
+
+/* ════════════════════════════════════════════
+   CHECKLIST — kanban pendientes/completadas + detalle
 ════════════════════════════════════════════ */
 function PanelChecklist({ proyectoId, onClose }) {
-  const [items, setItems]   = useState([]);
-  const [nuevo, setNuevo]   = useState("");
+  const [items, setItems] = useState([]);
+  const [nuevo, setNuevo] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving]  = useState(false);
-  const inputRef = useRef();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [comentarios, setComentarios] = useState([]);
+  const [nuevoComentario, setNuevoComentario] = useState("");
+  const [autor, setAutor] = useState("Director");
+  const inputRef = useRef(null);
 
   useEffect(() => { cargar(); }, [proyectoId]);
 
   async function cargar() {
-    const tk = await getToken();
-    const r = await fetch(`${SUPA_URL}/proyecto_checklist?proyecto_id=eq.${proyectoId}&order=orden.asc,created_at.asc`, { headers: hdrs(tk) }).then(r => r.json());
-    setItems(Array.isArray(r) ? r : []);
+    setLoading(true); setError("");
+    try {
+      const rows = await api(`/proyecto_checklist?proyecto_id=eq.${proyectoId}&order=orden.asc,created_at.asc`);
+      setItems(Array.isArray(rows) ? rows : []);
+    } catch (e) { setError(e.message); setItems([]); }
     setLoading(false);
+  }
+
+  async function abrirDetalle(item) {
+    setSelected(item); setNuevoComentario(""); setError("");
+    try {
+      const rows = await api(`/proyecto_checklist_comentarios?item_id=eq.${item.id}&order=created_at.asc`);
+      setComentarios(Array.isArray(rows) ? rows : []);
+    } catch (e) { setComentarios([]); setError(e.message); }
   }
 
   async function agregar() {
     if (!nuevo.trim()) return;
-    setSaving(true);
-    const tk = await getToken();
-    const r = await fetch(`${SUPA_URL}/proyecto_checklist`, {
-      method: "POST", headers: hdrs(tk),
-      body: JSON.stringify({ proyecto_id: proyectoId, texto: nuevo.trim(), orden: items.length })
-    }).then(r => r.json());
-    setItems(prev => [...prev, r[0]]);
-    setNuevo("");
-    inputRef.current?.focus();
+    setSaving(true); setError("");
+    try {
+      const rows = await api("/proyecto_checklist", { method: "POST", body: JSON.stringify({ proyecto_id: proyectoId, texto: nuevo.trim(), orden: items.length }) });
+      if (!Array.isArray(rows) || !rows[0]) throw new Error("No se pudo crear la tarea");
+      setItems(prev => [...prev, rows[0]]); setNuevo(""); inputRef.current?.focus();
+    } catch (e) { setError(e.message); }
     setSaving(false);
   }
 
   async function toggle(item) {
-    const tk = await getToken();
-    await fetch(`${SUPA_URL}/proyecto_checklist?id=eq.${item.id}`, {
-      method: "PATCH", headers: hdrs(tk),
-      body: JSON.stringify({ completado: !item.completado })
-    });
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, completado: !i.completado } : i));
+    const next = !item.completado;
+    const estado = next ? "completado" : "pendiente";
+    const previous = items;
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, completado: next, estado } : i));
+    if (selected?.id === item.id) setSelected(prev => ({ ...prev, completado: next, estado }));
+    try { await api(`/proyecto_checklist?id=eq.${item.id}`, { method: "PATCH", body: JSON.stringify({ completado: next, estado }) }); }
+    catch (e) { setError(e.message); setItems(previous); }
   }
 
   async function eliminar(id) {
-    const tk = await getToken();
-    await fetch(`${SUPA_URL}/proyecto_checklist?id=eq.${id}`, { method: "DELETE", headers: hdrs(tk) });
+    const previous = items;
     setItems(prev => prev.filter(i => i.id !== id));
+    try { await api(`/proyecto_checklist?id=eq.${id}`, { method: "DELETE" }); }
+    catch (e) { setError(e.message); setItems(previous); }
   }
 
-  const completados = items.filter(i => i.completado).length;
-  const pct = items.length ? Math.round((completados / items.length) * 100) : 0;
+  async function actualizarItem(item, patch) {
+    const previous = items;
+    const updated = { ...item, ...patch };
+    setItems(prev => prev.map(i => i.id === item.id ? updated : i));
+    setSelected(updated);
+    try {
+      const rows = await api(`/proyecto_checklist?id=eq.${item.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+      if (Array.isArray(rows) && rows[0]) { setItems(prev => prev.map(i => i.id === item.id ? rows[0] : i)); setSelected(rows[0]); }
+    } catch (e) { setError(e.message); setItems(previous); setSelected(item); }
+  }
+
+  async function agregarComentario() {
+    if (!selected || !nuevoComentario.trim()) return;
+    const texto = nuevoComentario.trim();
+    setNuevoComentario("");
+    try {
+      const rows = await api("/proyecto_checklist_comentarios", { method: "POST", body: JSON.stringify({ item_id: selected.id, autor, comentario: texto }) });
+      const creado = Array.isArray(rows) ? rows[0] : null;
+      if (creado) setComentarios(prev => [...prev, creado]);
+      await actualizarItem(selected, { ultimo_comentario: `${autor}: ${texto}` });
+    } catch (e) { setNuevoComentario(texto); setError(e.message); }
+  }
+
+  const done = items.filter(i => i.completado).length;
+  const pct = items.length ? Math.round(done / items.length * 100) : 0;
+  const pendientes = items.filter(i => !i.completado);
+  const completadas = items.filter(i => i.completado);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 200 }}>
-      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 40px", width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }}>
-        <div style={{ width: 40, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "0 auto 16px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17 }}>✅ Checklist</div>
-            {items.length > 0 && <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{completados}/{items.length} · {pct}%</div>}
-          </div>
-          <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 10px" }}>✕</button>
-        </div>
-
-        {items.length > 0 && (
-          <div style={{ height: 5, background: "#f0f0f0", borderRadius: 3, overflow: "hidden", marginBottom: 14 }}>
-            <div style={{ height: "100%", width: `${pct}%`, background: "#22c55e", transition: "width .4s" }} />
-          </div>
-        )}
-
-        {/* Input nuevo item */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <input ref={inputRef} value={nuevo} onChange={e => setNuevo(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && agregar()}
-            placeholder="Nueva tarea… (Enter para agregar)"
-            style={{ ...shared.inp, flex: 1 }} />
-          <button onClick={agregar} disabled={saving || !nuevo.trim()} style={{ ...shared.btn, padding: "10px 14px", fontSize: 13, flexShrink: 0 }}>+</button>
-        </div>
-
-        {/* Lista */}
-        {loading ? <p style={{ color: "#aaa", textAlign: "center" }}>Cargando…</p>
-        : items.length === 0 ? <p style={{ color: "#bbb", textAlign: "center", padding: "20px 0", fontSize: 13 }}>Sin tareas. Agregá la primera.</p>
-        : items.map(item => (
-          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: item.completado ? "#f0fdf4" : "#f8f8f8", borderRadius: 10, marginBottom: 6 }}>
-            <div onClick={() => toggle(item)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${item.completado ? "#22c55e" : "#ddd"}`, background: item.completado ? "#22c55e" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-              {item.completado && <span style={{ color: "#fff", fontSize: 13, fontWeight: 900 }}>✓</span>}
+    <div style={{ position: "fixed", inset: 0, background: "rgba(10,10,10,.55)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 200, padding: 24 }}>
+      <div style={{ width: "min(1040px, 100%)", maxHeight: "88vh", overflow: "hidden", background: COLORS.bgCard, borderRadius: 14, border: `1.5px solid ${COLORS.border}`, display: "grid", gridTemplateRows: "auto auto 1fr" }}>
+        <div style={{ padding: "22px 24px 14px", borderBottom: `1px solid ${COLORS.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: COLORS.text }}>✅ Checklist de comunicación</h3>
+              <p style={{ margin: "5px 0 0", color: COLORS.textMuted, fontSize: 13 }}>
+                {items.length ? `${done}/${items.length} tareas completadas` : "Sin tareas cargadas"} · Director / calculista
+              </p>
             </div>
-            <span style={{ flex: 1, fontSize: 14, color: item.completado ? "#16a34a" : "#111", textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</span>
-            <button onClick={() => eliminar(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 16, flexShrink: 0 }}>🗑</button>
+            <button onClick={onClose} style={shared.btnSm}>Cerrar</button>
           </div>
-        ))}
+          <div style={{ marginTop: 16 }}>
+            <ProgressBar valor={pct} max={100} color={FUNC.success} showValue={false} height={7} />
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 24px", borderBottom: `1px solid ${COLORS.border}`, background: COLORS.bgSoft }}>
+          <ErrorBanner message={error} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
+            <input ref={inputRef} value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => e.key === "Enter" && agregar()} placeholder="Nueva observación, ajuste o tarea técnica" style={{ ...shared.inp, fontSize: 14 }} />
+            <button onClick={agregar} disabled={saving || !nuevo.trim()} style={{ ...shared.btn, opacity: saving || !nuevo.trim() ? 0.5 : 1 }}>Agregar</button>
+          </div>
+        </div>
+
+        <div style={{ overflowY: "auto", padding: 24, background: COLORS.bgApp }}>
+          {loading ? <p style={{ color: COLORS.textFaint }}>Cargando…</p> : (
+            <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(260px,1fr) minmax(260px,1fr) 360px" : "minmax(280px,1fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
+              <ChecklistColumn title="Pendientes" count={pendientes.length}>
+                {pendientes.map(item => <ChecklistCard key={item.id} item={item} selected={selected?.id === item.id} onOpen={abrirDetalle} onToggle={toggle} onDelete={eliminar} />)}
+              </ChecklistColumn>
+              <ChecklistColumn title="Completadas" count={completadas.length} tone={FUNC.success}>
+                {completadas.map(item => <ChecklistCard key={item.id} item={item} selected={selected?.id === item.id} onOpen={abrirDetalle} onToggle={toggle} onDelete={eliminar} />)}
+              </ChecklistColumn>
+              {selected && (
+                <ChecklistDetail item={selected} comentarios={comentarios} autor={autor} setAutor={setAutor} nuevoComentario={nuevoComentario} setNuevoComentario={setNuevoComentario} onComment={agregarComentario} onUpdate={patch => actualizarItem(selected, patch)} onClose={() => setSelected(null)} />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
+function ChecklistColumn({ title, count, tone, children }) {
+  return (
+    <div style={{ background: tone ? tone + "0d" : COLORS.bgCard, border: `1.5px solid ${COLORS.border}`, borderRadius: 12, padding: 12, minHeight: 280 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <strong style={{ fontSize: 13, color: COLORS.text }}>{title}</strong>
+        <span style={{ fontSize: 11, color: COLORS.textMuted, background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: "2px 8px", fontFamily: FONT_MONO }}>{count}</span>
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {React.Children.count(children) ? children : <div style={{ border: `1px dashed ${COLORS.border}`, borderRadius: 10, padding: 28, textAlign: "center", color: COLORS.textFaint, fontSize: 13 }}>Sin tarjetas</div>}
+      </div>
+    </div>
+  );
+}
+
+function ChecklistCard({ item, selected, onOpen, onToggle, onDelete }) {
+  return (
+    <div onClick={() => onOpen(item)} style={{ background: COLORS.bgCard, border: selected ? `2px solid ${COLORS.text}` : `1.5px solid ${COLORS.border}`, borderRadius: 10, padding: selected ? 11 : 12, cursor: "pointer" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "start", gap: 10 }}>
+        <input type="checkbox" checked={!!item.completado} onClick={e => e.stopPropagation()} onChange={() => onToggle(item)} style={{ width: 18, height: 18, marginTop: 1 }} />
+        <div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.4, color: item.completado ? FUNC.success : COLORS.text, textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</div>
+          {item.ultimo_comentario && <div style={{ marginTop: 8, padding: "7px 9px", background: COLORS.bgSoft, borderRadius: 8, color: COLORS.textSoft, fontSize: 12 }}>{item.ultimo_comentario}</div>}
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+        <span style={{ fontSize: 11, color: COLORS.textFaint }}>{item.responsable || "Sin responsable"}</span>
+        <button onClick={e => { e.stopPropagation(); onDelete(item.id); }} style={{ background: "none", border: "none", color: COLORS.textFaint, fontSize: 12, padding: 0, cursor: "pointer" }}>🗑</button>
+      </div>
+    </div>
+  );
+}
+
+function ChecklistDetail({ item, comentarios, autor, setAutor, nuevoComentario, setNuevoComentario, onComment, onUpdate, onClose }) {
+  return (
+    <aside style={{ background: COLORS.bgCard, border: `1.5px solid ${COLORS.border}`, borderRadius: 12, padding: 14, minHeight: 360, position: "sticky", top: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+        <div>
+          <strong style={{ fontSize: 14, color: COLORS.text }}>Detalle</strong>
+          <div style={{ color: COLORS.textMuted, fontSize: 12, marginTop: 3 }}>Feedback director / calculista</div>
+        </div>
+        <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 9px", fontSize: 12 }}>Cerrar</button>
+      </div>
+
+      <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35, marginBottom: 12, color: COLORS.text }}>{item.texto}</div>
+
+      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+        <div>
+          <span style={shared.lbl}>Responsable</span>
+          <select value={item.responsable || ""} onChange={e => onUpdate({ responsable: e.target.value || null })} style={shared.inp}>
+            <option value="">Sin responsable</option>
+            <option value="Director">Director</option>
+            <option value="Calculista">Calculista</option>
+            <option value="Ricardo">Ricardo</option>
+            <option value="Lucas">Lucas</option>
+            <option value="Joaco">Joaco</option>
+            <option value="Cami">Cami</option>
+          </select>
+        </div>
+        <div>
+          <span style={shared.lbl}>Estado</span>
+          <select value={item.completado ? "completado" : (item.estado || "pendiente")} onChange={e => { const estado = e.target.value; onUpdate({ estado, completado: estado === "completado" }); }} style={shared.inp}>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="necesita_respuesta">Necesita respuesta</option>
+            <option value="para_revisar">Para revisar</option>
+            <option value="completado">Completado</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12 }}>
+        <strong style={{ fontSize: 13, color: COLORS.text }}>Comentarios</strong>
+        <div style={{ display: "grid", gap: 8, margin: "10px 0 12px", maxHeight: 210, overflowY: "auto" }}>
+          {comentarios.map(c => (
+            <div key={c.id} style={{ background: COLORS.bgSoft, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 9 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                <strong style={{ fontSize: 12, color: COLORS.text }}>{c.autor || "Usuario"}</strong>
+                <span style={{ fontSize: 11, color: COLORS.textFaint, fontFamily: FONT_MONO }}>{c.created_at ? new Date(c.created_at).toLocaleDateString("es-AR") : ""}</span>
+              </div>
+              <div style={{ fontSize: 13, color: COLORS.textSoft, lineHeight: 1.35 }}>{c.comentario}</div>
+            </div>
+          ))}
+          {!comentarios.length && <div style={{ color: COLORS.textFaint, fontSize: 13, padding: "8px 0" }}>Todavía no hay comentarios.</div>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 8, marginBottom: 8 }}>
+          <select value={autor} onChange={e => setAutor(e.target.value)} style={shared.inp}>
+            <option value="Director">Director</option>
+            <option value="Calculista">Calculista</option>
+            <option value="Ricardo">Ricardo</option>
+            <option value="Lucas">Lucas</option>
+            <option value="Joaco">Joaco</option>
+            <option value="Cami">Cami</option>
+          </select>
+          <input value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} onKeyDown={e => e.key === "Enter" && onComment()} placeholder="Escribir comentario…" style={shared.inp} />
+        </div>
+        <button onClick={onComment} disabled={!nuevoComentario.trim()} style={{ ...shared.btn, width: "100%", opacity: nuevoComentario.trim() ? 1 : 0.5 }}>Enviar comentario</button>
+      </div>
+    </aside>
+  );
+}
+
 /* ════════════════════════════════════════════
-   MODAL CREAR / EDITAR PROYECTO
+   MODAL PROYECTO
 ════════════════════════════════════════════ */
 function ModalProyecto({ proyecto, onClose, onGuardar }) {
   const esNuevo = !proyecto?.id;
   const [form, setForm] = useState({
-    numero_proyecto:    proyecto?.numero_proyecto    || "",
-    descripcion:        proyecto?.descripcion        || "",
-    cliente:            proyecto?.cliente            || "",
-    cliente_id:         proyecto?.cliente_id         || "",
-    encargado:          proyecto?.encargado          || "",
-    estado:             proyecto?.estado             || "onboarding",
-    categoria:          proyecto?.categoria          || "",
-    tipo_obra:          proyecto?.tipo_obra          || "",
-    superficie:         proyecto?.superficie         || "",
+    numero_proyecto: proyecto?.numero_proyecto || "",
+    descripcion: proyecto?.descripcion || "",
+    cliente: proyecto?.cliente || "",
+    cliente_id: proyecto?.cliente_id || "",
+    encargado: proyecto?.encargado || "",
+    estado: isDelivered(proyecto) ? "entregado" : normalizeEstado(proyecto || {}),
+    categoria: proyecto?.categoria || "",
+    tipo_obra: proyecto?.tipo_obra || "",
+    superficie: proyecto?.superficie ?? "",
     fecha_entrega_plan: proyecto?.fecha_entrega_plan || "",
-    anticipo:           proyecto?.anticipo           || false,
-    check_diagnostico:  proyecto?.check_diagnostico  || false,
-    proyecto_ok:        proyecto?.proyecto_ok        || false,
-    cobrado:            proyecto?.cobrado            || false,
-    drive_url:          proyecto?.drive_url          || "",
-    obs:                proyecto?.obs                || "",
-    proxima_tarea:      proyecto?.proxima_tarea      || "",
-    presupuesto_id:     proyecto?.presupuesto_id     || "",
+    anticipo: !!proyecto?.anticipo,
+    check_diagnostico: !!proyecto?.check_diagnostico,
+    proyecto_ok: !!proyecto?.proyecto_ok,
+    cobrado: !!proyecto?.cobrado,
+    drive_url: proyecto?.drive_url || "",
+    obs: proyecto?.obs || "",
+    proxima_tarea: proyecto?.proxima_tarea || "",
+    presupuesto_id: proyecto?.presupuesto_id || "",
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [clientes, setClientes] = useState([]);
   const [presupuestos, setPresupuestos] = useState([]);
   const [calculistas, setCalculistas] = useState([]);
 
   useEffect(() => {
-    async function cargar() {
-      const tk = await getToken();
-      const [cArr, pArr, calcArr] = await Promise.all([
-        fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/presupuestos?select=id,codigo,descripcion,cliente&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/calculistas?select=id,nombre,nivel&order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-      ]);
-      setClientes(Array.isArray(cArr) ? cArr : []);
-      setPresupuestos(Array.isArray(pArr) ? pArr : []);
-      setCalculistas(Array.isArray(calcArr) ? calcArr : []);
+    async function cargarOpciones() {
+      try {
+        const [cArr, pArr, calcArr] = await Promise.all([
+          api("/clientes?select=id,empresa&order=empresa.asc"),
+          api("/presupuestos?select=id,codigo,descripcion,cliente&order=created_at.desc"),
+          api("/calculistas?select=id,nombre,nivel&order=nombre.asc"),
+        ]);
+        setClientes(Array.isArray(cArr) ? cArr : []);
+        setPresupuestos(Array.isArray(pArr) ? pArr : []);
+        setCalculistas(Array.isArray(calcArr) ? calcArr : []);
+      } catch (e) { setError(e.message); }
     }
-    cargar();
+    cargarOpciones();
   }, []);
 
   async function guardar() {
-    setSaving(true);
-    const tk = await getToken();
-    const body = { ...form, superficie: form.superficie ? parseFloat(form.superficie) : null };
-    if (esNuevo) {
-      await fetch(`${SUPA_URL}/proyectos`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) });
-    } else {
-      await fetch(`${SUPA_URL}/proyectos?id=eq.${proyecto.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(body) });
-    }
-    await onGuardar();
+    if (!form.descripcion.trim()) return;
+    setSaving(true); setError("");
+    const delivered = form.estado === "entregado";
+    const body = {
+      ...form,
+      numero_proyecto: form.numero_proyecto.trim() || null,
+      descripcion: form.descripcion.trim(),
+      cliente: form.cliente || null,
+      cliente_id: emptyToNull(form.cliente_id),
+      encargado: form.encargado || null,
+      categoria: form.categoria || null,
+      tipo_obra: form.tipo_obra || null,
+      superficie: form.superficie !== "" ? parseFloat(form.superficie) : null,
+      fecha_entrega_plan: emptyToNull(form.fecha_entrega_plan),
+      drive_url: form.drive_url || null,
+      obs: form.obs || null,
+      proxima_tarea: form.proxima_tarea || null,
+      presupuesto_id: emptyToNull(form.presupuesto_id),
+      entregado: delivered,
+      archivado: delivered ? !!proyecto?.archivado : false,
+    };
+    try {
+      if (esNuevo) await api("/proyectos", { method: "POST", body: JSON.stringify(body) });
+      else await api(`/proyectos?id=eq.${proyecto.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      await onGuardar();
+    } catch (e) { setError(e.message); }
     setSaving(false);
   }
 
-  const estadoActual = ESTADOS.find(e => e.v === form.estado);
-
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 560, maxHeight: "92vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 17 }}>{esNuevo ? "Nuevo proyecto" : "Editar proyecto"}</h3>
-          <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 10px" }}>✕</button>
-        </div>
-
-        {/* Estado selector visual */}
-        <div style={{ marginBottom: 16 }}>
-          <span style={shared.lbl}>Estado</span>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {ESTADOS.map(e => (
-              <button key={e.v} onClick={() => setForm(f => ({ ...f, estado: e.v }))}
-                style={{ padding: "8px 14px", borderRadius: 10, border: `2px solid ${form.estado === e.v ? e.color : "#e0e0e0"}`, background: form.estado === e.v ? e.color + "18" : "#fff", color: form.estado === e.v ? e.color : "#888", fontWeight: form.estado === e.v ? 700 : 400, fontSize: 13, cursor: "pointer" }}>
-                {e.icon} {e.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, marginBottom: 12 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(10,10,10,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 100 }}>
+      <div style={{ width: "100%", maxWidth: 760, maxHeight: "92vh", overflowY: "auto", background: COLORS.bgCard, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
           <div>
-            <span style={shared.lbl}>N° Proyecto</span>
-            <input value={form.numero_proyecto} onChange={e => setForm(f => ({ ...f, numero_proyecto: e.target.value }))} style={shared.inp} placeholder="2026-001" />
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: COLORS.text }}>{esNuevo ? "Nuevo proyecto" : "Editar proyecto"}</h3>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: COLORS.textMuted }}>Datos operativos, estado, cliente y seguimiento.</p>
           </div>
+          <button onClick={onClose} style={shared.btnSm}>Cerrar</button>
+        </div>
+        <ErrorBanner message={error} />
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+          {Object.entries(ESTADOS).map(([id, meta]) => (
+            <button key={id} onClick={() => setForm(f => ({ ...f, estado: id }))} style={{
+              padding: "8px 14px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: form.estado === id ? 700 : 500,
+              border: `2px solid ${form.estado === id ? meta.color : COLORS.border}`,
+              background: form.estado === id ? meta.color + "1a" : COLORS.bgCard,
+              color: form.estado === id ? meta.color : COLORS.textSoft,
+            }}>{meta.label}</button>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(120px,.4fr) minmax(220px,1fr)", gap: 12, marginBottom: 12 }}>
+          <div><span style={shared.lbl}>Nro proyecto</span><input value={form.numero_proyecto} onChange={e => setForm(f => ({ ...f, numero_proyecto: e.target.value }))} style={shared.inp} placeholder="553" /></div>
+          <div><span style={shared.lbl}>Descripción *</span><input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} style={shared.inp} placeholder="Descripción del proyecto" /></div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
           <div>
-            <span style={shared.lbl}>Descripción *</span>
-            <input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} style={shared.inp} placeholder="Descripción del proyecto" />
+            <span style={shared.lbl}>Cliente</span>
+            <Combobox options={clientes.map(c => ({ value: c.id, label: c.empresa }))} value={form.cliente_id} onChange={(val, label) => setForm(f => ({ ...f, cliente_id: val, cliente: label || "" }))} placeholder="Buscar cliente" emptyLabel="Sin vincular" />
           </div>
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          <span style={shared.lbl}>Cliente</span>
-          <Combobox options={clientes.map(c => ({ value: c.id, label: c.empresa }))} value={form.cliente_id} onChange={val => { const c = clientes.find(c => c.id === val); setForm(f => ({ ...f, cliente_id: val, cliente: c?.empresa || f.cliente })); }} placeholder="Buscar cliente…" emptyLabel="Sin vincular" />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <span style={shared.lbl}>Encargado</span>
             <select value={form.encargado} onChange={e => setForm(f => ({ ...f, encargado: e.target.value }))} style={shared.inp}>
@@ -231,64 +421,33 @@ function ModalProyecto({ proyecto, onClose, onGuardar }) {
               {calculistas.map(c => <option key={c.id} value={c.nombre}>{c.nombre} · {c.nivel}</option>)}
             </select>
           </div>
+          <div><span style={shared.lbl}>Categoría</span><input value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} style={shared.inp} /></div>
+          <div><span style={shared.lbl}>Tipo de obra</span><select value={form.tipo_obra} onChange={e => setForm(f => ({ ...f, tipo_obra: e.target.value }))} style={shared.inp}><option value="">Seleccionar</option>{TIPOS_OBRA.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div><span style={shared.lbl}>Superficie m²</span><input type="number" min="0" value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} style={shared.inp} /></div>
+          <div><span style={shared.lbl}>Fecha entrega</span><input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={shared.inp} /></div>
+          <div><span style={shared.lbl}>Próxima tarea</span><input value={form.proxima_tarea} onChange={e => setForm(f => ({ ...f, proxima_tarea: e.target.value }))} style={shared.inp} /></div>
           <div>
-            <span style={shared.lbl}>Categoría</span>
-            <input value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} style={shared.inp} placeholder="Ej: Vivienda, Comercial…" />
-          </div>
-          <div>
-            <span style={shared.lbl}>Tipo de obra</span>
-            <select value={form.tipo_obra} onChange={e => setForm(f => ({ ...f, tipo_obra: e.target.value }))} style={shared.inp}>
-              <option value="">— Seleccionar —</option>
-              {TIPOS_OBRA.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <span style={shared.lbl}>Superficie (m²)</span>
-            <input type="number" min="0" value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
-          </div>
-          <div>
-            <span style={shared.lbl}>Fecha entrega plan</span>
-            <input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={shared.inp} />
-          </div>
-          <div>
-            <span style={shared.lbl}>Próxima tarea</span>
-            <input value={form.proxima_tarea} onChange={e => setForm(f => ({ ...f, proxima_tarea: e.target.value }))} style={shared.inp} placeholder="Ej: Revisar planos…" />
+            <span style={shared.lbl}>Presupuesto</span>
+            <Combobox options={presupuestos.map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}`.trim() }))} value={form.presupuesto_id} onChange={val => setForm(f => ({ ...f, presupuesto_id: val }))} placeholder="Buscar presupuesto" emptyLabel="Sin vincular" />
           </div>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <span style={shared.lbl}>Presupuesto vinculado</span>
-          <Combobox options={presupuestos.map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}`.trim() }))} value={form.presupuesto_id} onChange={val => setForm(f => ({ ...f, presupuesto_id: val }))} placeholder="Buscar presupuesto…" emptyLabel="Sin vincular" />
+        <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+          <div><span style={shared.lbl}>Link Drive</span><input value={form.drive_url} onChange={e => setForm(f => ({ ...f, drive_url: e.target.value }))} style={shared.inp} placeholder="https://drive.google.com/…" /></div>
+          <div><span style={shared.lbl}>Observaciones</span><textarea value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} /></div>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <span style={shared.lbl}>Link Drive</span>
-          <input value={form.drive_url} onChange={e => setForm(f => ({ ...f, drive_url: e.target.value }))} style={shared.inp} placeholder="https://drive.google.com/…" />
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <span style={shared.lbl}>Observaciones</span>
-          <textarea value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} />
-        </div>
-
-        {/* Flags */}
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-          {[
-            { key: "anticipo",          label: "💰 Anticipo cobrado" },
-            { key: "check_diagnostico", label: "🔍 Diagnóstico OK" },
-            { key: "proyecto_ok",       label: "✅ Proyecto OK" },
-            { key: "cobrado",           label: "✓ Cobrado" },
-          ].map(f => (
-            <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={!!form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.checked }))} style={{ width: 16, height: 16 }} />
-              {f.label}
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 16 }}>
+          {[["anticipo", "💰 Anticipo cobrado"], ["check_diagnostico", "🔍 Diagnóstico OK"], ["proyecto_ok", "✅ Proyecto OK"], ["cobrado", "✓ Cobrado"]].map(([key, label]) => (
+            <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.textSoft, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))} style={{ width: 16, height: 16 }} />{label}
             </label>
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={guardar} disabled={saving || !form.descripcion} style={{ ...shared.btn, flex: 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
-          <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
+          <button onClick={onClose} style={shared.btnSm}>Cancelar</button>
+          <button onClick={guardar} disabled={saving || !form.descripcion.trim()} style={{ ...shared.btn, opacity: saving || !form.descripcion.trim() ? 0.5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
         </div>
       </div>
     </div>
@@ -296,94 +455,47 @@ function ModalProyecto({ proyecto, onClose, onGuardar }) {
 }
 
 /* ════════════════════════════════════════════
-   FILA DE PROYECTO
+   CARD PROYECTO — expandible
 ════════════════════════════════════════════ */
-function FilaProyecto({ proyecto, onEditar, onChecklist, onArchivar }) {
-  const estado = ESTADOS.find(e => e.v === proyecto.estado) || ESTADOS[1];
-  const [expanded, setExpanded] = useState(false);
-
-  const diasRestantes = proyecto.fecha_entrega_plan
-    ? Math.ceil((new Date(proyecto.fecha_entrega_plan + "T12:00") - new Date()) / 86400000)
-    : null;
-
-  const pctChecklist = proyecto.checklist_total > 0
-    ? Math.round((proyecto.checklist_completados / proyecto.checklist_total) * 100) : null;
+function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
+  const [open, setOpen] = useState(false);
+  const meta = statusMeta(proyecto);
+  const days = proyecto.fecha_entrega_plan ? dueDays(proyecto.fecha_entrega_plan) : null;
+  const pct = proyecto.checklist_total > 0 ? Math.round(proyecto.checklist_completados / proyecto.checklist_total * 100) : null;
 
   return (
-    <div style={{ background: "#fff", borderRadius: 14, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,.06)", overflow: "hidden", borderLeft: `4px solid ${estado.color}` }}>
-      {/* Fila principal */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", cursor: "pointer" }} onClick={() => setExpanded(!expanded)}>
-        {/* Número */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", minWidth: 70, flexShrink: 0 }}>
-          {proyecto.numero_proyecto || "—"}
-        </div>
-
-        {/* Info principal */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, fontSize: 14 }}>{proyecto.descripcion || "Sin descripción"}</span>
-            {proyecto.tipo_obra && <span style={{ fontSize: 10, background: "#f0f0f0", borderRadius: 4, padding: "1px 6px", color: "#666" }}>{proyecto.tipo_obra}</span>}
+    <div style={{ background: COLORS.bgCard, border: `1.5px solid ${COLORS.border}`, borderLeft: `4px solid ${meta.color}`, borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "74px minmax(0,1fr) auto", gap: 12, alignItems: "start", padding: "14px 16px" }}>
+        <button onClick={() => setOpen(!open)} style={{ border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer" }}>
+          <div style={{ fontSize: 11, color: COLORS.textFaint, fontWeight: 700, fontFamily: FONT_MONO }}>{proyecto.numero_proyecto || "—"}</div>
+        </button>
+        <button onClick={() => setOpen(!open)} style={{ border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <strong style={{ fontSize: 14, color: COLORS.text }}>{proyecto.descripcion || "Sin descripción"}</strong>
+              <StatusPill proyecto={proyecto} />
+              {proyecto.tipo_obra && <Badge color={COLORS.textMuted} label={proyecto.tipo_obra} />}
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 3 }}>{proyecto.cliente || "Sin cliente"}{proyecto.encargado ? ` · ${proyecto.encargado}` : ""}{proyecto.superficie ? ` · ${proyecto.superficie}m²` : ""}</div>
+            {proyecto.proxima_tarea && <div style={{ fontSize: 12, color: FUNC.info, marginTop: 4 }}>→ {proyecto.proxima_tarea}</div>}
           </div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
-            {proyecto.cliente || "—"}
-            {proyecto.encargado && ` · ${proyecto.encargado}`}
-            {proyecto.superficie && ` · ${proyecto.superficie}m²`}
-          </div>
-          {proyecto.proxima_tarea && (
-            <div style={{ fontSize: 11, color: "#6366f1", marginTop: 3 }}>→ {proyecto.proxima_tarea}</div>
-          )}
-        </div>
-
-        {/* Badges derechos */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-          {/* Fecha entrega */}
-          {diasRestantes !== null && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-              background: diasRestantes < 0 ? "#fef2f2" : diasRestantes < 7 ? "#fffbeb" : "#f0fdf4",
-              color: diasRestantes < 0 ? "#ef4444" : diasRestantes < 7 ? "#d97706" : "#16a34a" }}>
-              {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d vencido` : diasRestantes === 0 ? "Hoy" : `${diasRestantes}d`}
-            </span>
-          )}
-          {/* Checklist */}
-          {pctChecklist !== null && (
-            <span style={{ fontSize: 10, color: pctChecklist === 100 ? "#22c55e" : "#888" }}>
-              ✅ {proyecto.checklist_completados}/{proyecto.checklist_total}
-            </span>
-          )}
-          {/* Flags */}
-          <div style={{ display: "flex", gap: 4 }}>
-            {proyecto.anticipo          && <span title="Anticipo" style={{ fontSize: 12 }}>💰</span>}
-            {proyecto.proyecto_ok       && <span title="Proyecto OK" style={{ fontSize: 12 }}>✅</span>}
-            {proyecto.cobrado           && <span title="Cobrado" style={{ fontSize: 12 }}>✓</span>}
-            {proyecto.drive_url         && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 12 }}>📂</a>}
-          </div>
-          <span style={{ fontSize: 11, color: "#bbb" }}>{expanded ? "▲" : "▼"}</span>
+        </button>
+        <div style={{ display: "flex", alignItems: "flex-end", flexDirection: "column", gap: 5 }}>
+          {days !== null && <Badge color={days < 0 ? FUNC.danger : days < 7 ? FUNC.warning : FUNC.success} label={days < 0 ? `${Math.abs(days)}d vencido` : days === 0 ? "Hoy" : `${days}d`} mono />}
+          {pct !== null && <span style={{ fontSize: 11, color: pct === 100 ? FUNC.success : COLORS.textMuted }}>✅ {proyecto.checklist_completados}/{proyecto.checklist_total}</span>}
+          <button onClick={() => setOpen(!open)} style={{ border: "none", background: "transparent", color: COLORS.textMuted, fontSize: 12, cursor: "pointer" }}>{open ? "▲" : "▼"}</button>
         </div>
       </div>
-
-      {/* Expandido */}
-      {expanded && (
-        <div style={{ padding: "0 16px 14px", borderTop: "1px solid #f5f5f5" }}>
-          {proyecto.obs && <p style={{ fontSize: 13, color: "#666", margin: "10px 0 10px" }}>{proyecto.obs}</p>}
-
-          {/* Barra checklist */}
-          {proyecto.checklist_total > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#aaa", marginBottom: 3 }}>
-                <span>Checklist</span><span>{pctChecklist}%</span>
-              </div>
-              <div style={{ height: 5, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pctChecklist}%`, background: "#22c55e" }} />
-              </div>
-            </div>
-          )}
-
+      {open && (
+        <div style={{ padding: "0 16px 14px 102px", borderTop: `1px solid ${COLORS.border}` }}>
+          {proyecto.obs && <p style={{ margin: "10px 0 10px", color: COLORS.textSoft, fontSize: 13 }}>{proyecto.obs}</p>}
+          {pct !== null && <div style={{ marginTop: 10, marginBottom: 12 }}><ProgressBar valor={pct} max={100} color={FUNC.success} showValue={false} /></div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => onEditar(proyecto)} style={{ ...shared.btnSm, fontSize: 12 }}>✏️ Editar</button>
-            <button onClick={() => onChecklist(proyecto)} style={{ ...shared.btnSm, fontSize: 12 }}>✅ Checklist</button>
-            {proyecto.estado !== "entregado" && (
-              <button onClick={() => onArchivar(proyecto)} style={{ ...shared.btnSm, fontSize: 12, color: "#888" }}>📦 Archivar</button>
-            )}
+            <button onClick={() => onEditar(proyecto)} style={shared.btnSm}>✏️ Editar</button>
+            <button onClick={() => onChecklist(proyecto)} style={shared.btnSm}>✅ Checklist</button>
+            {proyecto.drive_url && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" style={{ ...shared.btnSm, textDecoration: "none", display: "inline-block" }}>📂 Drive</a>}
+            {!isDelivered(proyecto) && <button onClick={() => onArchivar(proyecto, "entregar")} style={shared.btnSm}>Marcar entregado</button>}
+            {isDelivered(proyecto) && !isArchived(proyecto) && <button onClick={() => onArchivar(proyecto, "archivar")} style={shared.btnSm}>📦 Archivar</button>}
           </div>
         </div>
       )}
@@ -392,150 +504,147 @@ function FilaProyecto({ proyecto, onEditar, onChecklist, onArchivar }) {
 }
 
 /* ════════════════════════════════════════════
-   CRONOGRAMA MENSUAL
+   ESTADO DROPDOWN — selector de pestaña tipo menú
 ════════════════════════════════════════════ */
-function CronogramaMensual({ proyectos }) {
-  const hoy = new Date();
-  const meses = [];
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
-    meses.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }) });
-  }
+function EstadoDropdown({ tab, setTab }) {
+  const [open, setOpen] = useState(false);
+  const current = TABS.find(t => t.id === tab) || TABS[0];
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen(v => !v)} style={{ ...shared.btnSm, display: "flex", alignItems: "center", gap: 10, minWidth: 176, justifyContent: "space-between" }}>
+        <span>{current.label}</span>
+        <span style={{ fontSize: 10, color: COLORS.textFaint }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", left: 0, top: "100%", marginTop: 6, width: 210, background: COLORS.bgCard, border: `1.5px solid ${COLORS.border}`, borderRadius: 10, boxShadow: "0 12px 28px rgba(0,0,0,.14)", zIndex: 30, padding: 6 }}>
+          <div style={{ padding: "7px 10px 6px", fontSize: 10, color: COLORS.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Estado</div>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); setOpen(false); }} style={{ width: "100%", textAlign: "left", padding: "8px 10px", background: tab === t.id ? COLORS.bgSoft : "transparent", border: "none", color: COLORS.text, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: tab === t.id ? 700 : 500 }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   ENTREGAS — timeline (esta semana / próxima / por mes)
+════════════════════════════════════════════ */
+function EntregasTimeline({ proyectos }) {
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const en14 = new Date(hoy); en14.setDate(hoy.getDate() + 14);
+
+  const ordenados = [...proyectos].filter(p => p.fecha_entrega_plan).sort((a, b) => new Date(`${a.fecha_entrega_plan}T12:00`) - new Date(`${b.fecha_entrega_plan}T12:00`));
+  const semanaActual = ordenados.filter(p => { const d = new Date(`${p.fecha_entrega_plan}T12:00`); return d >= hoy && d < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 7); });
+  const semanaProxima = ordenados.filter(p => { const d = new Date(`${p.fecha_entrega_plan}T12:00`); return d >= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 7) && d <= en14; });
 
   const porMes = {};
-  proyectos.forEach(p => {
-    if (!p.fecha_entrega_plan) return;
-    const d = new Date(p.fecha_entrega_plan + "T12:00");
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    if (!porMes[key]) porMes[key] = [];
-    porMes[key].push(p);
-  });
+  ordenados.forEach(p => { const d = new Date(`${p.fecha_entrega_plan}T12:00`); const key = d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }); porMes[key] = [...(porMes[key] || []), p]; });
 
-  const conProyectos = meses.filter(m => porMes[`${m.year}-${m.month}`]?.length > 0);
-  if (conProyectos.length === 0) return null;
+  if (!ordenados.length) return null;
 
   return (
-    <div style={{ marginTop: 32 }}>
-      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>📅 Cronograma de entregas</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-        {meses.map(m => {
-          const key = `${m.year}-${m.month}`;
-          const items = porMes[key] || [];
-          if (items.length === 0) return null;
-          const esActual = m.year === hoy.getFullYear() && m.month === hoy.getMonth();
-          return (
-            <div key={key} style={{ background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 1px 6px rgba(0,0,0,.07)", border: esActual ? "2px solid #6366f1" : "none" }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: esActual ? "#6366f1" : "#111", marginBottom: 10, textTransform: "capitalize" }}>
-                {esActual && "📍 "}{m.label}
-                <span style={{ fontSize: 11, fontWeight: 400, color: "#aaa", marginLeft: 6 }}>{items.length} entrega{items.length > 1 ? "s" : ""}</span>
-              </div>
-              {items.map(p => {
-                const estado = ESTADOS.find(e => e.v === p.estado) || ESTADOS[1];
-                const dia = new Date(p.fecha_entrega_plan + "T12:00").getDate();
-                return (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f5f5f5" }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: estado.color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontWeight: 800, fontSize: 14, color: estado.color }}>{dia}</span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion}</div>
-                      <div style={{ fontSize: 10, color: "#aaa" }}>{p.cliente || "—"} · {p.numero_proyecto || "—"}</div>
-                    </div>
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: estado.color + "18", color: estado.color, fontWeight: 600 }}>{estado.label}</span>
-                  </div>
-                );
-              })}
+    <section style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <h2 style={{ fontSize: 16, margin: 0, fontWeight: 800, color: COLORS.text }}>📅 Próximas entregas</h2>
+        <span style={{ fontSize: 12, color: COLORS.textMuted }}>{ordenados.length} proyectos con fecha</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 10, marginBottom: 12 }}>
+        <EntregaBucket title="Esta semana" items={semanaActual} />
+        <EntregaBucket title="Próxima semana" items={semanaProxima} />
+      </div>
+      <div style={shared.card}>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Por mes</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(210px,1fr))", gap: 10 }}>
+          {Object.entries(porMes).slice(0, 6).map(([mes, items]) => (
+            <div key={mes} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 10 }}>
+              <strong style={{ display: "block", textTransform: "capitalize", fontSize: 13, marginBottom: 6, color: COLORS.text }}>{mes}</strong>
+              {items.slice(0, 4).map(p => <EntregaMini key={p.id} proyecto={p} />)}
+              {items.length > 4 && <div style={{ fontSize: 12, color: COLORS.textFaint, marginTop: 5 }}>+{items.length - 4} más</div>}
             </div>
-          );
-        })}
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EntregaBucket({ title, items }) {
+  return (
+    <div style={{ ...shared.card, minHeight: 128 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <strong style={{ fontSize: 13, color: COLORS.text }}>{title}</strong>
+        <span style={{ fontSize: 11, color: COLORS.textMuted, background: COLORS.bgSoft, borderRadius: 999, padding: "2px 8px", fontFamily: FONT_MONO }}>{items.length}</span>
+      </div>
+      {items.length ? items.map(p => <EntregaMini key={p.id} proyecto={p} />) : <div style={{ color: COLORS.textFaint, fontSize: 13, paddingTop: 20, textAlign: "center" }}>Sin entregas</div>}
+    </div>
+  );
+}
+
+function EntregaMini({ proyecto }) {
+  const d = new Date(`${proyecto.fecha_entrega_plan}T12:00`);
+  const days = dueDays(proyecto.fecha_entrega_plan);
+  const color = days < 0 ? FUNC.danger : days < 7 ? FUNC.warning : FUNC.success;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "38px 1fr", gap: 8, alignItems: "center", padding: "7px 0", borderTop: `1px solid ${COLORS.border}` }}>
+      <div style={{ textAlign: "center", borderRadius: 8, background: color + "1a", color, padding: "4px 0", fontWeight: 800, fontSize: 13, fontFamily: FONT_MONO }}>{d.getDate()}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: COLORS.text }}>{proyecto.descripcion}</div>
+        <div style={{ fontSize: 11, color: COLORS.textMuted }}>{proyecto.cliente || "Sin cliente"} · {days < 0 ? `${Math.abs(days)}d vencido` : days === 0 ? "Hoy" : `${days}d`}</div>
       </div>
     </div>
   );
 }
 
 /* ════════════════════════════════════════════
-   ACORDEÓN DE GRUPOS POR ESTADO
+   CRONOGRAMA MENSUAL — 6 meses adelante
 ════════════════════════════════════════════ */
-function GruposAcordeon({ grupos, archivados, mostrarArchivados, onEditar, onChecklist, onArchivar }) {
-  // Inicialmente todos abiertos excepto archivados
-  const [abiertos, setAbiertos] = useState(() => {
-    const init = {};
-    ["onboarding","activo","revision"].forEach(e => { init[e] = true; });
-    init["archivado"] = false;
-    return init;
-  });
-
-  function toggle(estado) {
-    setAbiertos(prev => ({ ...prev, [estado]: !prev[estado] }));
-  }
-
-  const todoGrupos = [
-    ...grupos,
-    ...(mostrarArchivados && archivados.length > 0 ? [{
-      estado: "archivado",
-      config: { v:"archivado", label:"Archivados / Entregados", color:"#888", icon:"📦" },
-      items: archivados,
-    }] : []),
-  ];
-
-  if (todoGrupos.length === 0) {
-    return <p style={{ color:"#aaa", textAlign:"center", padding:40 }}>No hay proyectos activos.</p>;
-  }
+function CronogramaMensual({ proyectos }) {
+  const hoy = new Date();
+  const meses = Array.from({ length: 6 }, (_, i) => { const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1); return { year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }) }; });
+  const porMes = {};
+  proyectos.forEach(p => { if (!p.fecha_entrega_plan) return; const d = new Date(`${p.fecha_entrega_plan}T12:00`); const key = `${d.getFullYear()}-${d.getMonth()}`; porMes[key] = [...(porMes[key] || []), p]; });
+  if (!meses.some(m => porMes[`${m.year}-${m.month}`]?.length)) return null;
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      {todoGrupos.map(g => {
-        const abierto = abiertos[g.estado] !== false;
-        return (
-          <div key={g.estado} style={{ borderRadius:14, overflow:"hidden", boxShadow:"0 1px 5px rgba(0,0,0,.06)" }}>
-            {/* Cabecera acordeón — clickeable */}
-            <div
-              onClick={() => toggle(g.estado)}
-              style={{ display:"flex", alignItems:"center", gap:10, padding:"13px 16px", background:g.config.color+"18", cursor:"pointer", userSelect:"none", borderLeft:`4px solid ${g.config.color}` }}>
-              <span style={{ fontSize:16 }}>{g.config.icon}</span>
-              <span style={{ fontWeight:700, fontSize:14, color:g.config.color, flex:1 }}>{g.config.label}</span>
-              <span style={{ fontSize:12, color:g.config.color, fontWeight:700, background:g.config.color+"22", borderRadius:20, padding:"2px 10px" }}>
-                {g.items.length}
-              </span>
-              <span style={{ fontSize:13, color:g.config.color, marginLeft:4, transition:"transform .2s", display:"inline-block", transform: abierto ? "rotate(0deg)" : "rotate(-90deg)" }}>
-                ▼
-              </span>
+    <section style={{ marginTop: 28 }}>
+      <h2 style={{ fontSize: 16, margin: "0 0 12px", fontWeight: 800, color: COLORS.text }}>🗓️ Cronograma</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 12 }}>
+        {meses.map(m => {
+          const key = `${m.year}-${m.month}`;
+          const items = porMes[key] || [];
+          if (!items.length) return null;
+          return (
+            <div key={key} style={shared.card}>
+              <div style={{ fontSize: 13, fontWeight: 700, textTransform: "capitalize", marginBottom: 8, color: COLORS.text }}>{m.label}</div>
+              {items.map(p => (
+                <div key={p.id} style={{ display: "grid", gridTemplateColumns: "32px 1fr", gap: 8, padding: "7px 0", borderTop: `1px solid ${COLORS.border}` }}>
+                  <strong style={{ color: statusMeta(p).color, fontFamily: FONT_MONO }}>{new Date(`${p.fecha_entrega_plan}T12:00`).getDate()}</strong>
+                  <span style={{ fontSize: 12, color: COLORS.textSoft }}>{p.descripcion}</span>
+                </div>
+              ))}
             </div>
-
-            {/* Contenido desplegable */}
-            {abierto && (
-              <div style={{ background:"#f8f9fa", padding:"10px 10px 4px" }}>
-                {g.items.length === 0 ? (
-                  <p style={{ color:"#bbb", textAlign:"center", padding:"16px 0", fontSize:13 }}>Sin proyectos en este estado.</p>
-                ) : g.items.map(p => (
-                  <FilaProyecto
-                    key={p.id}
-                    proyecto={p}
-                    onEditar={onEditar}
-                    onChecklist={onChecklist}
-                    onArchivar={onArchivar}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
 /* ════════════════════════════════════════════
-   COMPONENTE PRINCIPAL
+   PRINCIPAL
 ════════════════════════════════════════════ */
 export default function Proyectos({ deepLinkId }) {
   const [proyectos, setProyectos] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [modal, setModal]         = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
   const [panelChecklist, setPanelChecklist] = useState(null);
-  const [mostrarArchivados, setMostrarArchivados] = useState(false);
-  const [busqueda, setBusqueda]   = useState("");
-  const [msg, setMsg]             = useState("");
+  const [tab, setTab] = useState("activos");
+  const [busqueda, setBusqueda] = useState("");
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => { cargar(); }, []);
 
@@ -548,121 +657,95 @@ export default function Proyectos({ deepLinkId }) {
   }, [deepLinkId, proyectos]);
 
   async function cargar() {
-    setLoading(true);
-    const tk = await getToken();
-    // Intentar vista primero, fallback a tabla directa
-    let r = await fetch(`${SUPA_URL}/vista_proyectos?order=numero_proyecto.desc.nullslast`, { headers: hdrs(tk) }).then(r => r.json());
-    if (!Array.isArray(r) || r.error) {
-      r = await fetch(`${SUPA_URL}/proyectos?order=numero_proyecto.desc.nullslast`, { headers: hdrs(tk) }).then(r => r.json());
-    }
-    setProyectos(Array.isArray(r) ? r : []);
+    setLoading(true); setError("");
+    try {
+      let rows;
+      try { rows = await api("/vista_proyectos?order=numero_proyecto.desc.nullslast"); }
+      catch (_) { rows = await api("/proyectos?order=numero_proyecto.desc.nullslast"); }
+      setProyectos(Array.isArray(rows) ? rows : []);
+    } catch (e) { setError(e.message); setProyectos([]); }
     setLoading(false);
   }
 
-  async function archivar(p) {
-    if (!confirm(`¿Archivar "${p.descripcion}"?`)) return;
-    const tk = await getToken();
-    await fetch(`${SUPA_URL}/proyectos?id=eq.${p.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ estado: "entregado", archivado: true }) });
-    setMsg("✓ Archivado"); setTimeout(() => setMsg(""), 2000);
-    await cargar();
+  async function archivar(p, accion = "entregar") {
+    const esArchivo = accion === "archivar";
+    if (!confirm(`¿${esArchivo ? "Archivar" : "Marcar como entregado"} "${p.descripcion}"?`)) return;
+    setError("");
+    try {
+      await api(`/proyectos?id=eq.${p.id}`, { method: "PATCH", body: JSON.stringify(esArchivo ? { archivado: true } : { estado: "entregado", archivado: false, entregado: true }) });
+      setMsg(esArchivo ? "✓ Proyecto archivado" : "✓ Proyecto marcado como entregado");
+      setTimeout(() => setMsg(""), 2200);
+      await cargar();
+      setTab(esArchivo ? "archivados" : "entregados");
+    } catch (e) { setError(e.message); }
   }
 
-  // Filtrar
-  const q = busqueda.toLowerCase();
-  const filtrados = proyectos.filter(p => {
-    if (p.archivado && !mostrarArchivados) return false;
+  const q = busqueda.trim().toLowerCase();
+  const archivados = proyectos.filter(isArchived);
+  const activos = proyectos.filter(p => !isDelivered(p) && !isArchived(p));
+  const entregados = proyectos.filter(isVisibleDelivered);
+  const revision = activos.filter(p => normalizeEstado(p) === "revision");
+  const onboarding = activos.filter(p => normalizeEstado(p) === "onboarding");
+  const activosOperacion = activos.filter(p => normalizeEstado(p) === "activo");
+  const conEntrega = activos.filter(p => p.fecha_entrega_plan);
+  const vencidos = conEntrega.filter(p => dueDays(p.fecha_entrega_plan) < 0);
+
+  const base = useMemo(() => {
+    if (tab === "entregados") return entregados;
+    if (tab === "archivados") return archivados;
+    if (tab === "revision") return revision;
+    if (tab === "onboarding") return onboarding;
+    if (tab === "todos") return proyectos;
+    return activos;
+  }, [tab, proyectos]);
+
+  const visibles = base.filter(p => {
     if (!q) return true;
-    return (p.descripcion || "").toLowerCase().includes(q)
-      || (p.cliente || "").toLowerCase().includes(q)
-      || (p.numero_proyecto || "").toLowerCase().includes(q)
-      || (p.encargado || "").toLowerCase().includes(q);
+    return [p.descripcion, p.cliente, p.numero_proyecto, p.encargado, p.proxima_tarea].some(v => (v || "").toLowerCase().includes(q));
   });
 
-  // Agrupar: onboarding, activo, revision (entregados archivados)
-  const grupos = ESTADO_ORDER.map(estado => ({
-    estado,
-    config: ESTADOS.find(e => e.v === estado),
-    items: filtrados.filter(p => p.estado === estado),
-  })).filter(g => g.items.length > 0);
-
-  const archivados = filtrados.filter(p => p.estado === "entregado" || p.archivado);
-
-  // Stats
-  const total    = proyectos.filter(p => !p.archivado).length;
-  const activos  = proyectos.filter(p => p.estado === "activo").length;
-  const entregas = proyectos.filter(p => p.fecha_entrega_plan && !p.archivado).length;
-  const vencidos = proyectos.filter(p => {
-    if (!p.fecha_entrega_plan || p.archivado || p.estado === "entregado") return false;
-    return new Date(p.fecha_entrega_plan + "T12:00") < new Date();
-  }).length;
-
   return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ ...shared.page, maxWidth: 1180 }}>
+      <SectionHeader icon="📋" title="Proyectos" subtitle="Operación, entregas y seguimiento técnico." action={{ label: "+ Nuevo proyecto", onClick: () => setModal("nuevo") }} />
 
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📋 Proyectos</h1>
-        <button onClick={() => setModal("nuevo")} style={shared.btn}>+ Nuevo proyecto</button>
+      {msg && <Toast texto={msg} />}
+      <ErrorBanner message={error} />
+
+      <KpiGrid columns={6} items={[
+        { label: "En curso",    value: activos.length,           color: COLORS.accent },
+        { label: "Activos",     value: activosOperacion.length,  color: FUNC.success },
+        { label: "Revisión",    value: revision.length,          color: FUNC.info },
+        { label: "Entregados",  value: entregados.length,        color: COLORS.textMuted },
+        { label: "Archivados",  value: archivados.length,        color: COLORS.textFaint },
+        { label: "Vencidos",    value: vencidos.length,          color: vencidos.length ? FUNC.danger : COLORS.textMuted },
+      ]} />
+
+      <EntregasTimeline proyectos={activos.filter(p => p.fecha_entrega_plan)} />
+
+      <div style={{ ...shared.card, marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+          <EstadoDropdown tab={tab} setTab={setTab} />
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="🔍 Buscar proyecto, cliente, encargado…" style={{ ...shared.inp, maxWidth: 340 }} />
+        </div>
       </div>
 
-      {msg && <div style={{ background: "#d4edda", color: "#155724", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>{msg}</div>}
-
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
-        {[
-          { label: "En curso",   value: total,    color: "#6366f1" },
-          { label: "Activos",    value: activos,  color: "#22c55e" },
-          { label: "Con entrega",value: entregas, color: "#f59e0b" },
-          { label: "Vencidos",   value: vencidos, color: vencidos > 0 ? "#ef4444" : "#888" },
-        ].map(k => (
-          <div key={k.label} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", boxShadow: "0 1px 4px rgba(0,0,0,.06)", textAlign: "center" }}>
-            <div style={{ fontSize: 26, fontWeight: 800, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{k.label}</div>
-          </div>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "12px 0", color: COLORS.textMuted, fontSize: 13 }}>
+        <span>{loading ? "Cargando…" : `${visibles.length} resultado${visibles.length === 1 ? "" : "s"}`}</span>
+        {tab === "entregados" && <strong style={{ color: COLORS.text, fontWeight: 600, fontSize: 12 }}>Los entregados están acá. Si ya no los necesitás, abrilos y usá Archivar.</strong>}
+        {tab === "archivados" && <strong style={{ color: COLORS.text, fontWeight: 600, fontSize: 12 }}>Archivo histórico.</strong>}
       </div>
 
-      {/* Buscador */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-        <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="🔍 Buscar proyecto, cliente, encargado…" style={{ ...shared.inp, width: 320 }} />
-        <button onClick={() => setMostrarArchivados(!mostrarArchivados)} style={{ ...shared.btnSm, background: mostrarArchivados ? "#111" : "#f0f0f0", color: mostrarArchivados ? "#fff" : "#333" }}>
-          📦 Archivados ({archivados.length})
-        </button>
-      </div>
-
-      {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
-        <>
-          {/* Acordeón por estado */}
-          <GruposAcordeon
-            grupos={grupos}
-            archivados={archivados}
-            mostrarArchivados={mostrarArchivados}
-            onEditar={proj => setModal(proj)}
-            onChecklist={proj => setPanelChecklist(proj)}
-            onArchivar={archivar}
-          />
-
-          {/* Cronograma mensual */}
-          <CronogramaMensual proyectos={filtrados.filter(p => !p.archivado)} />
-        </>
+      {loading ? <p style={{ color: COLORS.textFaint }}>Cargando proyectos…</p> : (
+        <div style={{ display: "grid", gap: 8 }}>
+          {visibles.map(p => <ProyectoCard key={p.id} proyecto={p} onEditar={setModal} onChecklist={setPanelChecklist} onArchivar={archivar} />)}
+          {!visibles.length && <EmptyState message="No hay proyectos en esta vista." />}
+        </div>
       )}
 
-      {/* Modal */}
-      {modal && (
-        <ModalProyecto
-          proyecto={modal === "nuevo" ? null : modal}
-          onClose={() => setModal(null)}
-          onGuardar={async () => { setModal(null); setMsg("✓ Guardado"); setTimeout(() => setMsg(""), 2000); await cargar(); }}
-        />
-      )}
+      <CronogramaMensual proyectos={activos.filter(p => p.fecha_entrega_plan)} />
 
-      {/* Panel checklist */}
-      {panelChecklist && (
-        <PanelChecklist
-          proyectoId={panelChecklist.id}
-          onClose={() => { setPanelChecklist(null); cargar(); }}
-        />
-      )}
+      {modal && <ModalProyecto proyecto={modal === "nuevo" ? null : modal} onClose={() => setModal(null)} onGuardar={async () => { setModal(null); setMsg("✓ Proyecto guardado"); setTimeout(() => setMsg(""), 2200); await cargar(); }} />}
+      {panelChecklist && <PanelChecklist proyectoId={panelChecklist.id} onClose={() => { setPanelChecklist(null); cargar(); }} />}
     </div>
   );
 }
