@@ -135,26 +135,19 @@ export function ThemeToggle({ theme, onToggle, palette = LIGHT }) {
 }
 
 /* ════════════════════════════════════════════
-   SECTION HEADER — marca NPL + brackets + título
+   SECTION HEADER — título de módulo, sin repetir marca
+   (la marca "NPL" ya vive en el nav global superior)
    Uso: <SectionHeader icon="🏗️" title="Obras" action={{label:"+ Nueva obra", onClick:...}} palette={palette} />
 ════════════════════════════════════════════ */
-export function SectionHeader({ icon, title, subtitle, action, palette = LIGHT, showBrand = true }) {
+export function SectionHeader({ icon, title, subtitle, action, palette = LIGHT }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
       <div>
-        {showBrand && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 900, color: palette.text, letterSpacing: -0.5 }}>NPL</span>
-            <div style={{ width: 1, height: 12, background: palette.borderStrong }} />
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: palette.textMuted, textTransform: "uppercase", fontFamily: FONT_MONO }}>
-              [ {title} ]
-            </span>
-          </div>
-        )}
-        {subtitle && <p style={{ margin: "2px 0 0", fontSize: 12, color: palette.textFaint, fontWeight: 500 }}>{subtitle}</p>}
-        <h1 style={{ margin: showBrand ? "2px 0 0" : 0, fontSize: 22, fontWeight: 800, color: palette.text, letterSpacing: -0.3 }}>
-          {icon} {title}
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: palette.text, letterSpacing: -0.3, display: "flex", alignItems: "center", gap: 8 }}>
+          {icon && <span style={{ fontSize: 20 }}>{icon}</span>}
+          {title}
         </h1>
+        {subtitle && <p style={{ margin: "4px 0 0", fontSize: 12.5, color: palette.textMuted, fontWeight: 500 }}>{subtitle}</p>}
       </div>
       {action && (
         <button onClick={action.onClick} style={makeShared(palette).btn}>{action.label}</button>
@@ -341,8 +334,184 @@ export function FilterBar({ children, resultCount, palette = LIGHT }) {
   );
 }
 
+/* ════════════════════════════════════════════
+   GLOBAL SEARCH — command palette (Cmd+K) sobre vista_busqueda_global
+   Uso: <GlobalSearch palette={palette} onNavegar={(tipo, id) => ...} />
+════════════════════════════════════════════ */
+const SUPA_URL_KIT = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
+const ANON_KEY_KIT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
+
+const TIPO_META = {
+  presupuesto: { icon: "💰", label: "Presupuesto", modulo: "presupuestos" },
+  proyecto:    { icon: "📋", label: "Proyecto",    modulo: "proyectos" },
+  obra:        { icon: "🏗️", label: "Obra",         modulo: "obras" },
+};
+
+export function GlobalSearch({ palette = LIGHT, onNavegar }) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const [resultados, setResultados] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const inputRef = React.useRef();
+
+  // Atajo Cmd+K / Ctrl+K
+  React.useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setOpen(true);
+      }
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  React.useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+    else { setQ(""); setResultados([]); }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!q || q.length < 2) { setResultados([]); return; }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const tk = (await import("./supabase.js")).supabase;
+        const { data: { session } } = await tk.auth.getSession();
+        const token = session?.access_token || ANON_KEY_KIT;
+        const headers = { apikey: ANON_KEY_KIT, Authorization: `Bearer ${token}` };
+        const qEnc = encodeURIComponent(`%${q}%`);
+        const r = await fetch(
+          `${SUPA_URL_KIT}/vista_busqueda_global?or=(codigo.ilike.${qEnc},titulo.ilike.${qEnc},cliente.ilike.${qEnc})&limit=15&order=created_at.desc`,
+          { headers }
+        ).then(r => r.json());
+        setResultados(Array.isArray(r) ? r : []);
+      } catch (e) { setResultados([]); }
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} style={{
+        display: "flex", alignItems: "center", gap: 8, background: palette.bgSoft,
+        border: `1px solid ${palette.border}`, borderRadius: 8, padding: "6px 10px",
+        cursor: "pointer", color: palette.textMuted, fontSize: 12,
+      }}>
+        <span>🔍</span>
+        <span>Buscar…</span>
+        <span style={{ fontFamily: FONT_MONO, fontSize: 10, background: palette.border, padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>⌘K</span>
+      </button>
+
+      {open && (
+        <div onClick={() => setOpen(false)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500,
+          display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "12vh",
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: palette.bgCard, borderRadius: 14, width: "100%", maxWidth: 560,
+            border: `1.5px solid ${palette.border}`, overflow: "hidden", maxHeight: "70vh", display: "flex", flexDirection: "column",
+          }}>
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${palette.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ color: palette.textFaint }}>🔍</span>
+              <input
+                ref={inputRef}
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                placeholder="Buscar por código, cliente, descripción…"
+                style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: palette.text }}
+              />
+              <span style={{ fontSize: 10, color: palette.textFaint, fontFamily: FONT_MONO }}>ESC</span>
+            </div>
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {loading && <div style={{ padding: 20, textAlign: "center", color: palette.textFaint, fontSize: 13 }}>Buscando…</div>}
+              {!loading && q.length >= 2 && resultados.length === 0 && (
+                <div style={{ padding: 20, textAlign: "center", color: palette.textFaint, fontSize: 13 }}>Sin resultados.</div>
+              )}
+              {!loading && q.length < 2 && (
+                <div style={{ padding: 20, textAlign: "center", color: palette.textFaint, fontSize: 13 }}>Escribí al menos 2 caracteres…</div>
+              )}
+              {resultados.map(r => {
+                const meta = TIPO_META[r.tipo] || { icon: "📄", label: r.tipo, modulo: r.tipo };
+                return (
+                  <div key={`${r.tipo}-${r.id}`}
+                    onClick={() => { setOpen(false); onNavegar && onNavegar(meta.modulo, r.id, r.tipo); }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", cursor: "pointer", borderBottom: `1px solid ${palette.border}` }}
+                    onMouseEnter={e => e.currentTarget.style.background = palette.bgSoft}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{meta.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: palette.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.titulo}</div>
+                      <div style={{ fontSize: 11, color: palette.textMuted, display: "flex", gap: 6, alignItems: "center", marginTop: 1 }}>
+                        {r.codigo && <span style={{ fontFamily: FONT_MONO }}>[{r.codigo}]</span>}
+                        {r.cliente && <span>· {r.cliente}</span>}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: palette.textFaint, textTransform: "uppercase", flexShrink: 0 }}>{meta.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   FLOW BREADCRUMB — señalética de ubicación en el flujo
+   Presupuesto → Proyecto → Obra, con el paso actual resaltado
+   Uso: <FlowBreadcrumb actual="proyecto" tiene={{presupuesto:true, proyecto:true, obra:false}}
+          codigo="2026-SF-531" onClick={(paso) => ...} palette={palette} />
+════════════════════════════════════════════ */
+export function FlowBreadcrumb({ actual, tiene = {}, codigo, onClick, palette = LIGHT }) {
+  const pasos = [
+    { id: "presupuesto", label: "Presupuesto", icon: "💰" },
+    { id: "proyecto",    label: "Proyecto",    icon: "📋" },
+    { id: "obra",        label: "Obra",        icon: "🏗️" },
+  ];
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
+      {codigo && (
+        <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: palette.textFaint, marginRight: 8, fontWeight: 700 }}>
+          [ {codigo} ]
+        </span>
+      )}
+      {pasos.map((p, i) => {
+        const activo = p.id === actual;
+        const existe = tiene[p.id];
+        const clickable = existe && onClick;
+        return (
+          <React.Fragment key={p.id}>
+            {i > 0 && <span style={{ color: palette.textFaint, fontSize: 12 }}>→</span>}
+            <div
+              onClick={() => clickable && onClick(p.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20,
+                background: activo ? palette.bgInverse : existe ? palette.bgSoft : "transparent",
+                color: activo ? palette.textInverse : existe ? palette.text : palette.textFaint,
+                fontSize: 11.5, fontWeight: activo ? 800 : 600,
+                border: existe && !activo ? `1px solid ${palette.border}` : "1px solid transparent",
+                cursor: clickable ? "pointer" : "default",
+                opacity: existe ? 1 : 0.45,
+              }}>
+              <span>{p.icon}</span>
+              <span>{p.label}</span>
+              {activo && <span style={{ width: 5, height: 5, borderRadius: "50%", background: palette.textInverse, marginLeft: 2 }} />}
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+
 export default {
   COLORS, FUNC, FONT_MONO, FONT_SANS, shared, makeShared, useTheme, NplFontLoader,
   ThemeToggle, SectionHeader, KpiCard, KpiGrid, Badge, CodeTag, SemaforoBadge,
-  ProgressBar, Acordeon, EmptyState, Toast, FilterBar,
+  ProgressBar, Acordeon, EmptyState, Toast, FilterBar, GlobalSearch, FlowBreadcrumb,
 };
