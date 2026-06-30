@@ -14,30 +14,47 @@ function hdrs(tk) {
 }
 
 const TIPOS_SERVICIO = [
-  { v: "calculo",       label: "📐 Cálculo estructural",      desc: "Genera proyecto de ingeniería" },
-  { v: "calculo_obra",  label: "📐🏗️ Cálculo + Obra",         desc: "Genera proyecto y obra" },
-  { v: "obra",          label: "🏗️ Dirección de obra",         desc: "Genera obra de campo" },
-  { v: "auditoria",     label: "🔍 Auditoría de obra",         desc: "Revisión de obra existente" },
-  { v: "certificacion", label: "📋 Certificación",             desc: "Revisión y certificación" },
-  { v: "otro",          label: "📝 Otro",                      desc: "" },
+  { v: "calculo",        label: "📐 Cálculo estructural", desc: "Genera proyecto de ingeniería" },
+  { v: "calculo_obra",   label: "📐🏗️ Cálculo + Obra",     desc: "Genera proyecto y obra" },
+  { v: "obra",           label: "🏗️ Dirección de obra",   desc: "Genera obra de campo" },
+  { v: "auditoria",      label: "🔍 Auditoría de obra",   desc: "Revisión de obra existente" },
+  { v: "certificacion",  label: "📋 Certificación",        desc: "Revisión y certificación" },
+  { v: "otro",           label: "📝 Otro", desc: "" },
 ];
 
 const ESTADOS = [
   { v: "borrador",     label: "Borrador",     color: "#888" },
   { v: "enviado",      label: "Enviado",      color: "#3b82f6" },
+  { v: "negociacion",  label: "Negociación",  color: "#f59e0b" },
   { v: "aprobado",     label: "Aprobado",     color: "#22c55e" },
   { v: "rechazado",    label: "Rechazado",    color: "#ef4444" },
-  { v: "en_ejecucion", label: "En ejecución", color: "#f59e0b" },
-  { v: "finalizado",   label: "Finalizado",   color: "#6366f1" },
 ];
 
+const SISTEMAS_CONSTRUCTIVOS = [
+  { v: "Hormigón",    icon: "🧱" },
+  { v: "Steel Frame", icon: "🔩" },
+  { v: "Wood Frame",  icon: "🪵" },
+  { v: "Madera",      icon: "🌲" },
+  { v: "Panel SIP",   icon: "🧊" },
+  { v: "Metálica",    icon: "⚙️" },
+];
+
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
 const shared = {
-  btn:  { padding: "9px 18px", background: "#111", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnSm:{ padding: "6px 12px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" },
-  inp:  { width: "100%", padding: "10px 12px", border: "1px solid #e0e0e0", borderRadius: 10, fontSize: 14, boxSizing: "border-box" },
-  card: { background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 5px rgba(0,0,0,.07)" },
-  lbl:  { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4, display: "block" },
+  btn:   { padding: "9px 18px", background: "#111", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  btnSm: { padding: "6px 12px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" },
+  inp:   { width: "100%", padding: "10px 12px", border: "1px solid #e0e0e0", borderRadius: 10, fontSize: 14, boxSizing: "border-box" },
+  card:  { background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 5px rgba(0,0,0,.07)" },
+  lbl:   { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4, display: "block" },
 };
+
+/* ─── Helper: ordenar por código tipo "1140", "859-A" descendente ─── */
+function codigoNumero(codigo) {
+  if (!codigo) return -1;
+  const match = String(codigo).match(/\d+/);
+  return match ? parseInt(match[0]) : -1;
+}
 
 /* ─── Modal nuevo cliente inline ─── */
 function ModalNuevoCliente({ onCreado, onClose }) {
@@ -87,23 +104,24 @@ function ModalNuevoCliente({ onCreado, onClose }) {
 function ModalPresupuesto({ pres, onGuardar, onClose }) {
   const esNuevo = !pres?.id;
   const [form, setForm] = useState({
-    codigo:           pres?.codigo || "",
-    cliente:          pres?.cliente || "",
-    cliente_id:       pres?.cliente_id || "",
-    tipo_servicio:    pres?.tipo_servicio || "",
-    descripcion:      pres?.descripcion || "",
-    superficie:       pres?.superficie || "",
-    monto:            pres?.monto || "",
-    moneda:           pres?.moneda || "ARS",
-    estado:           pres?.estado || "borrador",
-    probabilidad:     pres?.probabilidad || "",
-    fecha_emision:    pres?.fecha_emision || new Date().toISOString().slice(0,10),
-    fecha_vencimiento:pres?.fecha_vencimiento || "",
-    obs:              pres?.obs || "",
+    codigo:               pres?.codigo || "",
+    cliente:              pres?.cliente || "",
+    cliente_id:           pres?.cliente_id || "",
+    tipo_servicio:        pres?.tipo_servicio || "",
+    sistema_constructivo: pres?.sistema_constructivo || "",
+    descripcion:          pres?.descripcion || "",
+    superficie:           pres?.superficie || "",
+    monto:                pres?.monto || "",
+    moneda:               pres?.moneda || "ARS",
+    estado:               pres?.estado || "borrador",
+    probabilidad:         pres?.probabilidad || "",
+    fecha_emision:        pres?.fecha_emision || new Date().toISOString().slice(0,10),
+    fecha_vencimiento:    pres?.fecha_vencimiento || "",
+    obs:                  pres?.obs || "",
   });
-  const [clientes,      setClientes]      = useState([]);
-  const [showNuevoCli,  setShowNuevoCli]  = useState(false);
-  const [saving,        setSaving]        = useState(false);
+  const [clientes, setClientes] = useState([]);
+  const [showNuevoCli, setShowNuevoCli] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function cargar() {
@@ -127,6 +145,9 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   }
 
   const tipoInfo = TIPOS_SERVICIO.find(t => t.v === form.tipo_servicio);
+  const precioM2 = form.monto && form.superficie && parseFloat(form.superficie) > 0
+    ? (parseFloat(form.monto) / parseFloat(form.superficie))
+    : null;
 
   return (
     <>
@@ -154,11 +175,24 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </button>
               ))}
             </div>
-            {tipoInfo && (
-              <div style={{ marginTop: 8, fontSize: 12, color: "#3b82f6", background: "#eff6ff", borderRadius: 8, padding: "6px 10px" }}>
-                ℹ️ {tipoInfo.desc || tipoInfo.label}
-              </div>
-            )}
+          </div>
+
+          {/* Sistema constructivo — visible y destacado */}
+          <div style={{ marginBottom: 16 }}>
+            <span style={shared.lbl}>🏗️ Sistema constructivo</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {SISTEMAS_CONSTRUCTIVOS.map(s => (
+                <button key={s.v} onClick={() => setForm(p => ({ ...p, sistema_constructivo: s.v }))} style={{
+                  padding: "8px 14px", borderRadius: 10, cursor: "pointer", fontSize: 13,
+                  border: form.sistema_constructivo === s.v ? "2px solid #6366f1" : "1px solid #e0e0e0",
+                  background: form.sistema_constructivo === s.v ? "#6366f118" : "#fff",
+                  color: form.sistema_constructivo === s.v ? "#6366f1" : "#555",
+                  fontWeight: form.sistema_constructivo === s.v ? 700 : 400,
+                }}>
+                  {s.icon} {s.v}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Cliente */}
@@ -180,7 +214,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
           <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
             <div style={{ flex: "0 0 140px" }}>
               <span style={shared.lbl}>Código</span>
-              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="NPL-2026-001" />
+              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1140" />
             </div>
             <div style={{ flex: 1 }}>
               <span style={shared.lbl}>Descripción *</span>
@@ -188,8 +222,8 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
             </div>
           </div>
 
-          {/* Monto y moneda */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+          {/* Monto, moneda, superficie */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
             <div style={{ flex: 1 }}>
               <span style={shared.lbl}>Monto</span>
               <input type="number" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} style={shared.inp} placeholder="0" />
@@ -206,6 +240,13 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               <input type="number" value={form.superficie} onChange={e => setForm(p => ({ ...p, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
             </div>
           </div>
+
+          {/* Precio por m2 — visible debajo del monto */}
+          {precioM2 !== null && (
+            <div style={{ marginBottom: 12, background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#16a34a", fontWeight: 600 }}>
+              💲 Precio por m²: {form.moneda === "USD" ? "u$s" : "$"} {precioM2.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+            </div>
+          )}
 
           {/* Estado y probabilidad */}
           <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
@@ -253,15 +294,73 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   );
 }
 
+/* ─── Card presupuesto ─── */
+function CardPresupuesto({ p, onEditar, onCambiarEstado }) {
+  const estado = ESTADOS.find(e => e.v === p.estado);
+  const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
+  const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
+  const precioM2 = p.monto && p.superficie && parseFloat(p.superficie) > 0
+    ? (parseFloat(p.monto) / parseFloat(p.superficie))
+    : null;
+
+  return (
+    <div style={{ ...shared.card, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+          {p.codigo && <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa" }}>{p.codigo}</span>}
+          {tipo && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 8, padding: "2px 8px", color: "#555" }}>{tipo.label}</span>}
+          {sistema && <span style={{ fontSize: 11, background: "#eef2ff", borderRadius: 8, padding: "2px 8px", color: "#6366f1", fontWeight: 600 }}>{sistema.icon} {sistema.v}</span>}
+        </div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 3 }}>{p.descripcion || "Sin descripción"}</div>
+        <div style={{ fontSize: 13, color: "#888" }}>{p.cliente}</div>
+        {p.tipo && !p.tipo_servicio && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{p.tipo}</div>}
+        {p.fecha_emision && <div style={{ fontSize: 11, color: "#bbb", marginTop: 4 }}>📅 {new Date(p.fecha_emision+"T12:00").toLocaleDateString("es-AR")}</div>}
+        {p.obs && <div style={{ fontSize: 12, color: "#aaa", marginTop: 4, fontStyle: "italic" }}>{p.obs}</div>}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+        {p.monto && (
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#111" }}>
+            {p.moneda === "USD" ? "u$s" : "$"} {parseFloat(p.monto).toLocaleString("es-AR")}
+          </div>
+        )}
+        {/* Precio por m2 debajo del monto */}
+        {precioM2 !== null && (
+          <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 600, background: "#f0fdf4", borderRadius: 6, padding: "1px 7px" }}>
+            {p.moneda === "USD" ? "u$s" : "$"}{precioM2.toLocaleString("es-AR", { maximumFractionDigits: 0 })}/m²
+          </div>
+        )}
+
+        <select
+          value={p.estado || "borrador"}
+          onChange={e => onCambiarEstado(p.id, e.target.value)}
+          style={{
+            fontSize: 12, padding: "5px 8px", borderRadius: 8, cursor: "pointer",
+            border: `1px solid ${estado?.color || "#e0e0e0"}`,
+            color: estado?.color || "#888",
+            background: "#fff", fontWeight: 600,
+          }}
+        >
+          {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
+        </select>
+
+        <button onClick={() => onEditar(p)} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Lista de presupuestos ─── */
 export default function App() {
   const [presupuestos, setPresupuestos] = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [showModal,    setShowModal]    = useState(false);
-  const [editando,     setEditando]     = useState(null);
-  const [filtroEstado, setFiltroEstado] = useState("todos");
-  const [filtroTipo,   setFiltroTipo]   = useState("todos");
-  const [isMobile,     setIsMobile]     = useState(window.innerWidth < 768);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [filtroEstado, setFiltroEstado] = useState("enviado"); // Default: enviado, es el que se monitorea
+  const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [filtroSistema, setFiltroSistema] = useState("todos");
+  const [filtroMes, setFiltroMes] = useState("todos");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -296,15 +395,27 @@ export default function App() {
     setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, estado } : p));
   }
 
+  // Meses disponibles según datos reales (para el desplegable)
+  const mesesDisponibles = [...new Set(
+    presupuestos.filter(p => p.fecha_emision).map(p => p.fecha_emision.slice(0,7))
+  )].sort().reverse();
+
+  // Filtros
   const filtrados = presupuestos.filter(p => {
-    const pasaEstado = filtroEstado === "todos" || p.estado === filtroEstado;
-    const pasaTipo   = filtroTipo   === "todos" || p.tipo_servicio === filtroTipo;
-    return pasaEstado && pasaTipo;
+    const pasaEstado  = filtroEstado === "todos"   || p.estado === filtroEstado;
+    const pasaTipo    = filtroTipo === "todos"     || p.tipo_servicio === filtroTipo;
+    const pasaSistema = filtroSistema === "todos"  || p.sistema_constructivo === filtroSistema;
+    const pasaMes     = filtroMes === "todos"      || (p.fecha_emision && p.fecha_emision.slice(0,7) === filtroMes);
+    return pasaEstado && pasaTipo && pasaSistema && pasaMes;
   });
 
+  // Orden: por código descendente (el "último enviado" tiene el número más alto)
+  const ordenados = [...filtrados].sort((a, b) => codigoNumero(b.codigo) - codigoNumero(a.codigo));
+
   // KPIs
-  const totalMonto = presupuestos.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const enPipeline = presupuestos.filter(p => ["enviado","borrador"].includes(p.estado)).length;
+  const totalMonto    = presupuestos.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const enviados      = presupuestos.filter(p => p.estado === "enviado").length;
+  const montoEnviados = presupuestos.filter(p => p.estado === "enviado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: isMobile ? 16 : 28, maxWidth: 1100, margin: "0 auto" }}>
@@ -321,9 +432,10 @@ export default function App() {
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          { label: "Total aprobado", value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
-          { label: "En pipeline",    value: enPipeline,                               color: "#3b82f6" },
-          { label: "Total",          value: presupuestos.length,                       color: "#888" },
+          { label: "Total aprobado",      value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
+          { label: "📨 Enviados (seguimiento)", value: enviados, color: "#3b82f6" },
+          { label: "Monto en seguimiento", value: `$${montoEnviados.toLocaleString("es-AR")}`, color: "#3b82f6" },
+          { label: "Total",               value: presupuestos.length, color: "#888" },
         ].map(k => (
           <div key={k.label} style={{ ...shared.card, textAlign: "center" }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</div>
@@ -333,68 +445,51 @@ export default function App() {
       </div>
 
       {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
+        {/* Filtro estado — destacado para "enviado" */}
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{
+          ...shared.btnSm, padding: "8px 12px",
+          background: filtroEstado === "enviado" ? "#3b82f618" : "#f0f0f0",
+          color: filtroEstado === "enviado" ? "#3b82f6" : "#333",
+          fontWeight: filtroEstado === "enviado" ? 700 : 400,
+          border: filtroEstado === "enviado" ? "1px solid #3b82f6" : "1px solid transparent",
+        }}>
           <option value="todos">Todos los estados</option>
           {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
         </select>
+
+        {/* Filtro mes — desplegable */}
+        <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
+          <option value="todos">📅 Todos los meses</option>
+          {mesesDisponibles.map(m => {
+            const [y, mo] = m.split("-");
+            return <option key={m} value={m}>{MESES[parseInt(mo)-1]} {y}</option>;
+          })}
+        </select>
+
         <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
-          <option value="todos">Todos los tipos</option>
+          <option value="todos">Todos los servicios</option>
           {TIPOS_SERVICIO.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
         </select>
-        {(filtroEstado !== "todos" || filtroTipo !== "todos") && (
-          <button onClick={() => { setFiltroEstado("todos"); setFiltroTipo("todos"); }} style={{ ...shared.btnSm, padding: "8px 12px" }}>✕ Limpiar</button>
+
+        <select value={filtroSistema} onChange={e => setFiltroSistema(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
+          <option value="todos">🏗️ Todos los sistemas</option>
+          {SISTEMAS_CONSTRUCTIVOS.map(s => <option key={s.v} value={s.v}>{s.icon} {s.v}</option>)}
+        </select>
+
+        {(filtroEstado !== "todos" || filtroTipo !== "todos" || filtroSistema !== "todos" || filtroMes !== "todos") && (
+          <button onClick={() => { setFiltroEstado("todos"); setFiltroTipo("todos"); setFiltroSistema("todos"); setFiltroMes("todos"); }} style={{ ...shared.btnSm, padding: "8px 12px" }}>✕ Limpiar</button>
         )}
-        <span style={{ fontSize: 13, color: "#aaa", alignSelf: "center" }}>{filtrados.length} resultados</span>
+        <span style={{ fontSize: 13, color: "#aaa", alignSelf: "center" }}>{ordenados.length} resultados</span>
       </div>
 
       {/* Lista */}
       {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {filtrados.map(p => {
-            const estado = ESTADOS.find(e => e.v === p.estado);
-            const tipo   = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
-            return (
-              <div key={p.id} style={{ ...shared.card, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                    {p.codigo && <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa" }}>{p.codigo}</span>}
-                    {tipo && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 8, padding: "2px 8px", color: "#555" }}>{tipo.label}</span>}
-                  </div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 3 }}>{p.descripcion || "Sin descripción"}</div>
-                  <div style={{ fontSize: 13, color: "#888" }}>{p.cliente}</div>
-                  {p.tipo && !p.tipo_servicio && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{p.tipo}</div>}
-                  {p.obs && <div style={{ fontSize: 12, color: "#aaa", marginTop: 4, fontStyle: "italic" }}>{p.obs}</div>}
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-                  {p.monto && (
-                    <div style={{ fontWeight: 800, fontSize: 16, color: "#111" }}>
-                      {p.moneda === "USD" ? "u$s" : "$"} {parseFloat(p.monto).toLocaleString("es-AR")}
-                    </div>
-                  )}
-                  {/* Selector estado inline */}
-                  <select
-                    value={p.estado || "borrador"}
-                    onChange={e => cambiarEstado(p.id, e.target.value)}
-                    style={{
-                      fontSize: 12, padding: "5px 8px", borderRadius: 8, cursor: "pointer",
-                      border: `1px solid ${estado?.color || "#e0e0e0"}`,
-                      color: estado?.color || "#888",
-                      background: "#fff", fontWeight: 600,
-                    }}
-                  >
-                    {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
-                  </select>
-
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => { setEditando(p); setShowModal(true); }} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {filtrados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
+          {ordenados.map(p => (
+            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} />
+          ))}
+          {ordenados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
         </div>
       )}
 
