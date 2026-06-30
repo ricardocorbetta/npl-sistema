@@ -44,14 +44,20 @@ export default function Root() {
   const [loading, setLoading] = useState(true)
   const [current, setCurrent] = useState(() => {
     const hash = window.location.hash.replace("#", "");
-    return hash || null;
+    return hash.split(":")[0] || null;
+  })
+  const [deepLinkId, setDeepLinkId] = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash.split(":")[1] || null;
   })
   const { theme, toggle, palette } = useTheme();
 
   useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace("#", "");
-      setCurrent(hash || null);
+      const [mod, id] = hash.split(":");
+      setCurrent(mod || null);
+      setDeepLinkId(id || null);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -78,10 +84,12 @@ export default function Root() {
     setLoading(false)
   }
 
-  const navTo = (modulo) => {
+  const navTo = (modulo, deepId) => {
+    const hashValue = deepId ? `${modulo}:${deepId}` : modulo;
     setCurrent(modulo)
+    setDeepLinkId(deepId || null)
     if (modulo) {
-      window.location.hash = modulo
+      window.location.hash = hashValue
     } else {
       window.history.pushState(null, '', window.location.pathname)
     }
@@ -108,12 +116,12 @@ export default function Root() {
 
   const themeCtx = { theme, palette };
 
-  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App /></Layout></ThemeContext.Provider>
-  if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos /></Layout></ThemeContext.Provider>
+  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
+  if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
   if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
   if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
   if (current === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard /></Layout></ThemeContext.Provider>
-  if (current === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} /></Layout></ThemeContext.Provider>
+  if (current === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
   if (current === 'biblioteca') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Biblioteca /></Layout></ThemeContext.Provider>
   if (current === 'usuarios') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Usuarios session={session} palette={palette} /></Layout></ThemeContext.Provider>
 
@@ -121,7 +129,7 @@ export default function Root() {
   return (
     <div style={{ ...sans, minHeight: '100vh', background: palette.bgApp, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ position: 'fixed', top: 20, right: 20, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <GlobalSearch palette={palette} onNavegar={(modulo) => navTo(modulo)} />
+        <GlobalSearch palette={palette} onNavegar={(modulo, id) => navTo(modulo, id)} />
         <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
       </div>
       <div style={{ marginBottom: 32, textAlign: 'center' }}>
@@ -168,7 +176,7 @@ function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <GlobalSearch palette={palette} onNavegar={(modulo, id, tipo) => { onNav(modulo); }} />
+        <GlobalSearch palette={palette} onNavegar={(modulo, id) => onNav(modulo, id)} />
         <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
         <span style={{ fontSize: 11, color: '#777', flexShrink: 0, marginLeft: 4 }}>{perfil?.nombre}</span>
         <button onClick={onLogout} style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>Salir</button>
