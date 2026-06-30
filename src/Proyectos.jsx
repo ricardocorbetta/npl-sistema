@@ -59,6 +59,7 @@ const ui = {
   secondary: { padding: "9px 12px", background: "#fff", color: "#333", border: "1px solid #dedede", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   input: { width: "100%", padding: "10px 12px", border: "1px solid #dcdcdc", borderRadius: 8, fontSize: 14, boxSizing: "border-box", background: "#fff" },
   label: { fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5, display: "block" },
+  menuLine: { display: "block", width: 14, height: 2, borderRadius: 999, background: "#333" },
 };
 
 const emptyToNull = value => value === "" || value === undefined ? null : value;
@@ -85,6 +86,10 @@ function PanelChecklist({ proyectoId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [comentarios, setComentarios] = useState([]);
+  const [nuevoComentario, setNuevoComentario] = useState("");
+  const [autor, setAutor] = useState("Director");
   const inputRef = useRef(null);
 
   useEffect(() => { cargar(); }, [proyectoId]);
@@ -100,6 +105,19 @@ function PanelChecklist({ proyectoId, onClose }) {
       setItems([]);
     }
     setLoading(false);
+  }
+
+  async function abrirDetalle(item) {
+    setSelected(item);
+    setNuevoComentario("");
+    setError("");
+    try {
+      const rows = await api(`/proyecto_checklist_comentarios?item_id=eq.${item.id}&order=created_at.asc`);
+      setComentarios(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      setComentarios([]);
+      setError(e.message);
+    }
   }
 
   async function agregar() {
@@ -123,10 +141,12 @@ function PanelChecklist({ proyectoId, onClose }) {
 
   async function toggle(item) {
     const next = !item.completado;
+    const estado = next ? "completado" : "pendiente";
     const previous = items;
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, completado: next } : i));
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, completado: next, estado } : i));
+    if (selected?.id === item.id) setSelected(prev => ({ ...prev, completado: next, estado }));
     try {
-      await api(`/proyecto_checklist?id=eq.${item.id}`, { method: "PATCH", body: JSON.stringify({ completado: next }) });
+      await api(`/proyecto_checklist?id=eq.${item.id}`, { method: "PATCH", body: JSON.stringify({ completado: next, estado }) });
     } catch (e) {
       setError(e.message);
       setItems(previous);
@@ -141,6 +161,45 @@ function PanelChecklist({ proyectoId, onClose }) {
     } catch (e) {
       setError(e.message);
       setItems(previous);
+    }
+  }
+
+  async function actualizarItem(item, patch) {
+    const previous = items;
+    const updated = { ...item, ...patch };
+    setItems(prev => prev.map(i => i.id === item.id ? updated : i));
+    setSelected(updated);
+    try {
+      const rows = await api(`/proyecto_checklist?id=eq.${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      if (Array.isArray(rows) && rows[0]) {
+        setItems(prev => prev.map(i => i.id === item.id ? rows[0] : i));
+        setSelected(rows[0]);
+      }
+    } catch (e) {
+      setError(e.message);
+      setItems(previous);
+      setSelected(item);
+    }
+  }
+
+  async function agregarComentario() {
+    if (!selected || !nuevoComentario.trim()) return;
+    const texto = nuevoComentario.trim();
+    setNuevoComentario("");
+    try {
+      const rows = await api("/proyecto_checklist_comentarios", {
+        method: "POST",
+        body: JSON.stringify({ item_id: selected.id, autor, comentario: texto }),
+      });
+      const creado = Array.isArray(rows) ? rows[0] : null;
+      if (creado) setComentarios(prev => [...prev, creado]);
+      await actualizarItem(selected, { ultimo_comentario: `${autor}: ${texto}` });
+    } catch (e) {
+      setNuevoComentario(texto);
+      setError(e.message);
     }
   }
 
@@ -177,13 +236,26 @@ function PanelChecklist({ proyectoId, onClose }) {
 
         <div style={{ overflowY: "auto", padding: 24, background: "#f6f7f9" }}>
           {loading ? <p style={{ color: "#888" }}>Cargando...</p> : (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(280px,1fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(260px,1fr) minmax(260px,1fr) 360px" : "minmax(280px,1fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
               <ChecklistColumn title="Pendientes" count={pendientes.length} tone="#f8fafc">
-                {pendientes.map(item => <ChecklistCard key={item.id} item={item} onToggle={toggle} onDelete={eliminar} />)}
+                {pendientes.map(item => <ChecklistCard key={item.id} item={item} selected={selected?.id === item.id} onOpen={abrirDetalle} onToggle={toggle} onDelete={eliminar} />)}
               </ChecklistColumn>
               <ChecklistColumn title="Completadas" count={completadas.length} tone="#f0fdf4">
-                {completadas.map(item => <ChecklistCard key={item.id} item={item} onToggle={toggle} onDelete={eliminar} />)}
+                {completadas.map(item => <ChecklistCard key={item.id} item={item} selected={selected?.id === item.id} onOpen={abrirDetalle} onToggle={toggle} onDelete={eliminar} />)}
               </ChecklistColumn>
+              {selected && (
+                <ChecklistDetail
+                  item={selected}
+                  comentarios={comentarios}
+                  autor={autor}
+                  setAutor={setAutor}
+                  nuevoComentario={nuevoComentario}
+                  setNuevoComentario={setNuevoComentario}
+                  onComment={agregarComentario}
+                  onUpdate={patch => actualizarItem(selected, patch)}
+                  onClose={() => setSelected(null)}
+                />
+              )}
             </div>
           )}
         </div>
@@ -206,11 +278,11 @@ function ChecklistColumn({ title, count, tone, children }) {
   );
 }
 
-function ChecklistCard({ item, onToggle, onDelete }) {
+function ChecklistCard({ item, selected, onOpen, onToggle, onDelete }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #e1e5ea", borderRadius: 10, padding: 12, boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
+    <div onClick={() => onOpen(item)} style={{ background: "#fff", border: selected ? "2px solid #111" : "1px solid #e1e5ea", borderRadius: 10, padding: selected ? 11 : 12, boxShadow: "0 1px 2px rgba(0,0,0,.04)", cursor: "pointer" }}>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "start", gap: 10 }}>
-        <input type="checkbox" checked={!!item.completado} onChange={() => onToggle(item)} style={{ width: 18, height: 18, marginTop: 1 }} />
+        <input type="checkbox" checked={!!item.completado} onClick={e => e.stopPropagation()} onChange={() => onToggle(item)} style={{ width: 18, height: 18, marginTop: 1 }} />
         <div>
           <div style={{ fontSize: 14, lineHeight: 1.38, color: item.completado ? "#15803d" : "#222", textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</div>
           {item.ultimo_comentario && <div style={{ marginTop: 8, padding: "7px 9px", background: "#f8fafc", borderRadius: 8, color: "#555", fontSize: 12 }}>{item.ultimo_comentario}</div>}
@@ -218,9 +290,79 @@ function ChecklistCard({ item, onToggle, onDelete }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
         <span style={{ fontSize: 11, color: "#777" }}>{item.responsable || "Sin responsable"}</span>
-        <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", color: "#777", fontSize: 12, padding: 0, cursor: "pointer" }}>Eliminar</button>
+        <button onClick={e => { e.stopPropagation(); onDelete(item.id); }} style={{ background: "none", border: "none", color: "#777", fontSize: 12, padding: 0, cursor: "pointer" }}>Eliminar</button>
       </div>
     </div>
+  );
+}
+
+function ChecklistDetail({ item, comentarios, autor, setAutor, nuevoComentario, setNuevoComentario, onComment, onUpdate, onClose }) {
+  return (
+    <aside style={{ background: "#fff", border: "1px solid #e1e5ea", borderRadius: 12, padding: 14, minHeight: 360, position: "sticky", top: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+        <div>
+          <strong style={{ fontSize: 15 }}>Detalle</strong>
+          <div style={{ color: "#777", fontSize: 12, marginTop: 3 }}>Feedback director / calculista</div>
+        </div>
+        <button onClick={onClose} style={{ ...ui.secondary, padding: "5px 9px", fontSize: 12 }}>Cerrar</button>
+      </div>
+
+      <div style={{ fontSize: 15, fontWeight: 750, lineHeight: 1.35, marginBottom: 12 }}>{item.texto}</div>
+
+      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+        <Field label="Responsable">
+          <select value={item.responsable || ""} onChange={e => onUpdate({ responsable: e.target.value || null })} style={ui.input}>
+            <option value="">Sin responsable</option>
+            <option value="Director">Director</option>
+            <option value="Calculista">Calculista</option>
+            <option value="Ricardo">Ricardo</option>
+            <option value="Lucas">Lucas</option>
+            <option value="Joaco">Joaco</option>
+            <option value="Cami">Cami</option>
+          </select>
+        </Field>
+        <Field label="Estado">
+          <select value={item.completado ? "completado" : (item.estado || "pendiente")} onChange={e => {
+            const estado = e.target.value;
+            onUpdate({ estado, completado: estado === "completado" });
+          }} style={ui.input}>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="necesita_respuesta">Necesita respuesta</option>
+            <option value="para_revisar">Para revisar</option>
+            <option value="completado">Completado</option>
+          </select>
+        </Field>
+      </div>
+
+      <div style={{ borderTop: "1px solid #eee", paddingTop: 12 }}>
+        <strong style={{ fontSize: 13 }}>Comentarios</strong>
+        <div style={{ display: "grid", gap: 8, margin: "10px 0 12px", maxHeight: 210, overflowY: "auto" }}>
+          {comentarios.map(c => (
+            <div key={c.id} style={{ background: "#f8fafc", border: "1px solid #edf0f4", borderRadius: 8, padding: 9 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                <strong style={{ fontSize: 12 }}>{c.autor || "Usuario"}</strong>
+                <span style={{ fontSize: 11, color: "#888" }}>{c.created_at ? new Date(c.created_at).toLocaleDateString("es-AR") : ""}</span>
+              </div>
+              <div style={{ fontSize: 13, color: "#333", lineHeight: 1.35 }}>{c.comentario}</div>
+            </div>
+          ))}
+          {!comentarios.length && <div style={{ color: "#999", fontSize: 13, padding: "8px 0" }}>Todavia no hay comentarios.</div>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 8, marginBottom: 8 }}>
+          <select value={autor} onChange={e => setAutor(e.target.value)} style={ui.input}>
+            <option value="Director">Director</option>
+            <option value="Calculista">Calculista</option>
+            <option value="Ricardo">Ricardo</option>
+            <option value="Lucas">Lucas</option>
+            <option value="Joaco">Joaco</option>
+            <option value="Cami">Cami</option>
+          </select>
+          <input value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} onKeyDown={e => e.key === "Enter" && onComment()} placeholder="Escribir comentario..." style={ui.input} />
+        </div>
+        <button onClick={onComment} disabled={!nuevoComentario.trim()} style={{ ...ui.button, width: "100%", opacity: nuevoComentario.trim() ? 1 : 0.5 }}>Enviar comentario</button>
+      </div>
+    </aside>
   );
 }
 
@@ -291,7 +433,7 @@ function ModalProyecto({ proyecto, onClose, onGuardar }) {
       proxima_tarea: form.proxima_tarea || null,
       presupuesto_id: emptyToNull(form.presupuesto_id),
       entregado: delivered,
-      archivado: delivered,
+      archivado: delivered ? !!proyecto?.archivado : false,
     };
     try {
       if (esNuevo) await api("/proyectos", { method: "POST", body: JSON.stringify(body) });
@@ -375,15 +517,18 @@ function Field({ label, children }) {
 
 function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const meta = statusMeta(proyecto);
   const days = proyecto.fecha_entrega_plan ? dueDays(proyecto.fecha_entrega_plan) : null;
   const pct = proyecto.checklist_total > 0 ? Math.round(proyecto.checklist_completados / proyecto.checklist_total * 100) : null;
 
   return (
     <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderLeft: `4px solid ${meta.color}`, borderRadius: 8, overflow: "hidden" }}>
-      <button onClick={() => setOpen(!open)} style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "14px 16px", cursor: "pointer" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "74px minmax(0,1fr) auto", gap: 12, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "74px minmax(0,1fr) auto", gap: 12, alignItems: "start", padding: "14px 16px" }}>
+        <button onClick={() => setOpen(!open)} style={{ border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer" }}>
           <div style={{ fontSize: 12, color: "#777", fontWeight: 800 }}>{proyecto.numero_proyecto || "-"}</div>
+        </button>
+        <button onClick={() => setOpen(!open)} style={{ border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", minWidth: 0 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ fontSize: 14 }}>{proyecto.descripcion || "Sin descripcion"}</strong>
@@ -393,27 +538,46 @@ function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
             <div style={{ fontSize: 12, color: "#777", marginTop: 3 }}>{proyecto.cliente || "Sin cliente"}{proyecto.encargado ? ` - ${proyecto.encargado}` : ""}{proyecto.superficie ? ` - ${proyecto.superficie}m2` : ""}</div>
             {proyecto.proxima_tarea && <div style={{ fontSize: 12, color: "#3730a3", marginTop: 4 }}>{proyecto.proxima_tarea}</div>}
           </div>
-          <div style={{ display: "flex", alignItems: "flex-end", flexDirection: "column", gap: 5 }}>
-            {days !== null && <span style={{ fontSize: 11, fontWeight: 800, color: days < 0 ? "#b91c1c" : days < 7 ? "#a16207" : "#15803d", background: days < 0 ? "#fef2f2" : days < 7 ? "#fefce8" : "#f0fdf4", borderRadius: 999, padding: "3px 8px" }}>{days < 0 ? `${Math.abs(days)}d vencido` : days === 0 ? "Hoy" : `${days}d`}</span>}
-            {pct !== null && <span style={{ fontSize: 11, color: pct === 100 ? "#15803d" : "#777" }}>Checklist {proyecto.checklist_completados}/{proyecto.checklist_total}</span>}
-            <span style={{ fontSize: 12, color: "#999" }}>{open ? "Cerrar" : "Abrir"}</span>
-          </div>
+        </button>
+        <div style={{ display: "flex", alignItems: "flex-end", flexDirection: "column", gap: 5, position: "relative" }}>
+          {days !== null && <span style={{ fontSize: 11, fontWeight: 800, color: days < 0 ? "#b91c1c" : days < 7 ? "#a16207" : "#15803d", background: days < 0 ? "#fef2f2" : days < 7 ? "#fefce8" : "#f0fdf4", borderRadius: 999, padding: "3px 8px" }}>{days < 0 ? `${Math.abs(days)}d vencido` : days === 0 ? "Hoy" : `${days}d`}</span>}
+          {pct !== null && <span style={{ fontSize: 11, color: pct === 100 ? "#15803d" : "#777" }}>Checklist {proyecto.checklist_completados}/{proyecto.checklist_total}</span>}
+          <button onClick={() => setMenuOpen(v => !v)} title="Menu de acciones" aria-label="Menu de acciones" style={{ ...ui.secondary, width: 34, height: 30, padding: 0, display: "grid", placeItems: "center" }}>
+            <span style={{ display: "grid", gap: 3 }}>
+              <span style={ui.menuLine} />
+              <span style={ui.menuLine} />
+              <span style={ui.menuLine} />
+            </span>
+          </button>
+          {menuOpen && (
+            <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 6, width: 196, background: "#fff", border: "1px solid #ddd", borderRadius: 8, boxShadow: "0 12px 28px rgba(0,0,0,.14)", zIndex: 20, padding: 6 }}>
+              <div style={{ padding: "7px 10px 6px", fontSize: 11, color: "#777", fontWeight: 800, textTransform: "uppercase" }}>Acciones</div>
+              <MenuAction label={open ? "Cerrar detalle" : "Abrir detalle"} onClick={() => { setOpen(!open); setMenuOpen(false); }} />
+              <MenuAction label="Editar" onClick={() => { onEditar(proyecto); setMenuOpen(false); }} />
+              <MenuAction label="Checklist" onClick={() => { onChecklist(proyecto); setMenuOpen(false); }} />
+              {proyecto.drive_url && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" style={{ display: "block", padding: "8px 10px", color: "#333", textDecoration: "none", borderRadius: 6, fontSize: 13 }}>Drive</a>}
+              {!isDelivered(proyecto) && <MenuAction label="Marcar entregado" onClick={() => { onArchivar(proyecto, "entregar"); setMenuOpen(false); }} />}
+              {isDelivered(proyecto) && !isArchived(proyecto) && <MenuAction label="Archivar" onClick={() => { onArchivar(proyecto, "archivar"); setMenuOpen(false); }} />}
+            </div>
+          )}
         </div>
-      </button>
+      </div>
       {open && (
-        <div style={{ padding: "0 16px 14px 102px" }}>
+        <div style={{ padding: "0 16px 14px 102px", borderTop: "1px solid #f2f2f2" }}>
           {proyecto.obs && <p style={{ margin: "0 0 10px", color: "#555", fontSize: 13 }}>{proyecto.obs}</p>}
           {pct !== null && <div style={{ height: 6, background: "#eee", borderRadius: 999, overflow: "hidden", marginBottom: 12 }}><div style={{ height: "100%", width: `${pct}%`, background: "#16a34a" }} /></div>}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => onEditar(proyecto)} style={ui.secondary}>Editar</button>
-            <button onClick={() => onChecklist(proyecto)} style={ui.secondary}>Checklist</button>
-            {proyecto.drive_url && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" style={{ ...ui.secondary, textDecoration: "none" }}>Drive</a>}
-            {!isDelivered(proyecto) && <button onClick={() => onArchivar(proyecto, "entregar")} style={ui.secondary}>Marcar entregado</button>}
-            {isDelivered(proyecto) && !isArchived(proyecto) && <button onClick={() => onArchivar(proyecto, "archivar")} style={ui.secondary}>Archivar</button>}
-          </div>
+          <div style={{ fontSize: 12, color: "#777" }}>Acciones disponibles desde el menu del titulo.</div>
         </div>
       )}
     </div>
+  );
+}
+
+function MenuAction({ label, onClick }) {
+  return (
+    <button onClick={onClick} style={{ width: "100%", textAlign: "left", padding: "8px 10px", background: "transparent", border: "none", color: "#333", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>
+      {label}
+    </button>
   );
 }
 
