@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
+import { COLORS, shared, SectionHeader, KpiGrid, Badge, FilterBar, EmptyState, Toast } from "./uiKit.jsx";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
@@ -12,18 +13,8 @@ function hdrs(tk) {
   return { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json", Prefer: "return=representation" };
 }
 
-const NIVEL_COLOR = { Senior: "#6366f1", Semi: "#f59e0b", Junior: "#22c55e" };
-const TIPO_COLOR  = { interno: "#111", externo: "#3b82f6" };
-
-const shared = {
-  btn:   { padding: "10px 18px", background: "#111", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" },
-  btnSm: { padding: "7px 12px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" },
-  inp:   { width: "100%", padding: "10px 12px", border: "1px solid #e0e0e0", borderRadius: 10, fontSize: 14, boxSizing: "border-box" },
-  card:  { background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,.07)" },
-  lbl:   { fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5, display: "block" },
-};
-
-const SISTEMAS_LIST = ["CypeCad", "AutoCad", "SketchUp", "Otros"];
+const NIVEL_COLOR = { Senior: COLORS.accent, Semi: COLORS.warning, Junior: COLORS.success };
+const TIPO_COLOR  = { interno: COLORS.text, externo: COLORS.info };
 
 /* ─── Modal crear/editar ─── */
 function ModalCalculista({ calc, onClose, onGuardar }) {
@@ -67,7 +58,7 @@ function ModalCalculista({ calc, onClose, onGuardar }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ background: COLORS.bgCard, borderRadius: 16, padding: 28, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 17 }}>{esNuevo ? "Nuevo calculista" : "Editar calculista"}</h3>
           <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 10px" }}>✕</button>
@@ -123,7 +114,6 @@ function ModalCalculista({ calc, onClose, onGuardar }) {
           <textarea value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} rows={2} style={{ ...shared.inp, resize: "vertical" }} />
         </F>
 
-        {/* Flags */}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
           {[
             { key: "disponible", label: "✅ Disponible" },
@@ -148,7 +138,7 @@ function ModalCalculista({ calc, onClose, onGuardar }) {
 
 /* ─── Card calculista ─── */
 function CardCalculista({ calc, onClick }) {
-  const nivelColor = NIVEL_COLOR[calc.nivel] || "#888";
+  const nivelColor = NIVEL_COLOR[calc.nivel] || COLORS.textMuted;
   const estrellas = Math.round((calc.puntaje || 0) / 2);
 
   return (
@@ -156,51 +146,44 @@ function CardCalculista({ calc, onClick }) {
       onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.12)"}
       onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 6px rgba(0,0,0,.07)"}>
 
-      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{calc.nombre}</div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{calc.ciudad || "—"}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.text }}>{calc.nombre}</div>
+          <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>{calc.ciudad || "—"}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: nivelColor, background: nivelColor + "18", borderRadius: 6, padding: "2px 8px" }}>{calc.nivel}</span>
-          <span style={{ fontSize: 11, color: TIPO_COLOR[calc.tipo] || "#888", background: "#f0f0f0", borderRadius: 6, padding: "2px 8px" }}>{calc.tipo}</span>
+          <Badge color={nivelColor} label={calc.nivel} />
+          <Badge color={TIPO_COLOR[calc.tipo] || COLORS.textMuted} label={calc.tipo} />
         </div>
       </div>
 
-      {/* Puntaje estrellas */}
       {calc.puntaje > 0 && (
-        <div style={{ fontSize: 14, marginBottom: 8, color: "#f59e0b" }}>
+        <div style={{ fontSize: 14, marginBottom: 8, color: COLORS.warning }}>
           {"★".repeat(estrellas)}{"☆".repeat(5 - estrellas)}
-          <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{calc.puntaje}/10</span>
+          <span style={{ fontSize: 11, color: COLORS.textMuted, marginLeft: 6 }}>{calc.puntaje}/10</span>
         </div>
       )}
 
-      {/* Badges */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-        <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: calc.disponible ? "#f0fdf4" : "#fef2f2", color: calc.disponible ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-          {calc.disponible ? "✅ Disponible" : "❌ No disponible"}
-        </span>
-        {calc.freelance && <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#f0f4ff", color: "#6366f1" }}>💼 Freelance</span>}
-        {calc.factura   && <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#fffbeb", color: "#d97706" }}>🧾 Factura</span>}
+        <Badge color={calc.disponible ? COLORS.success : COLORS.danger} label={calc.disponible ? "Disponible" : "No disponible"} icon={calc.disponible ? "✅" : "❌"} />
+        {calc.freelance && <Badge color={COLORS.accent} label="Freelance" icon="💼" />}
+        {calc.factura   && <Badge color={COLORS.warning} label="Factura" icon="🧾" />}
       </div>
 
-      {/* Software */}
       {calc.sistemas && (
-        <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+        <div style={{ fontSize: 12, color: COLORS.textSoft, marginBottom: 6 }}>
           💻 {calc.sistemas}
         </div>
       )}
 
-      {/* Contacto */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {calc.mail && (
-          <a href={`mailto:${calc.mail}`} onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: "#6366f1", textDecoration: "none" }}>
+          <a href={`mailto:${calc.mail}`} onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: COLORS.accent, textDecoration: "none" }}>
             ✉️ {calc.mail}
           </a>
         )}
         {calc.wsp && (
-          <a href={`https://wa.me/${calc.wsp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: "#22c55e", textDecoration: "none" }}>
+          <a href={`https://wa.me/${calc.wsp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: COLORS.success, textDecoration: "none" }}>
             💬 WhatsApp
           </a>
         )}
@@ -213,7 +196,7 @@ function CardCalculista({ calc, onClick }) {
 export default function Calculistas() {
   const [calculistas, setCalculistas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null); // null | "nuevo" | calc obj
+  const [modal, setModal] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroNivel, setFiltroNivel] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
@@ -238,7 +221,6 @@ export default function Calculistas() {
     await cargar();
   }
 
-  // Filtros
   const filtrados = calculistas.filter(c => {
     const q = busqueda.toLowerCase();
     const matchQ = !q || c.nombre?.toLowerCase().includes(q) || c.ciudad?.toLowerCase().includes(q) || c.mail?.toLowerCase().includes(q);
@@ -248,40 +230,25 @@ export default function Calculistas() {
     return matchQ && matchN && matchT && matchD;
   });
 
-  // Stats
-  const total      = calculistas.length;
+  const total       = calculistas.length;
   const disponibles = calculistas.filter(c => c.disponible).length;
-  const seniors    = calculistas.filter(c => c.nivel === "Senior").length;
-  const externos   = calculistas.filter(c => c.tipo === "externo").length;
+  const seniors     = calculistas.filter(c => c.nivel === "Senior").length;
+  const externos    = calculistas.filter(c => c.tipo === "externo").length;
 
   return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "24px 24px", maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ ...shared.page, maxWidth: 1200 }}>
+      <SectionHeader icon="👷" title="Calculistas" action={{ label: "+ Nuevo calculista", onClick: () => setModal("nuevo") }} />
 
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>👷 Calculistas</h1>
-        <button onClick={() => setModal("nuevo")} style={shared.btn}>+ Nuevo calculista</button>
-      </div>
+      {msg && <Toast texto={msg} />}
 
-      {msg && <div style={{ background: "#d4edda", color: "#155724", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>{msg}</div>}
+      <KpiGrid items={[
+        { label: "Total",       value: total,       color: COLORS.accent },
+        { label: "Disponibles", value: disponibles, color: COLORS.success },
+        { label: "Seniors",     value: seniors,      color: COLORS.warning },
+        { label: "Externos",    value: externos,     color: COLORS.info },
+      ]} />
 
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
-        {[
-          { label: "Total", value: total, color: "#6366f1" },
-          { label: "Disponibles", value: disponibles, color: "#22c55e" },
-          { label: "Seniors", value: seniors, color: "#f59e0b" },
-          { label: "Externos", value: externos, color: "#3b82f6" },
-        ].map(k => (
-          <div key={k.label} style={{ background: "#fff", borderRadius: 12, padding: "16px", boxShadow: "0 1px 6px rgba(0,0,0,.06)", textAlign: "center" }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+      <FilterBar resultCount={`${filtrados.length} de ${total}`}>
         <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="🔍 Buscar…" style={{ ...shared.inp, width: 220 }} />
         {[
           { val: filtroNivel, set: setFiltroNivel, opts: ["", "Junior", "Semi", "Senior"], placeholder: "Nivel" },
@@ -295,15 +262,12 @@ export default function Calculistas() {
         {(busqueda || filtroNivel || filtroTipo || filtroDisp) && (
           <button onClick={() => { setBusqueda(""); setFiltroNivel(""); setFiltroTipo(""); setFiltroDisp(""); }} style={shared.btnSm}>✕ Limpiar</button>
         )}
-      </div>
+      </FilterBar>
 
-      <div style={{ fontSize: 12, color: "#aaa", marginBottom: 12 }}>{filtrados.length} de {total} calculistas</div>
-
-      {/* Grid */}
       {loading ? (
-        <p style={{ color: "#aaa" }}>Cargando…</p>
+        <p style={{ color: COLORS.textFaint }}>Cargando…</p>
       ) : filtrados.length === 0 ? (
-        <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>No hay resultados.</p>
+        <EmptyState message="No hay resultados con esos filtros." />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
           {filtrados.map(c => (
@@ -317,7 +281,6 @@ export default function Calculistas() {
         </div>
       )}
 
-      {/* Modal */}
       {modal && (
         <ModalCalculista
           calc={modal === "nuevo" ? null : modal}
