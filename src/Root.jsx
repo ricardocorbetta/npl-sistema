@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from './supabase.js'
 import App from './App.jsx'
 import Proyectos from './Proyectos.jsx'
@@ -7,19 +7,20 @@ import CRM from './CRM.jsx'
 import Dashboard from './Dashboard.jsx'
 import Obras from './Obras.jsx'
 import Biblioteca from './Biblioteca.jsx'
+import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
 
-const EDGE_URL        = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
-const EDGE_LIST_URL   = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
+const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
+const EDGE_LIST_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
 
 const APPS_ADMIN = [
-  { id: 'dashboard',    label: 'Dashboard',    icon: '📊', desc: 'Panel de control' },
-  { id: 'presupuestos', label: 'Presupuestos',  icon: '📋', desc: 'Pipeline y seguimiento' },
-  { id: 'proyectos',   label: 'Proyectos',    icon: '🗂️', desc: 'Kanban de proyectos' },
-  { id: 'obras',        label: 'Obras',         icon: '🏗️', desc: 'Seguimiento diario' },
-  { id: 'calculistas',  label: 'Calculistas',   icon: '👷', desc: 'Equipo y postulantes' },
-  { id: 'crm',          label: 'Clientes',      icon: '👥', desc: '148 contactos' },
-  { id: 'biblioteca',   label: 'Biblioteca',    icon: '📚', desc: 'Rubros y tareas' },
-  { id: 'usuarios',     label: 'Usuarios',      icon: '⚙️', desc: 'Gestión de accesos' },
+  { id: 'dashboard', label: 'Dashboard', icon: '📊', desc: 'Panel de control' },
+  { id: 'presupuestos', label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
+  { id: 'proyectos', label: 'Proyectos', icon: '🗂️', desc: 'Kanban de proyectos' },
+  { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
+  { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
+  { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
+  { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
+  { id: 'usuarios', label: 'Usuarios', icon: '⚙️', desc: 'Gestión de accesos' },
 ]
 
 const APPS_JEFE = [
@@ -30,21 +31,23 @@ const APPS_CALCULISTA = [
   { id: 'legajos', label: 'Mis legajos', icon: '🗂️', desc: 'Proyectos asignados' },
 ]
 
-const s = {
-  sans: { fontFamily: 'system-ui, -apple-system, sans-serif' },
-  inp: { width: '100%', fontSize: 15, padding: '12px 14px', border: '1px solid #e5e5e5', borderRadius: 10, boxSizing: 'border-box', background: '#fff' },
+/* ─── Contexto de tema — para que cualquier módulo hijo pueda leer palette/theme
+   sin tener que recibirlo por props explícitas ─── */
+const ThemeContext = createContext(null);
+export function useNplTheme() {
+  return useContext(ThemeContext);
 }
 
 export default function Root() {
-  const [session, setSession]   = useState(null)
-  const [perfil, setPerfil]     = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [current, setCurrent]   = useState(() => {
+  const [session, setSession] = useState(null)
+  const [perfil, setPerfil] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [current, setCurrent] = useState(() => {
     const hash = window.location.hash.replace("#", "");
     return hash || null;
   })
+  const { theme, toggle, palette } = useTheme();
 
-  // Sincronizar con el botón atrás/adelante del browser
   useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace("#", "");
@@ -89,83 +92,101 @@ export default function Root() {
     navTo(null)
   }
 
+  const shared = makeShared(palette);
+  const sans = { fontFamily: 'system-ui, -apple-system, sans-serif' };
+
   if (loading) return (
-    <div style={{ ...s.sans, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: '#aaa', fontSize: 14 }}>
+    <div style={{ ...sans, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: palette.textFaint, fontSize: 14, background: palette.bgApp }}>
       Cargando...
     </div>
   )
 
-  if (!session) return <LoginScreen />
-  if (!perfil || !perfil.activo) return <PendienteScreen onLogout={logout} perfil={perfil} />
+  if (!session) return <LoginScreen palette={palette} />
+  if (!perfil || !perfil.activo) return <PendienteScreen onLogout={logout} perfil={perfil} palette={palette} />
 
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
-  if (current === 'presupuestos') return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><App /></Layout>
-  if (current === 'proyectos')    return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Proyectos /></Layout>
-  if (current === 'calculistas')  return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Calculistas /></Layout>
-  if (current === 'crm')          return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><CRM /></Layout>
-  if (current === 'dashboard')    return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Dashboard /></Layout>
-  if (current === 'obras')        return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Obras perfil={perfil} onLogout={logout} /></Layout>
-  if (current === 'biblioteca')    return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Biblioteca /></Layout>
-  if (current === 'usuarios')     return <Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil}><Usuarios session={session} /></Layout>
+  const themeCtx = { theme, palette };
 
+  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App /></Layout></ThemeContext.Provider>
+  if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos /></Layout></ThemeContext.Provider>
+  if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
+  if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
+  if (current === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard /></Layout></ThemeContext.Provider>
+  if (current === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} /></Layout></ThemeContext.Provider>
+  if (current === 'biblioteca') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Biblioteca /></Layout></ThemeContext.Provider>
+  if (current === 'usuarios') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Usuarios session={session} palette={palette} /></Layout></ThemeContext.Provider>
+
+  // ─── Pantalla de inicio (selector de apps) ───
   return (
-    <div style={{ ...s.sans, minHeight: '100vh', background: '#f9f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ ...sans, minHeight: '100vh', background: palette.bgApp, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ position: 'fixed', top: 20, right: 20, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <GlobalSearch palette={palette} onNavegar={(modulo) => navTo(modulo)} />
+        <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
+      </div>
       <div style={{ marginBottom: 32, textAlign: 'center' }}>
-        <div style={{ width: 52, height: 52, background: '#111', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 12px', color: '#fff', fontWeight: 700 }}>N</div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#111' }}>NPL Sistema</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>Bienvenido, {perfil.nombre}</p>
+        <div style={{ width: 52, height: 52, background: palette.bgInverse, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 12px', color: palette.textInverse, fontWeight: 900, fontFamily: FONT_MONO }}>N</div>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: palette.text, letterSpacing: -0.3 }}>NPL Sistema</h1>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: palette.textMuted }}>Bienvenido, {perfil.nombre}</p>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, width: '100%', maxWidth: 600 }}>
         {apps.map(a => (
           <button key={a.id} onClick={() => navTo(a.id)}
-            style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 14, padding: '20px 16px', cursor: 'pointer', textAlign: 'left' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = '#111'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e5e5'}>
+            style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: '20px 16px', cursor: 'pointer', textAlign: 'left' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = palette.bgInverse}
+            onMouseLeave={e => e.currentTarget.style.borderColor = palette.border}>
             <div style={{ fontSize: 26, marginBottom: 8 }}>{a.icon}</div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#111' }}>{a.label}</p>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#888' }}>{a.desc}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: palette.text }}>{a.label}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{a.desc}</p>
           </button>
         ))}
       </div>
-      <button onClick={logout} style={{ marginTop: 32, fontSize: 12, color: '#aaa', background: 'none', border: 'none', cursor: 'pointer' }}>Cerrar sesión</button>
+      <button onClick={logout} style={{ marginTop: 32, fontSize: 12, color: palette.textFaint, background: 'none', border: 'none', cursor: 'pointer' }}>Cerrar sesión</button>
     </div>
   )
 }
 
-// ─── Layout ───────────────────────────────────────────────────
-function Layout({ current, onNav, apps, onLogout, perfil, children }) {
+/* ─── Layout — header global con marca + nav + theme toggle, una sola vez ─── */
+function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette, children }) {
   if (perfil?.rol === 'jefe_obra') {
-    return <div style={{ ...s.sans, minHeight: '100vh', background: '#f8f8f8' }}>{children}</div>
+    return <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>{children}</div>
   }
   return (
-    <div style={{ ...s.sans, minHeight: '100vh', background: '#fff' }}>
-      <div style={{ background: '#111', padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 46, overflowX: 'auto' }}>
-        <button onClick={() => onNav(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontWeight: 700, fontSize: 16, padding: 0, flexShrink: 0 }}>N</button>
-        <div style={{ width: 1, height: 20, background: '#333', flexShrink: 0 }} />
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>
+      <div style={{ background: palette.bgInverse, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 48, overflowX: 'auto' }}>
+        <button onClick={() => onNav(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: palette.textInverse, fontWeight: 900, fontSize: 16, padding: 0, flexShrink: 0, fontFamily: FONT_MONO, letterSpacing: -0.5 }}>N</button>
+        <div style={{ width: 1, height: 20, background: theme === 'dark' ? '#333' : '#2a2a2a', flexShrink: 0 }} />
         {apps.map(a => (
           <button key={a.id} onClick={() => onNav(a.id)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: current === a.id ? '#fff' : '#888', padding: '0 4px', borderBottom: current === a.id ? '2px solid #fff' : '2px solid transparent', height: 46, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+              color: current === a.id ? palette.textInverse : '#888',
+              padding: '0 4px', borderBottom: current === a.id ? `2px solid ${palette.textInverse}` : '2px solid transparent',
+              height: 48, whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
             {a.label}
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: '#666', flexShrink: 0 }}>{perfil?.nombre}</span>
-        <button onClick={onLogout} style={{ fontSize: 11, color: '#888', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>Salir</button>
+        <GlobalSearch palette={palette} onNavegar={(modulo, id, tipo) => { onNav(modulo); }} />
+        <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
+        <span style={{ fontSize: 11, color: '#777', flexShrink: 0, marginLeft: 4 }}>{perfil?.nombre}</span>
+        <button onClick={onLogout} style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>Salir</button>
       </div>
       <div>{children}</div>
     </div>
   )
 }
 
-// ─── Login ───────────────────────────────────────────────────
-function LoginScreen() {
-  const [tab, setTab]       = useState('login')
-  const [mail, setMail]     = useState('')
-  const [pass, setPass]     = useState('')
+/* ─── Login ─── */
+function LoginScreen({ palette }) {
+  const [tab, setTab] = useState('login')
+  const [mail, setMail] = useState('')
+  const [pass, setPass] = useState('')
   const [nombre, setNombre] = useState('')
   const [loading, setLoading] = useState(false)
-  const [msg, setMsg]       = useState('')
+  const [msg, setMsg] = useState('')
+  const shared = makeShared(palette);
 
   const login = async () => {
     setLoading(true); setMsg('')
@@ -184,39 +205,39 @@ function LoginScreen() {
   }
 
   return (
-    <div style={{ ...s.sans, minHeight: '100vh', background: '#f9f9f9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 16, padding: '32px 28px', width: '100%', maxWidth: 380 }}>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 16, padding: '32px 28px', width: '100%', maxWidth: 380 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ width: 48, height: 48, background: '#111', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, margin: '0 auto 12px', color: '#fff', fontWeight: 700 }}>N</div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111' }}>NPL Sistema</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>Ingeniería Civil</p>
+          <div style={{ width: 48, height: 48, background: palette.bgInverse, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, margin: '0 auto 12px', color: palette.textInverse, fontWeight: 900, fontFamily: FONT_MONO }}>N</div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: palette.text }}>NPL Sistema</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: palette.textMuted }}>Ingeniería Civil</p>
         </div>
-        <div style={{ display: 'flex', border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ display: 'flex', border: `1.5px solid ${palette.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
           {[['login', 'Ingresar'], ['registro', 'Registrarse']].map(([id, label]) => (
             <button key={id} onClick={() => { setTab(id); setMsg('') }}
-              style={{ flex: 1, padding: '8px', fontSize: 13, fontWeight: 600, background: tab === id ? '#111' : '#fff', color: tab === id ? '#fff' : '#888', border: 'none', cursor: 'pointer' }}>
+              style={{ flex: 1, padding: '8px', fontSize: 13, fontWeight: 700, background: tab === id ? palette.bgInverse : palette.bgCard, color: tab === id ? palette.textInverse : palette.textMuted, border: 'none', cursor: 'pointer' }}>
               {label}
             </button>
           ))}
         </div>
         {tab === 'registro' && (
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Nombre completo</label>
-            <input style={s.inp} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: palette.textSoft, marginBottom: 5 }}>Nombre completo</label>
+            <input style={shared.inp} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
           </div>
         )}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Email</label>
-          <input style={s.inp} type="email" value={mail} onChange={e => setMail(e.target.value)} placeholder="tu@mail.com" />
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: palette.textSoft, marginBottom: 5 }}>Email</label>
+          <input style={shared.inp} type="email" value={mail} onChange={e => setMail(e.target.value)} placeholder="tu@mail.com" />
         </div>
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Contraseña</label>
-          <input style={s.inp} type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: palette.textSoft, marginBottom: 5 }}>Contraseña</label>
+          <input style={shared.inp} type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
             onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? login() : registro())} />
         </div>
-        {msg && <p style={{ fontSize: 13, color: msg.includes('exitoso') ? '#3B6D11' : '#c00', marginBottom: 14, textAlign: 'center' }}>{msg}</p>}
+        {msg && <p style={{ fontSize: 13, color: msg.includes('exitoso') ? '#1a8a5e' : '#c0392b', marginBottom: 14, textAlign: 'center' }}>{msg}</p>}
         <button onClick={tab === 'login' ? login : registro} disabled={loading}
-          style={{ width: '100%', padding: '13px', fontSize: 15, fontWeight: 700, borderRadius: 10, border: 'none', background: loading ? '#aaa' : '#111', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer' }}>
+          style={{ width: '100%', padding: '13px', fontSize: 15, fontWeight: 700, borderRadius: 10, border: 'none', background: loading ? palette.textFaint : palette.bgInverse, color: palette.textInverse, cursor: loading ? 'not-allowed' : 'pointer' }}>
           {loading ? 'Cargando...' : tab === 'login' ? 'Ingresar' : 'Crear cuenta'}
         </button>
       </div>
@@ -224,18 +245,18 @@ function LoginScreen() {
   )
 }
 
-// ─── Pantalla pendiente ───────────────────────────────────────
-function PendienteScreen({ onLogout, perfil }) {
+/* ─── Pantalla pendiente ─── */
+function PendienteScreen({ onLogout, perfil, palette }) {
   return (
-    <div style={{ ...s.sans, minHeight: '100vh', background: '#f9f9f9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 16, padding: '32px 28px', width: '100%', maxWidth: 380, textAlign: 'center' }}>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 16, padding: '32px 28px', width: '100%', maxWidth: 380, textAlign: 'center' }}>
         <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#111' }}>Cuenta pendiente</h2>
-        <p style={{ margin: '0 0 24px', fontSize: 14, color: '#888', lineHeight: 1.5 }}>
+        <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800, color: palette.text }}>Cuenta pendiente</h2>
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: palette.textMuted, lineHeight: 1.5 }}>
           Tu cuenta fue creada correctamente. El administrador de NPL debe activarla y asignarte un rol antes de que puedas acceder.
         </p>
-        <p style={{ margin: '0 0 24px', fontSize: 12, color: '#aaa' }}>{perfil?.mail}</p>
-        <button onClick={onLogout} style={{ padding: '10px 24px', fontSize: 14, fontWeight: 600, borderRadius: 10, border: '1px solid #e5e5e5', background: '#fff', color: '#555', cursor: 'pointer' }}>
+        <p style={{ margin: '0 0 24px', fontSize: 12, color: palette.textFaint }}>{perfil?.mail}</p>
+        <button onClick={onLogout} style={{ padding: '10px 24px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: `1.5px solid ${palette.border}`, background: palette.bgCard, color: palette.textSoft, cursor: 'pointer' }}>
           Cerrar sesión
         </button>
       </div>
@@ -243,14 +264,15 @@ function PendienteScreen({ onLogout, perfil }) {
   )
 }
 
-// ─── Panel de usuarios ────────────────────────────────────────
-function Usuarios({ session }) {
-  const [users, setUsers]     = useState([])
+/* ─── Panel de usuarios ─── */
+function Usuarios({ session, palette }) {
+  const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving]   = useState(false)
-  const [msg, setMsg]         = useState('')
-  const [form, setForm]       = useState({ nombre: '', email: '', password: '', rol: 'calculista' })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [form, setForm] = useState({ nombre: '', email: '', password: '', rol: 'calculista' })
+  const shared = makeShared(palette);
 
   useEffect(() => { cargar() }, [])
 
@@ -293,75 +315,68 @@ function Usuarios({ session }) {
   }
 
   const ROLES = [
-    { value: 'admin',      label: 'Admin' },
-    { value: 'jefe_obra',  label: 'Jefe de Obra' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'jefe_obra', label: 'Jefe de Obra' },
     { value: 'calculista', label: 'Calculista' },
-    { value: 'pendiente',  label: 'Pendiente' },
+    { value: 'pendiente', label: 'Pendiente' },
   ]
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', padding: '24px 20px', maxWidth: 800, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20 }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 12, color: '#999', fontWeight: 500 }}>NPL · Admin</p>
-          <h1 style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 700, color: '#111' }}>Gestión de usuarios</h1>
-        </div>
-        <button onClick={() => { setShowForm(!showForm); setMsg('') }}
-          style={{ padding: '9px 18px', fontSize: 13, fontWeight: 600, background: '#111', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: palette.text }}>⚙️ Gestión de usuarios</h1>
+        <button onClick={() => { setShowForm(!showForm); setMsg('') }} style={shared.btn}>
           {showForm ? 'Cancelar' : '+ Nuevo usuario'}
         </button>
       </div>
 
-      {/* Formulario nuevo usuario */}
       {showForm && (
-        <div style={{ background: '#f9f9f9', border: '1px solid #e5e5e5', borderRadius: 14, padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600 }}>Nuevo usuario</h3>
+        <div style={{ background: palette.bgSoft, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: palette.text }}>Nuevo usuario</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Nombre completo *</label>
-              <input style={s.inp} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre y apellido" />
+              <label style={shared.lbl}>Nombre completo *</label>
+              <input style={shared.inp} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre y apellido" />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Email *</label>
-              <input style={s.inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="usuario@mail.com" />
+              <label style={shared.lbl}>Email *</label>
+              <input style={shared.inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="usuario@mail.com" />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Contraseña *</label>
-              <input style={s.inp} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+              <label style={shared.lbl}>Contraseña *</label>
+              <input style={shared.inp} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Mínimo 6 caracteres" />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 5 }}>Rol *</label>
-              <select style={{ ...s.inp }} value={form.rol} onChange={e => setForm(p => ({ ...p, rol: e.target.value }))}>
+              <label style={shared.lbl}>Rol *</label>
+              <select style={shared.inp} value={form.rol} onChange={e => setForm(p => ({ ...p, rol: e.target.value }))}>
                 {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
           </div>
-          {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#3B6D11' : '#c00', margin: '0 0 12px' }}>{msg}</p>}
-          <button onClick={crearUsuario} disabled={saving}
-            style={{ padding: '10px 24px', fontSize: 14, fontWeight: 600, background: saving ? '#aaa' : '#111', color: '#fff', border: 'none', borderRadius: 10, cursor: saving ? 'not-allowed' : 'pointer' }}>
+          {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#1a8a5e' : '#c0392b', margin: '0 0 12px' }}>{msg}</p>}
+          <button onClick={crearUsuario} disabled={saving} style={shared.btn}>
             {saving ? 'Creando...' : 'Crear usuario'}
           </button>
         </div>
       )}
 
-      {msg && !showForm && <p style={{ fontSize: 13, color: '#3B6D11', marginBottom: 16 }}>{msg}</p>}
-
-      {loading && <p style={{ color: '#aaa' }}>Cargando...</p>}
+      {msg && !showForm && <p style={{ fontSize: 13, color: '#1a8a5e', marginBottom: 16 }}>{msg}</p>}
+      {loading && <p style={{ color: palette.textFaint }}>Cargando...</p>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {users.map(u => (
-          <div key={u.id} style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div key={u.id} style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#111' }}>{u.nombre || '—'}</p>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#888' }}>{u.mail}</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: palette.text }}>{u.nombre || '—'}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{u.mail}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select value={u.rol} onChange={e => actualizar(u.id, 'rol', e.target.value)}
-                style={{ fontSize: 12, padding: '5px 8px', border: '1px solid #e5e5e5', borderRadius: 8, background: '#f9f9f9', cursor: 'pointer' }}>
+                style={{ fontSize: 12, padding: '5px 8px', border: `1px solid ${palette.border}`, borderRadius: 8, background: palette.bgSoft, cursor: 'pointer', color: palette.text }}>
                 {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
               <button onClick={() => actualizar(u.id, 'activo', !u.activo)}
-                style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: u.activo ? '#EAF3DE' : '#f5f5f5', color: u.activo ? '#3B6D11' : '#888', fontWeight: 600 }}>
+                style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: u.activo ? '#1a8a5e1a' : palette.bgSoft, color: u.activo ? '#1a8a5e' : palette.textMuted, fontWeight: 700 }}>
                 {u.activo ? '✓ Activo' : 'Inactivo'}
               </button>
             </div>
