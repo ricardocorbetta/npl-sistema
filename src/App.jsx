@@ -351,7 +351,7 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado }) {
 }
 
 /* ─── Lista de presupuestos ─── */
-export default function App() {
+export default function App({ deepLinkId }) {
   const [presupuestos, setPresupuestos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -361,6 +361,14 @@ export default function App() {
   const [filtroSistema, setFiltroSistema] = useState("todos");
   const [filtroMes, setFiltroMes] = useState("todos");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Deep link: abrir presupuesto específico al llegar desde el buscador global
+  useEffect(() => {
+    if (deepLinkId && presupuestos.length > 0) {
+      const p = presupuestos.find(pr => pr.id === deepLinkId);
+      if (p) { setEditando(p); setShowModal(true); setFiltroEstado("todos"); }
+    }
+  }, [deepLinkId, presupuestos]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
