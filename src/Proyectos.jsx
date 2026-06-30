@@ -42,10 +42,11 @@ const ESTADOS = {
 };
 
 const TABS = [
-  { id: "activos", label: "Activos" },
   { id: "onboarding", label: "Onboarding" },
+  { id: "activos", label: "Activos" },
   { id: "revision", label: "Revision" },
   { id: "entregados", label: "Entregados" },
+  { id: "archivados", label: "Archivados" },
   { id: "todos", label: "Todos" },
 ];
 
@@ -62,7 +63,9 @@ const ui = {
 
 const emptyToNull = value => value === "" || value === undefined ? null : value;
 const normalizeEstado = p => p?.estado === "en_curso" ? "activo" : (p?.estado || "activo");
-const isDelivered = p => !!(p?.archivado || p?.entregado || normalizeEstado(p) === "entregado");
+const isArchived = p => !!p?.archivado;
+const isDelivered = p => !!(p?.entregado || normalizeEstado(p) === "entregado");
+const isVisibleDelivered = p => isDelivered(p) && !isArchived(p);
 const statusMeta = p => ESTADOS[isDelivered(p) ? "entregado" : normalizeEstado(p)] || ESTADOS.activo;
 const dueDays = date => Math.ceil((new Date(`${date}T12:00`) - new Date()) / 86400000);
 
@@ -162,15 +165,30 @@ function PanelChecklist({ proyectoId, onClose }) {
           <button onClick={agregar} disabled={saving || !nuevo.trim()} style={{ ...ui.button, opacity: saving || !nuevo.trim() ? 0.5 : 1 }}>Agregar</button>
         </div>
         {loading ? <p style={{ color: "#888" }}>Cargando...</p> : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {items.map(item => (
-              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 10, padding: "10px 12px", border: "1px solid #eee", borderRadius: 8, background: item.completado ? "#f0fdf4" : "#fff" }}>
-                <input type="checkbox" checked={!!item.completado} onChange={() => toggle(item)} style={{ width: 18, height: 18 }} />
-                <span style={{ fontSize: 14, color: item.completado ? "#15803d" : "#222", textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</span>
-                <button onClick={() => eliminar(item.id)} style={{ ...ui.secondary, padding: "6px 9px", fontSize: 12 }}>Eliminar</button>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
+            {[
+              ["Pendientes", items.filter(i => !i.completado), "#f8fafc"],
+              ["Completadas", items.filter(i => i.completado), "#f0fdf4"],
+            ].map(([title, list, bg]) => (
+              <div key={title} style={{ background: bg, border: "1px solid #e5e7eb", borderRadius: 10, padding: 10, minHeight: 180 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <strong style={{ fontSize: 13 }}>{title}</strong>
+                  <span style={{ fontSize: 11, color: "#666", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 999, padding: "2px 7px" }}>{list.length}</span>
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {list.map(item => (
+                    <div key={item.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "start", gap: 8 }}>
+                        <input type="checkbox" checked={!!item.completado} onChange={() => toggle(item)} style={{ width: 18, height: 18, marginTop: 1 }} />
+                        <span style={{ fontSize: 14, lineHeight: 1.35, color: item.completado ? "#15803d" : "#222", textDecoration: item.completado ? "line-through" : "none" }}>{item.texto}</span>
+                      </div>
+                      <button onClick={() => eliminar(item.id)} style={{ marginTop: 8, background: "none", border: "none", color: "#777", fontSize: 12, padding: 0, cursor: "pointer" }}>Eliminar</button>
+                    </div>
+                  ))}
+                  {!list.length && <div style={{ border: "1px dashed #d4d4d8", borderRadius: 8, padding: 18, textAlign: "center", color: "#999", fontSize: 13 }}>Sin tarjetas</div>}
+                </div>
               </div>
             ))}
-            {!items.length && <p style={{ color: "#999", textAlign: "center", padding: "18px 0" }}>Agrega la primera tarea para este proyecto.</p>}
           </div>
         )}
       </div>
@@ -362,10 +380,91 @@ function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
             <button onClick={() => onEditar(proyecto)} style={ui.secondary}>Editar</button>
             <button onClick={() => onChecklist(proyecto)} style={ui.secondary}>Checklist</button>
             {proyecto.drive_url && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" style={{ ...ui.secondary, textDecoration: "none" }}>Drive</a>}
-            {!isDelivered(proyecto) && <button onClick={() => onArchivar(proyecto)} style={ui.secondary}>Marcar entregado</button>}
+            {!isDelivered(proyecto) && <button onClick={() => onArchivar(proyecto, "entregar")} style={ui.secondary}>Marcar entregado</button>}
+            {isDelivered(proyecto) && !isArchived(proyecto) && <button onClick={() => onArchivar(proyecto, "archivar")} style={ui.secondary}>Archivar</button>}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EntregasTimeline({ proyectos }) {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const en14 = new Date(hoy);
+  en14.setDate(hoy.getDate() + 14);
+
+  const ordenados = [...proyectos]
+    .filter(p => p.fecha_entrega_plan)
+    .sort((a, b) => new Date(`${a.fecha_entrega_plan}T12:00`) - new Date(`${b.fecha_entrega_plan}T12:00`));
+
+  const semanaActual = ordenados.filter(p => {
+    const d = new Date(`${p.fecha_entrega_plan}T12:00`);
+    return d >= hoy && d < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 7);
+  });
+  const semanaProxima = ordenados.filter(p => {
+    const d = new Date(`${p.fecha_entrega_plan}T12:00`);
+    return d >= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 7) && d <= en14;
+  });
+
+  const porMes = {};
+  ordenados.forEach(p => {
+    const d = new Date(`${p.fecha_entrega_plan}T12:00`);
+    const key = d.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+    porMes[key] = [...(porMes[key] || []), p];
+  });
+
+  if (!ordenados.length) return null;
+
+  return (
+    <section style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <h2 style={{ fontSize: 17, margin: 0 }}>Proximas entregas</h2>
+        <span style={{ fontSize: 12, color: "#666" }}>{ordenados.length} proyectos con fecha</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 10, marginBottom: 12 }}>
+        <EntregaBucket title="Esta semana" items={semanaActual} />
+        <EntregaBucket title="Proxima semana" items={semanaProxima} />
+      </div>
+      <div style={{ background: "#fff", border: "1px solid #e6e6e6", borderRadius: 10, padding: 12 }}>
+        <div style={{ fontSize: 13, color: "#666", fontWeight: 750, marginBottom: 8 }}>Por mes</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(210px,1fr))", gap: 10 }}>
+          {Object.entries(porMes).slice(0, 6).map(([mes, items]) => (
+            <div key={mes} style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
+              <strong style={{ display: "block", textTransform: "capitalize", fontSize: 13, marginBottom: 6 }}>{mes}</strong>
+              {items.slice(0, 4).map(p => <EntregaMini key={p.id} proyecto={p} />)}
+              {items.length > 4 && <div style={{ fontSize: 12, color: "#777", marginTop: 5 }}>+{items.length - 4} mas</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EntregaBucket({ title, items }) {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e6e6e6", borderRadius: 10, padding: 12, minHeight: 128 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <strong style={{ fontSize: 14 }}>{title}</strong>
+        <span style={{ fontSize: 11, color: "#666", background: "#f4f4f5", borderRadius: 999, padding: "2px 8px" }}>{items.length}</span>
+      </div>
+      {items.length ? items.map(p => <EntregaMini key={p.id} proyecto={p} />) : <div style={{ color: "#999", fontSize: 13, paddingTop: 20, textAlign: "center" }}>Sin entregas</div>}
+    </div>
+  );
+}
+
+function EntregaMini({ proyecto }) {
+  const d = new Date(`${proyecto.fecha_entrega_plan}T12:00`);
+  const days = dueDays(proyecto.fecha_entrega_plan);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "38px 1fr", gap: 8, alignItems: "center", padding: "7px 0", borderTop: "1px solid #f1f1f1" }}>
+      <div style={{ textAlign: "center", borderRadius: 8, background: days < 0 ? "#fef2f2" : days < 7 ? "#fefce8" : "#f0fdf4", color: days < 0 ? "#b91c1c" : days < 7 ? "#a16207" : "#15803d", padding: "4px 0", fontWeight: 850, fontSize: 13 }}>{d.getDate()}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{proyecto.descripcion}</div>
+        <div style={{ fontSize: 11, color: "#777" }}>{proyecto.cliente || "Sin cliente"} - {days < 0 ? `${Math.abs(days)}d vencido` : days === 0 ? "Hoy" : `${days}d`}</div>
+      </div>
     </div>
   );
 }
@@ -435,26 +534,30 @@ export default function Proyectos() {
     setLoading(false);
   }
 
-  async function archivar(p) {
-    if (!confirm(`Marcar como entregado "${p.descripcion}"?`)) return;
+  async function archivar(p, accion = "entregar") {
+    const esArchivo = accion === "archivar";
+    if (!confirm(`${esArchivo ? "Archivar" : "Marcar como entregado"} "${p.descripcion}"?`)) return;
     setError("");
     try {
       await api(`/proyectos?id=eq.${p.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ estado: "entregado", archivado: true, entregado: true }),
+        body: JSON.stringify(esArchivo
+          ? { archivado: true }
+          : { estado: "entregado", archivado: false, entregado: true }),
       });
-      setMsg("Proyecto marcado como entregado");
+      setMsg(esArchivo ? "Proyecto archivado" : "Proyecto marcado como entregado");
       setTimeout(() => setMsg(""), 2200);
       await cargar();
-      setTab("entregados");
+      setTab(esArchivo ? "archivados" : "entregados");
     } catch (e) {
       setError(e.message);
     }
   }
 
   const q = busqueda.trim().toLowerCase();
-  const activos = proyectos.filter(p => !isDelivered(p));
-  const entregados = proyectos.filter(isDelivered);
+  const archivados = proyectos.filter(isArchived);
+  const activos = proyectos.filter(p => !isDelivered(p) && !isArchived(p));
+  const entregados = proyectos.filter(isVisibleDelivered);
   const revision = activos.filter(p => normalizeEstado(p) === "revision");
   const onboarding = activos.filter(p => normalizeEstado(p) === "onboarding");
   const activosOperacion = activos.filter(p => normalizeEstado(p) === "activo");
@@ -463,6 +566,7 @@ export default function Proyectos() {
 
   const base = useMemo(() => {
     if (tab === "entregados") return entregados;
+    if (tab === "archivados") return archivados;
     if (tab === "revision") return revision;
     if (tab === "onboarding") return onboarding;
     if (tab === "todos") return proyectos;
@@ -493,8 +597,11 @@ export default function Proyectos() {
           <Metric label="Activos" value={activosOperacion.length} color="#15803d" />
           <Metric label="Revision" value={revision.length} color="#1d4ed8" />
           <Metric label="Entregados" value={entregados.length} color="#525252" onClick={() => setTab("entregados")} />
+          <Metric label="Archivados" value={archivados.length} color="#71717a" onClick={() => setTab("archivados")} />
           <Metric label="Vencidos" value={vencidos.length} color={vencidos.length ? "#b91c1c" : "#777"} />
         </div>
+
+        <EntregasTimeline proyectos={activos.filter(p => p.fecha_entrega_plan)} />
 
         <section style={{ background: "#fff", border: "1px solid #e6e6e6", borderRadius: 10, padding: 12, marginBottom: 14 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
@@ -507,7 +614,8 @@ export default function Proyectos() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "12px 0", color: "#666", fontSize: 13 }}>
           <span>{loading ? "Cargando..." : `${visibles.length} resultado${visibles.length === 1 ? "" : "s"}`}</span>
-          {tab === "entregados" && <strong style={{ color: "#333" }}>Los entregados estan aca.</strong>}
+          {tab === "entregados" && <strong style={{ color: "#333" }}>Los entregados estan aca. Si ya no los necesitas, abrilos y usa Archivar.</strong>}
+          {tab === "archivados" && <strong style={{ color: "#333" }}>Archivo historico.</strong>}
         </div>
 
         {loading ? <p style={{ color: "#888" }}>Cargando proyectos...</p> : (
