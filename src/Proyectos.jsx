@@ -517,7 +517,6 @@ function Field({ label, children }) {
 
 function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
   const [open, setOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const meta = statusMeta(proyecto);
   const days = proyecto.fecha_entrega_plan ? dueDays(proyecto.fecha_entrega_plan) : null;
   const pct = proyecto.checklist_total > 0 ? Math.round(proyecto.checklist_completados / proyecto.checklist_total * 100) : null;
@@ -539,45 +538,53 @@ function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
             {proyecto.proxima_tarea && <div style={{ fontSize: 12, color: "#3730a3", marginTop: 4 }}>{proyecto.proxima_tarea}</div>}
           </div>
         </button>
-        <div style={{ display: "flex", alignItems: "flex-end", flexDirection: "column", gap: 5, position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "flex-end", flexDirection: "column", gap: 5 }}>
           {days !== null && <span style={{ fontSize: 11, fontWeight: 800, color: days < 0 ? "#b91c1c" : days < 7 ? "#a16207" : "#15803d", background: days < 0 ? "#fef2f2" : days < 7 ? "#fefce8" : "#f0fdf4", borderRadius: 999, padding: "3px 8px" }}>{days < 0 ? `${Math.abs(days)}d vencido` : days === 0 ? "Hoy" : `${days}d`}</span>}
           {pct !== null && <span style={{ fontSize: 11, color: pct === 100 ? "#15803d" : "#777" }}>Checklist {proyecto.checklist_completados}/{proyecto.checklist_total}</span>}
-          <button onClick={() => setMenuOpen(v => !v)} title="Menu de acciones" aria-label="Menu de acciones" style={{ ...ui.secondary, width: 34, height: 30, padding: 0, display: "grid", placeItems: "center" }}>
-            <span style={{ display: "grid", gap: 3 }}>
-              <span style={ui.menuLine} />
-              <span style={ui.menuLine} />
-              <span style={ui.menuLine} />
-            </span>
-          </button>
-          {menuOpen && (
-            <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 6, width: 196, background: "#fff", border: "1px solid #ddd", borderRadius: 8, boxShadow: "0 12px 28px rgba(0,0,0,.14)", zIndex: 20, padding: 6 }}>
-              <div style={{ padding: "7px 10px 6px", fontSize: 11, color: "#777", fontWeight: 800, textTransform: "uppercase" }}>Acciones</div>
-              <MenuAction label={open ? "Cerrar detalle" : "Abrir detalle"} onClick={() => { setOpen(!open); setMenuOpen(false); }} />
-              <MenuAction label="Editar" onClick={() => { onEditar(proyecto); setMenuOpen(false); }} />
-              <MenuAction label="Checklist" onClick={() => { onChecklist(proyecto); setMenuOpen(false); }} />
-              {proyecto.drive_url && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" style={{ display: "block", padding: "8px 10px", color: "#333", textDecoration: "none", borderRadius: 6, fontSize: 13 }}>Drive</a>}
-              {!isDelivered(proyecto) && <MenuAction label="Marcar entregado" onClick={() => { onArchivar(proyecto, "entregar"); setMenuOpen(false); }} />}
-              {isDelivered(proyecto) && !isArchived(proyecto) && <MenuAction label="Archivar" onClick={() => { onArchivar(proyecto, "archivar"); setMenuOpen(false); }} />}
-            </div>
-          )}
+          <button onClick={() => setOpen(!open)} style={{ border: "none", background: "transparent", color: "#666", fontSize: 12, cursor: "pointer" }}>{open ? "Cerrar" : "Abrir"}</button>
         </div>
       </div>
       {open && (
         <div style={{ padding: "0 16px 14px 102px", borderTop: "1px solid #f2f2f2" }}>
           {proyecto.obs && <p style={{ margin: "0 0 10px", color: "#555", fontSize: 13 }}>{proyecto.obs}</p>}
           {pct !== null && <div style={{ height: 6, background: "#eee", borderRadius: 999, overflow: "hidden", marginBottom: 12 }}><div style={{ height: "100%", width: `${pct}%`, background: "#16a34a" }} /></div>}
-          <div style={{ fontSize: 12, color: "#777" }}>Acciones disponibles desde el menu del titulo.</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => onEditar(proyecto)} style={ui.secondary}>Editar</button>
+            <button onClick={() => onChecklist(proyecto)} style={ui.secondary}>Checklist</button>
+            {proyecto.drive_url && <a href={proyecto.drive_url} target="_blank" rel="noreferrer" style={{ ...ui.secondary, textDecoration: "none" }}>Drive</a>}
+            {!isDelivered(proyecto) && <button onClick={() => onArchivar(proyecto, "entregar")} style={ui.secondary}>Marcar entregado</button>}
+            {isDelivered(proyecto) && !isArchived(proyecto) && <button onClick={() => onArchivar(proyecto, "archivar")} style={ui.secondary}>Archivar</button>}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function MenuAction({ label, onClick }) {
+function EstadoDropdown({ tab, setTab }) {
+  const [open, setOpen] = useState(false);
+  const current = TABS.find(t => t.id === tab) || TABS[0];
   return (
-    <button onClick={onClick} style={{ width: "100%", textAlign: "left", padding: "8px 10px", background: "transparent", border: "none", color: "#333", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>
-      {label}
-    </button>
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen(v => !v)} style={{ ...ui.secondary, display: "flex", alignItems: "center", gap: 10, minWidth: 176, justifyContent: "space-between" }}>
+        <span>{current.label}</span>
+        <span style={{ display: "grid", gap: 3 }}>
+          <span style={ui.menuLine} />
+          <span style={ui.menuLine} />
+          <span style={ui.menuLine} />
+        </span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", left: 0, top: "100%", marginTop: 6, width: 210, background: "#fff", border: "1px solid #ddd", borderRadius: 8, boxShadow: "0 12px 28px rgba(0,0,0,.14)", zIndex: 30, padding: 6 }}>
+          <div style={{ padding: "7px 10px 6px", fontSize: 11, color: "#777", fontWeight: 800, textTransform: "uppercase" }}>Estado</div>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); setOpen(false); }} style={{ width: "100%", textAlign: "left", padding: "8px 10px", background: tab === t.id ? "#f4f4f5" : "transparent", border: "none", color: "#333", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: tab === t.id ? 800 : 500 }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -797,8 +804,8 @@ export default function Proyectos() {
 
         <section style={{ background: "#fff", border: "1px solid #e6e6e6", borderRadius: 10, padding: 12, marginBottom: 14 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} style={{ ...ui.secondary, background: tab === t.id ? "#111" : "#fff", color: tab === t.id ? "#fff" : "#333", borderColor: tab === t.id ? "#111" : "#dedede" }}>{t.label}</button>)}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <EstadoDropdown tab={tab} setTab={setTab} />
             </div>
             <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar proyecto, cliente, encargado..." style={{ ...ui.input, maxWidth: 340 }} />
           </div>
