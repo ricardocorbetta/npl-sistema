@@ -234,26 +234,25 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
           </div>
 
           {/* Código, versión y descripción */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "0 0 110px" }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "flex-end" }}>
+            <div style={{ flex: "0 0 100px" }}>
               <span style={shared.lbl}>Código</span>
               <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1159" />
             </div>
-            <div style={{ flex: "0 0 80px" }}>
+            <div style={{ flex: "0 0 90px" }}>
               <span style={shared.lbl}>Versión</span>
               <select value={form.version} onChange={e => setForm(p => ({ ...p, version: e.target.value }))} style={shared.inp}>
-                <option value="">—</option>
+                <option value="">Sin versión</option>
                 {["A","B","C","D","E","F"].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
-            <div style={{ flex: "0 0 110px" }}>
-              <span style={shared.lbl}>Código final</span>
-              <div style={{ padding: "10px 12px", border: "1.5px solid #e8e8e8", borderRadius: 10, fontSize: 13, background: "#f8f8f8", color: "#111", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, height: 42, display: "flex", alignItems: "center" }}>
-                {form.codigo ? (form.version ? `${form.codigo}-${form.version}` : form.codigo) : "—"}
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                <span style={shared.lbl}>Descripción *</span>
+                {form.codigo && <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "#888", fontWeight: 700 }}>
+                  [ {form.version ? `${form.codigo}-${form.version}` : form.codigo} ]
+                </span>}
               </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <span style={shared.lbl}>Descripción *</span>
               <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Breve descripción del trabajo" />
             </div>
           </div>
