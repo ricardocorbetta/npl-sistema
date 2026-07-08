@@ -105,7 +105,8 @@ function ModalNuevoCliente({ onCreado, onClose }) {
 function ModalPresupuesto({ pres, onGuardar, onClose }) {
   const esNuevo = !pres?.id;
   const [form, setForm] = useState({
-    codigo:               pres?.codigo || "",
+    codigo:               pres?.codigo ? pres.codigo.replace(/-[A-Z]$/, '') : "",
+    version:              pres?.codigo?.match(/-([A-Z])$/)?.[1] || "",
     cliente:              pres?.cliente || "",
     cliente_id:           pres?.cliente_id || "",
     tipo_servicio:        pres?.tipo_servicio || "",
@@ -136,7 +137,9 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
         try {
           const r = await fetch(`${SUPA_URL}/presupuestos?select=codigo&codigo=not.is.null&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
           const nums = (Array.isArray(r) ? r : [])
-            .map(p => parseInt((p.codigo || "").replace(/[^0-9]/g, ""), 10))
+            .map(p => p.codigo || "")
+            .filter(c => /^\d+$/.test(c))  // solo códigos puramente numéricos (1158, no 928-1)
+            .map(c => parseInt(c, 10))
             .filter(n => !isNaN(n) && n > 0);
           const max = nums.length ? Math.max(...nums) : 1158;
           setForm(f => ({ ...f, codigo: String(max + 1) }));
@@ -230,13 +233,26 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
             />
           </div>
 
-          {/* Código y descripción */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: "0 0 140px" }}>
+          {/* Código, versión y descripción */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "0 0 110px" }}>
               <span style={shared.lbl}>Código</span>
-              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1140" />
+              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1159" />
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: "0 0 80px" }}>
+              <span style={shared.lbl}>Versión</span>
+              <select value={form.version} onChange={e => setForm(p => ({ ...p, version: e.target.value }))} style={shared.inp}>
+                <option value="">—</option>
+                {["A","B","C","D","E","F"].map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: "0 0 110px" }}>
+              <span style={shared.lbl}>Código final</span>
+              <div style={{ padding: "10px 12px", border: "1.5px solid #e8e8e8", borderRadius: 10, fontSize: 13, background: "#f8f8f8", color: "#111", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, height: 42, display: "flex", alignItems: "center" }}>
+                {form.codigo ? (form.version ? `${form.codigo}-${form.version}` : form.codigo) : "—"}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
               <span style={shared.lbl}>Descripción *</span>
               <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Breve descripción del trabajo" />
             </div>
@@ -419,7 +435,9 @@ export default function App({ deepLinkId }) {
     const tk = await getToken();
     const r = await fetch(`${SUPA_URL}/presupuestos?select=codigo&codigo=not.is.null&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
     const nums = (Array.isArray(r) ? r : [])
-      .map(p => parseInt((p.codigo || "").replace(/[^0-9]/g, ""), 10))
+      .map(p => p.codigo || "")
+      .filter(c => /^\d+$/.test(c))
+      .map(c => parseInt(c, 10))
       .filter(n => !isNaN(n) && n > 0);
     const max = nums.length ? Math.max(...nums) : 1158; // fallback al máximo conocido
     return String(max + 1);
@@ -429,6 +447,11 @@ export default function App({ deepLinkId }) {
     const tk = await getToken();
     try {
       let body = { ...form };
+      // Combinar código base + versión → "1159" + "A" = "1159-A"
+      if (body.version && body.version.trim()) {
+        body.codigo = `${body.codigo}-${body.version.trim().toUpperCase()}`;
+      }
+      delete body.version; // no existe en la tabla
 
       if (editando?.id) {
         // Edición — PATCH
