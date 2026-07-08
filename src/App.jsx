@@ -125,6 +125,12 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    async function cargar() {
+      const tk = await getToken();
+      const d = await fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json());
+      setClientes(Array.isArray(d) ? d : []);
+
       // Auto-código solo si es presupuesto nuevo y no tiene código
       if (!pres?.id && !form.codigo) {
         try {
