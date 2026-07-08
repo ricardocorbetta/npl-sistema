@@ -60,6 +60,7 @@ function codigoNumero(codigo) {
 function ModalNuevoCliente({ onCreado, onClose }) {
   const [form, setForm] = useState({ empresa: "", contacto: "", mail: "", wsp: "", ciudad: "", tipo: "empresa" });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function crear() {
     setSaving(true);
@@ -128,6 +129,18 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       const tk = await getToken();
       const d = await fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json());
       setClientes(Array.isArray(d) ? d : []);
+
+      // Auto-código solo si es presupuesto nuevo y no tiene código
+      if (!pres?.id && !form.codigo) {
+        try {
+          const r = await fetch(`${SUPA_URL}/presupuestos?select=codigo&codigo=not.is.null&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
+          const nums = (Array.isArray(r) ? r : [])
+            .map(p => parseInt((p.codigo || "").replace(/[^0-9]/g, ""), 10))
+            .filter(n => !isNaN(n) && n > 0);
+          const max = nums.length ? Math.max(...nums) : 1158;
+          setForm(f => ({ ...f, codigo: String(max + 1) }));
+        } catch(e) { /* no bloquear si falla */ }
+      }
     }
     cargar();
   }, []);
@@ -140,7 +153,13 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
   async function guardar() {
     setSaving(true);
-    await onGuardar(form);
+    setError("");
+    try {
+      await onGuardar(form);
+    } catch(e) {
+      setError(e.message || "Error al guardar");
+      console.error("Error guardando presupuesto:", e);
+    }
     setSaving(false);
   }
 
@@ -280,6 +299,11 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
             <textarea value={form.obs} onChange={e => setForm(p => ({ ...p, obs: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} placeholder="Notas internas…" />
           </div>
 
+          {error && (
+            <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
+              ❌ {error}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving} style={{ ...shared.btn, flex: 1 }}>
               {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
@@ -295,7 +319,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 }
 
 /* ─── Card presupuesto ─── */
-function CardPresupuesto({ p, onEditar, onCambiarEstado }) {
+function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar }) {
   const estado = ESTADOS.find(e => e.v === p.estado);
   const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
   const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
@@ -345,6 +369,10 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado }) {
         </select>
 
         <button onClick={() => onEditar(p)} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
+        {p.archivado
+          ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12 }}>↩ Restaurar</button>
+          : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12, color: "#888" }}>📦 Archivar</button>
+        }
       </div>
     </div>
   );
@@ -360,6 +388,7 @@ export default function App({ deepLinkId }) {
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroSistema, setFiltroSistema] = useState("todos");
   const [filtroMes, setFiltroMes] = useState("todos");
+  const [verArchivados, setVerArchivados] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Deep link: abrir presupuesto específico al llegar desde el buscador global
@@ -385,22 +414,74 @@ export default function App({ deepLinkId }) {
     setLoading(false);
   }
 
+  async function getSiguienteCodigo() {
+    const tk = await getToken();
+    const r = await fetch(`${SUPA_URL}/presupuestos?select=codigo&codigo=not.is.null&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json());
+    const nums = (Array.isArray(r) ? r : [])
+      .map(p => parseInt((p.codigo || "").replace(/[^0-9]/g, ""), 10))
+      .filter(n => !isNaN(n) && n > 0);
+    const max = nums.length ? Math.max(...nums) : 1158; // fallback al máximo conocido
+    return String(max + 1);
+  }
+
   async function guardar(form) {
     const tk = await getToken();
-    if (editando?.id) {
-      await fetch(`${SUPA_URL}/presupuestos?id=eq.${editando.id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(form) });
-    } else {
-      await fetch(`${SUPA_URL}/presupuestos`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(form) });
+    try {
+      let body = { ...form };
+
+      if (editando?.id) {
+        // Edición — PATCH
+        const res = await fetch(`${SUPA_URL}/presupuestos?id=eq.${editando.id}`, {
+          method: "PATCH", headers: hdrs(tk), body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || err.details || `Error ${res.status}`);
+        }
+      } else {
+        // Nuevo — auto-generar código si no tiene
+        if (!body.codigo || body.codigo.trim() === "") {
+          body.codigo = await getSiguienteCodigo();
+        }
+        const res = await fetch(`${SUPA_URL}/presupuestos`, {
+          method: "POST", headers: hdrs(tk), body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || err.details || `Error ${res.status}`);
+        }
+      }
+
+      setShowModal(false);
+      setEditando(null);
+      setMsg("✓ Presupuesto guardado");
+      setTimeout(() => setMsg(""), 3000);
+      cargar();
+    } catch(e) {
+      setMsg("❌ Error: " + e.message);
+      setTimeout(() => setMsg(""), 6000);
+      console.error("Error guardando presupuesto:", e);
     }
-    setShowModal(false);
-    setEditando(null);
-    cargar();
   }
 
   async function cambiarEstado(id, estado) {
     const tk = await getToken();
     await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ estado }) });
     setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, estado } : p));
+  }
+
+  async function archivar(id) {
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ archivado: true }) });
+    setPresupuestos(prev => prev.filter(p => p.id !== id));
+    setMsg("✓ Presupuesto archivado"); setTimeout(() => setMsg(""), 3000);
+  }
+
+  async function desarchivar(id) {
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ archivado: false }) });
+    setMsg("✓ Presupuesto restaurado"); setTimeout(() => setMsg(""), 3000);
+    cargar();
   }
 
   // Meses disponibles según datos reales (para el desplegable)
@@ -410,12 +491,16 @@ export default function App({ deepLinkId }) {
 
   // Filtros
   const filtrados = presupuestos.filter(p => {
+    if (verArchivados) return !!p.archivado;  // modo archivados: solo archivados
+    if (p.archivado) return false;             // modo normal: excluir archivados
     const pasaEstado  = filtroEstado === "todos"   || p.estado === filtroEstado;
     const pasaTipo    = filtroTipo === "todos"     || p.tipo_servicio === filtroTipo;
     const pasaSistema = filtroSistema === "todos"  || p.sistema_constructivo === filtroSistema;
     const pasaMes     = filtroMes === "todos"      || (p.fecha_emision && p.fecha_emision.slice(0,7) === filtroMes);
     return pasaEstado && pasaTipo && pasaSistema && pasaMes;
   });
+
+  const totalArchivados = presupuestos.filter(p => p.archivado).length;
 
   // Orden: por código descendente (el "último enviado" tiene el número más alto)
   const ordenados = [...filtrados].sort((a, b) => codigoNumero(b.codigo) - codigoNumero(a.codigo));
@@ -495,7 +580,7 @@ export default function App({ deepLinkId }) {
       {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {ordenados.map(p => (
-            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} />
+            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} onArchivar={archivar} onDesarchivar={desarchivar} />
           ))}
           {ordenados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
         </div>
