@@ -370,7 +370,7 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
         </select>
 
         <button onClick={() => onEditar(p)} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
-        {p.archivado
+        {p.archivado === true
           ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12 }}>↩ Restaurar</button>
           : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12, color: "#888" }}>📦 Archivar</button>
         }
@@ -492,8 +492,8 @@ export default function App({ deepLinkId }) {
 
   // Filtros
   const filtrados = presupuestos.filter(p => {
-    if (verArchivados) return !!p.archivado;  // modo archivados: solo archivados
-    if (p.archivado) return false;             // modo normal: excluir archivados
+    if (verArchivados) return p.archivado === true;
+    if (p.archivado === true) return false;
     const pasaEstado  = filtroEstado === "todos"   || p.estado === filtroEstado;
     const pasaTipo    = filtroTipo === "todos"     || p.tipo_servicio === filtroTipo;
     const pasaSistema = filtroSistema === "todos"  || p.sistema_constructivo === filtroSistema;
@@ -501,7 +501,7 @@ export default function App({ deepLinkId }) {
     return pasaEstado && pasaTipo && pasaSistema && pasaMes;
   });
 
-  const totalArchivados = presupuestos.filter(p => p.archivado).length;
+  const totalArchivados = presupuestos.filter(p => p.archivado === true).length;
 
   // Orden: por código descendente (el "último enviado" tiene el número más alto)
   const ordenados = [...filtrados].sort((a, b) => codigoNumero(b.codigo) - codigoNumero(a.codigo));
