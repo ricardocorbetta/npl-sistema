@@ -474,8 +474,8 @@ export default function App({ deepLinkId }) {
   async function archivar(id) {
     const tk = await getToken();
     await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ archivado: true }) });
-    setPresupuestos(prev => prev.filter(p => p.id !== id));
     setMsg("✓ Presupuesto archivado"); setTimeout(() => setMsg(""), 3000);
+    cargar();
   }
 
   async function desarchivar(id) {
@@ -574,6 +574,9 @@ export default function App({ deepLinkId }) {
         {(filtroEstado !== "todos" || filtroTipo !== "todos" || filtroSistema !== "todos" || filtroMes !== "todos") && (
           <button onClick={() => { setFiltroEstado("todos"); setFiltroTipo("todos"); setFiltroSistema("todos"); setFiltroMes("todos"); }} style={{ ...shared.btnSm, padding: "8px 12px" }}>✕ Limpiar</button>
         )}
+        <button onClick={() => setVerArchivados(v => !v)} style={{ ...shared.btnSm, padding: "8px 12px", background: verArchivados ? "#111" : "#f0f0f0", color: verArchivados ? "#fff" : "#333" }}>
+          📦 {verArchivados ? "Ver activos" : `Archivados${totalArchivados > 0 ? ` (${totalArchivados})` : ""}`}
+        </button>
         <span style={{ fontSize: 13, color: "#aaa", alignSelf: "center" }}>{ordenados.length} resultados</span>
       </div>
 
