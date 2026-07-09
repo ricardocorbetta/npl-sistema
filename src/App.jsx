@@ -174,157 +174,172 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
   return (
     <>
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-        <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-            <h3 style={{ margin: 0 }}>{esNuevo ? "Nuevo presupuesto" : "Editar presupuesto"}</h3>
-            <button onClick={onClose} style={{ ...shared.btnSm, padding: "5px 10px" }}>✕</button>
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 860, maxHeight: "92vh", overflowY: "auto" }}>
+
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0a0a0a" }}>{esNuevo ? "Nuevo presupuesto" : "Editar presupuesto"}</h3>
+              {form.codigo && <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "#888", fontWeight: 700 }}>[ {form.version ? `${form.codigo}-${form.version}` : form.codigo} ]</span>}
+            </div>
+            <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 12px" }}>✕</button>
           </div>
 
-          {/* Tipo de servicio */}
-          <div style={{ marginBottom: 16 }}>
-            <span style={shared.lbl}>Tipo de servicio *</span>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {TIPOS_SERVICIO.map(t => (
-                <button key={t.v} onClick={() => setForm(p => ({ ...p, tipo_servicio: t.v }))} style={{
-                  padding: "10px 12px", textAlign: "left", borderRadius: 10, cursor: "pointer", fontSize: 13,
-                  border: form.tipo_servicio === t.v ? "2px solid #111" : "1px solid #e0e0e0",
-                  background: form.tipo_servicio === t.v ? "#111" : "#fff",
-                  color: form.tipo_servicio === t.v ? "#fff" : "#333",
-                  fontWeight: form.tipo_servicio === t.v ? 600 : 400,
-                }}>
-                  <div>{t.label}</div>
-                  {t.desc && <div style={{ fontSize: 11, opacity: .7, marginTop: 2 }}>{t.desc}</div>}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Layout 2 columnas */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
 
-          {/* Sistema constructivo — visible y destacado */}
-          <div style={{ marginBottom: 16 }}>
-            <span style={shared.lbl}>🏗️ Sistema constructivo</span>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {SISTEMAS_CONSTRUCTIVOS.map(s => (
-                <button key={s.v} onClick={() => setForm(p => ({ ...p, sistema_constructivo: s.v }))} style={{
-                  padding: "8px 14px", borderRadius: 10, cursor: "pointer", fontSize: 13,
-                  border: form.sistema_constructivo === s.v ? "2px solid #6366f1" : "1px solid #e0e0e0",
-                  background: form.sistema_constructivo === s.v ? "#6366f118" : "#fff",
-                  color: form.sistema_constructivo === s.v ? "#6366f1" : "#555",
-                  fontWeight: form.sistema_constructivo === s.v ? 700 : 400,
-                }}>
-                  {s.icon} {s.v}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Cliente */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span style={shared.lbl}>Cliente *</span>
-              <button onClick={() => setShowNuevoCli(true)} style={{ ...shared.btnSm, fontSize: 11, padding: "3px 8px" }}>+ Nuevo cliente</button>
-            </div>
-            <Combobox
-              options={clientes.map(c => ({ value: c.id, label: c.empresa }))}
-              value={form.cliente_id}
-              onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
-              placeholder="Buscar cliente..."
-              emptyLabel="Sin cliente asignado"
-            />
-          </div>
-
-          {/* Código, versión y descripción */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "flex-end" }}>
-            <div style={{ flex: "0 0 100px" }}>
-              <span style={shared.lbl}>Código</span>
-              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1159" />
-            </div>
-            <div style={{ flex: "0 0 90px" }}>
-              <span style={shared.lbl}>Versión</span>
-              <select value={form.version} onChange={e => setForm(p => ({ ...p, version: e.target.value }))} style={shared.inp}>
-                <option value="">Sin versión</option>
-                {["A","B","C","D","E","F"].map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                <span style={shared.lbl}>Descripción *</span>
-                {form.codigo && <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "#888", fontWeight: 700 }}>
-                  [ {form.version ? `${form.codigo}-${form.version}` : form.codigo} ]
-                </span>}
+            {/* ─── Columna izquierda ─── */}
+            <div>
+              {/* Tipo de servicio */}
+              <div style={{ marginBottom: 16 }}>
+                <span style={shared.lbl}>Tipo de servicio *</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  {TIPOS_SERVICIO.map(t => (
+                    <button key={t.v} onClick={() => setForm(p => ({ ...p, tipo_servicio: t.v }))} style={{
+                      padding: "9px 10px", textAlign: "left", borderRadius: 8, cursor: "pointer", fontSize: 12,
+                      border: form.tipo_servicio === t.v ? "2px solid #0a0a0a" : "1.5px solid #e0e0e0",
+                      background: form.tipo_servicio === t.v ? "#0a0a0a" : "#fff",
+                      color: form.tipo_servicio === t.v ? "#fff" : "#333",
+                      fontWeight: form.tipo_servicio === t.v ? 600 : 400,
+                    }}>
+                      <div>{t.label}</div>
+                      {t.desc && <div style={{ fontSize: 10, opacity: .65, marginTop: 2 }}>{t.desc}</div>}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Breve descripción del trabajo" />
-            </div>
-          </div>
 
-          {/* Monto, moneda, superficie */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}>
-              <span style={shared.lbl}>Monto</span>
-              <input type="number" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} style={shared.inp} placeholder="0" />
-            </div>
-            <div style={{ flex: "0 0 100px" }}>
-              <span style={shared.lbl}>Moneda</span>
-              <select value={form.moneda} onChange={e => setForm(p => ({ ...p, moneda: e.target.value }))} style={shared.inp}>
-                <option value="ARS">ARS $</option>
-                <option value="USD">USD u$s</option>
-              </select>
-            </div>
-            <div style={{ flex: "0 0 100px" }}>
-              <span style={shared.lbl}>Superficie m²</span>
-              <input type="number" value={form.superficie} onChange={e => setForm(p => ({ ...p, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
-            </div>
-          </div>
+              {/* Sistema constructivo */}
+              <div style={{ marginBottom: 16 }}>
+                <span style={shared.lbl}>Sistema constructivo</span>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {SISTEMAS_CONSTRUCTIVOS.map(s => (
+                    <button key={s.v} onClick={() => setForm(p => ({ ...p, sistema_constructivo: s.v }))} style={{
+                      padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12,
+                      border: form.sistema_constructivo === s.v ? "2px solid #0a0a0a" : "1.5px solid #e0e0e0",
+                      background: form.sistema_constructivo === s.v ? "#0a0a0a" : "#fff",
+                      color: form.sistema_constructivo === s.v ? "#fff" : "#555",
+                      fontWeight: form.sistema_constructivo === s.v ? 700 : 400,
+                    }}>
+                      {s.icon} {s.v}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Precio por m2 — visible debajo del monto */}
-          {precioM2 !== null && (
-            <div style={{ marginBottom: 12, background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#16a34a", fontWeight: 600 }}>
-              💲 Precio por m²: {form.moneda === "USD" ? "u$s" : "$"} {precioM2.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
-            </div>
-          )}
+              {/* Cliente */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                  <span style={shared.lbl}>Cliente</span>
+                  <button onClick={() => setShowNuevoCli(true)} style={{ ...shared.btnSm, fontSize: 11, padding: "2px 8px" }}>+ Nuevo</button>
+                </div>
+                <Combobox
+                  options={clientes.map(c => ({ value: c.id, label: c.empresa }))}
+                  value={form.cliente_id}
+                  onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
+                  placeholder="Buscar cliente..."
+                  emptyLabel="Sin cliente asignado"
+                />
+              </div>
 
-          {/* Estado y probabilidad */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <span style={shared.lbl}>Estado</span>
-              <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} style={shared.inp}>
-                {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: "0 0 120px" }}>
-              <span style={shared.lbl}>Probabilidad %</span>
-              <input type="number" min="0" max="100" value={form.probabilidad} onChange={e => setForm(p => ({ ...p, probabilidad: e.target.value }))} style={shared.inp} placeholder="0" />
-            </div>
-          </div>
+              {/* Descripción */}
+              <div style={{ marginBottom: 14 }}>
+                <span style={shared.lbl}>Descripción *</span>
+                <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Breve descripción del trabajo" />
+              </div>
 
-          {/* Fechas */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <span style={shared.lbl}>Fecha emisión</span>
-              <input type="date" value={form.fecha_emision} onChange={e => setForm(p => ({ ...p, fecha_emision: e.target.value }))} style={shared.inp} />
+              {/* Observaciones */}
+              <div style={{ marginBottom: 14 }}>
+                <span style={shared.lbl}>Observaciones</span>
+                <textarea value={form.obs} onChange={e => setForm(p => ({ ...p, obs: e.target.value }))} rows={4} style={{ ...shared.inp, resize: "vertical" }} placeholder="Notas internas…" />
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <span style={shared.lbl}>Vencimiento</span>
-              <input type="date" value={form.fecha_vencimiento} onChange={e => setForm(p => ({ ...p, fecha_vencimiento: e.target.value }))} style={shared.inp} />
-            </div>
-          </div>
 
-          {/* Observaciones */}
-          <div style={{ marginBottom: 16 }}>
-            <span style={shared.lbl}>Observaciones</span>
-            <textarea value={form.obs} onChange={e => setForm(p => ({ ...p, obs: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} placeholder="Notas internas…" />
-          </div>
+            {/* ─── Columna derecha ─── */}
+            <div>
+              {/* Código y versión */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                <div>
+                  <span style={shared.lbl}>Código</span>
+                  <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1159" />
+                </div>
+                <div>
+                  <span style={shared.lbl}>Versión</span>
+                  <select value={form.version} onChange={e => setForm(p => ({ ...p, version: e.target.value }))} style={shared.inp}>
+                    <option value="">Sin versión</option>
+                    {["A","B","C","D","E","F"].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+              </div>
 
-          {error && (
-            <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
-              ❌ {error}
+              {/* Monto, moneda, superficie */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px", gap: 10, marginBottom: 8 }}>
+                <div>
+                  <span style={shared.lbl}>Monto</span>
+                  <input type="number" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} style={shared.inp} placeholder="0" />
+                </div>
+                <div>
+                  <span style={shared.lbl}>Moneda</span>
+                  <select value={form.moneda} onChange={e => setForm(p => ({ ...p, moneda: e.target.value }))} style={shared.inp}>
+                    <option value="ARS">$ ARS</option>
+                    <option value="USD">u$s</option>
+                  </select>
+                </div>
+                <div>
+                  <span style={shared.lbl}>Sup. m²</span>
+                  <input type="number" value={form.superficie} onChange={e => setForm(p => ({ ...p, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
+                </div>
+              </div>
+
+              {/* Precio por m² */}
+              {precioM2 !== null && (
+                <div style={{ marginBottom: 14, background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#1a8a5e", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>
+                  {form.moneda === "USD" ? "u$s" : "$"} {precioM2.toLocaleString("es-AR", { maximumFractionDigits: 0 })} / m²
+                </div>
+              )}
+
+              {/* Estado y probabilidad */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 10, marginBottom: 14 }}>
+                <div>
+                  <span style={shared.lbl}>Estado</span>
+                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} style={shared.inp}>
+                    {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <span style={shared.lbl}>Prob. %</span>
+                  <input type="number" min="0" max="100" value={form.probabilidad} onChange={e => setForm(p => ({ ...p, probabilidad: e.target.value }))} style={shared.inp} placeholder="0" />
+                </div>
+              </div>
+
+              {/* Fechas */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                <div>
+                  <span style={shared.lbl}>Fecha emisión</span>
+                  <input type="date" value={form.fecha_emision} onChange={e => setForm(p => ({ ...p, fecha_emision: e.target.value }))} style={shared.inp} />
+                </div>
+                <div>
+                  <span style={shared.lbl}>Vencimiento</span>
+                  <input type="date" value={form.fecha_vencimiento} onChange={e => setForm(p => ({ ...p, fecha_vencimiento: e.target.value }))} style={shared.inp} />
+                </div>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
+                  ❌ {error}
+                </div>
+              )}
+
+              {/* Acciones */}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving} style={{ ...shared.btn, flex: 1 }}>
+                  {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
+                </button>
+                <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
+              </div>
             </div>
-          )}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving} style={{ ...shared.btn, flex: 1 }}>
-              {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
-            </button>
-            <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
           </div>
         </div>
       </div>
@@ -405,6 +420,7 @@ export default function App({ deepLinkId }) {
   const [filtroSistema, setFiltroSistema] = useState("todos");
   const [filtroMes, setFiltroMes] = useState("todos");
   const [verArchivados, setVerArchivados] = useState(false);
+  const [msg, setMsg] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Deep link: abrir presupuesto específico al llegar desde el buscador global
@@ -545,8 +561,11 @@ export default function App({ deepLinkId }) {
         <button onClick={() => { setEditando(null); setShowModal(true); }} style={shared.btn}>+ Nuevo presupuesto</button>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+      {msg && (
+        <div style={{ background: msg.startsWith("❌") ? "#fef2f2" : "#f0fdf4", color: msg.startsWith("❌") ? "#c0392b" : "#1a8a5e", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
+          {msg}
+        </div>
+      )}
         {[
           { label: "Total aprobado",      value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
           { label: "📨 Enviados (seguimiento)", value: enviados, color: "#3b82f6" },
