@@ -3,6 +3,7 @@ import Combobox from "./Combobox.jsx";
 import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
+const EDGE_URL = "https://imkmosifqxzbtqgzssst.supabase.co/functions/v1";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
 
 async function getToken() {
@@ -34,7 +35,6 @@ const SISTEMAS_CONSTRUCTIVOS = [
   { v: "Hormigón",    icon: "🧱" },
   { v: "Steel Frame", icon: "🔩" },
   { v: "Wood Frame",  icon: "🪵" },
-  { v: "Madera",      icon: "🌲" },
   { v: "Panel SIP",   icon: "🧊" },
   { v: "Metálica",    icon: "⚙️" },
 ];
@@ -120,7 +120,17 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     fecha_emision:        pres?.fecha_emision || new Date().toISOString().slice(0,10),
     fecha_vencimiento:    pres?.fecha_vencimiento || "",
     obs:                  pres?.obs || "",
+    // Campos para generación de PDF
+    obra_nombre:          pres?.obra_nombre || "",
+    comitente:            pres?.comitente || pres?.cliente || "",
+    descripcion_larga:    pres?.descripcion_larga || "Las tareas encomendadas incluyen el diseño y cálculo estructural para todos los sectores indicados en los planos, que contemplan una superficie aproximada de [X] metros cuadrados entre superficie cubierta y semi cubierta.",
+    items_alcance:        pres?.items_alcance || ["Anteproyecto final en 3D.","Planos de replanteo de fundaciones.","Planos de estructura y detalles necesarios.","Planos de doblado de armadura (planos con despiece de vigas).","Detalle de elementos atípicos y detalle de uniones.","Cómputo y presupuesto de materiales de la estructura.","Servicio postventa: Checklist para control durante etapa de ejecución en obra y respaldo vía whatsapp."],
+    modalidad_trabajo:    pres?.modalidad_trabajo || "-Será necesario contar con planos de planta, vistas y cortes, de ser posible volumetría, antes de iniciar los trabajos.\n-Se deberá contar con estudio de suelos.\n-Aprobación de anteproyecto previo a la entrega del legajo final (se envía 3d + cad).\n✓ Incluye volumetría completa del proyecto de referencia en etapas.\n✓ Asesoramiento técnico durante toda la etapa de ejecución de las tareas",
+    notas_pdf:            pres?.notas_pdf || "-Forma de pago: 50% Anticipo 50% Contra entrega final.\n-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal.\n-Medios de pago: Efectivo, transferencia bancaria. Se realiza factura tipo C.",
   });
+  const [tabModal, setTabModal] = useState("datos"); // "datos" | "documento"
+  const [generandoPDF, setGenerandoPDF] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(pres?.pdf_url || "");
   const [clientes, setClientes] = useState([]);
   const [showNuevoCli, setShowNuevoCli] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -168,6 +178,30 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   }
 
   const tipoInfo = TIPOS_SERVICIO.find(t => t.v === form.tipo_servicio);
+
+  async function generarPDF() {
+    if (!pres?.id && !editando?.id) {
+      setError("Guardá el presupuesto primero antes de generar el PDF.");
+      return;
+    }
+    setGenerandoPDF(true);
+    setError("");
+    try {
+      const tk = await getToken();
+      const res = await fetch(`${EDGE_URL}/generar-presupuesto-pdf`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ presupuesto_id: pres?.id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setPdfUrl(data.pdf_url);
+      window.open(data.pdf_url, "_blank");
+    } catch(e) {
+      setError("Error generando PDF: " + e.message);
+    }
+    setGenerandoPDF(false);
+  }
   const precioM2 = form.monto && form.superficie && parseFloat(form.superficie) > 0
     ? (parseFloat(form.monto) / parseFloat(form.superficie))
     : null;
@@ -178,15 +212,24 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
         <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 860, maxHeight: "92vh", overflowY: "auto" }}>
 
           {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0a0a0a" }}>{esNuevo ? "Nuevo presupuesto" : "Editar presupuesto"}</h3>
               {form.codigo && <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "#888", fontWeight: 700 }}>[ {form.version ? `${form.codigo}-${form.version}` : form.codigo} ]</span>}
             </div>
-            <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 12px" }}>✕</button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {/* Tabs */}
+              <div style={{ display: "flex", background: "#f0f0f0", borderRadius: 8, padding: 3, gap: 3 }}>
+                {[["datos","📋 Datos"],["documento","📄 Documento"]].map(([id, label]) => (
+                  <button key={id} onClick={() => setTabModal(id)} style={{ padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: tabModal === id ? 700 : 400, background: tabModal === id ? "#111" : "transparent", color: tabModal === id ? "#fff" : "#666", cursor: "pointer" }}>{label}</button>
+                ))}
+              </div>
+              <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 12px" }}>✕</button>
+            </div>
           </div>
 
-          {/* Layout 2 columnas */}
+          {/* Tab DATOS */}
+          {tabModal === "datos" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
 
             {/* ─── Columna izquierda ─── */}
@@ -341,6 +384,66 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               </div>
             </div>
           </div>
+          )} {/* fin tab datos */}
+
+          {/* Tab DOCUMENTO */}
+          {tabModal === "documento" && (
+            <div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 14 }}>
+                <div>
+                  <span style={shared.lbl}>Nombre de la obra</span>
+                  <input value={form.obra_nombre} onChange={e => setForm(p => ({ ...p, obra_nombre: e.target.value }))} style={shared.inp} placeholder="Vivienda Vrick Ensenada" />
+                </div>
+                <div>
+                  <span style={shared.lbl}>Comitente</span>
+                  <input value={form.comitente} onChange={e => setForm(p => ({ ...p, comitente: e.target.value }))} style={shared.inp} placeholder="Estudio Hatrick" />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <span style={shared.lbl}>Descripción general</span>
+                <textarea value={form.descripcion_larga} onChange={e => setForm(p => ({ ...p, descripcion_larga: e.target.value }))} rows={3} style={{ ...shared.inp, resize: "vertical" }} />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={shared.lbl}>Items del alcance</span>
+                  <button onClick={() => setForm(p => ({ ...p, items_alcance: [...(p.items_alcance || []), ""] }))} style={{ ...shared.btnSm, fontSize: 11, padding: "3px 8px" }}>+ Agregar item</button>
+                </div>
+                {(form.items_alcance || []).map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                    <input value={item} onChange={e => { const arr = [...form.items_alcance]; arr[i] = e.target.value; setForm(p => ({ ...p, items_alcance: arr })); }} style={{ ...shared.inp, flex: 1 }} placeholder={`Item ${i+1}`} />
+                    <button onClick={() => setForm(p => ({ ...p, items_alcance: p.items_alcance.filter((_, j) => j !== i) }))} style={{ ...shared.btnSm, padding: "6px 10px", color: "#c0392b" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <span style={shared.lbl}>Modalidad de trabajo</span>
+                  <textarea value={form.modalidad_trabajo} onChange={e => setForm(p => ({ ...p, modalidad_trabajo: e.target.value }))} rows={6} style={{ ...shared.inp, resize: "vertical", fontSize: 12 }} />
+                </div>
+                <div>
+                  <span style={shared.lbl}>Notas</span>
+                  <textarea value={form.notas_pdf} onChange={e => setForm(p => ({ ...p, notas_pdf: e.target.value }))} rows={6} style={{ ...shared.inp, resize: "vertical", fontSize: 12 }} />
+                </div>
+              </div>
+
+              {error && <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600 }}>❌ {error}</div>}
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button onClick={async () => { await guardar(); }} disabled={saving} style={{ ...shared.btnSm, fontSize: 13 }}>
+                  {saving ? "Guardando…" : "💾 Guardar"}
+                </button>
+                <button onClick={generarPDF} disabled={generandoPDF || esNuevo} style={{ ...shared.btn, fontSize: 13 }}>
+                  {generandoPDF ? "Generando PDF…" : "📄 Generar PDF en Drive"}
+                </button>
+                {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#1a73e8", textDecoration: "none" }}>📂 Ver PDF →</a>}
+                {esNuevo && <span style={{ fontSize: 11, color: "#aaa" }}>Guardá primero para poder generar el PDF</span>}
+              </div>
+            </div>
+          )} {/* fin tab documento */}
+
         </div>
       </div>
 
