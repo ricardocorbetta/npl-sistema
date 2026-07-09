@@ -61,6 +61,7 @@ function codigoNumero(codigo) {
 /* ─── Modal nuevo cliente inline ─── */
 function ModalNuevoCliente({ onCreado, onClose }) {
   const [form, setForm] = useState({ empresa: "", contacto: "", mail: "", wsp: "", ciudad: "", tipo: "empresa" });
+  const TIPOS_CLIENTE = ["empresa", "arquitecto", "comitente", "desarrolladora", "particular", "otro"];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -92,6 +93,12 @@ function ModalNuevoCliente({ onCreado, onClose }) {
             <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} style={shared.inp} placeholder={f.ph} />
           </div>
         ))}
+        <div style={{ marginBottom: 10 }}>
+          <span style={shared.lbl}>Tipo</span>
+          <select value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))} style={shared.inp}>
+            {TIPOS_CLIENTE.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+          </select>
+        </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={crear} disabled={!form.empresa || saving} style={{ ...shared.btn, flex: 1 }}>
             {saving ? "Creando…" : "Crear cliente"}
@@ -122,6 +129,8 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     fecha_emision:        pres?.fecha_emision || new Date().toISOString().slice(0,10),
     fecha_vencimiento:    pres?.fecha_vencimiento || "",
     obs:                  pres?.obs || "",
+    comitente_id:         pres?.comitente_id || "",
+    comitente_nombre:     pres?.comitente_nombre || "",
     // Campos para generación de PDF
     obra_nombre:          pres?.obra_nombre || "",
     descripcion_larga:    pres?.descripcion_larga || "Las tareas encomendadas incluyen el diseño y cálculo estructural para todos los sectores indicados en los planos, que contemplan una superficie aproximada de [X] metros cuadrados entre superficie cubierta y semi cubierta.",
@@ -335,16 +344,36 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               {/* Cliente */}
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <span style={shared.lbl}>Cliente</span>
+                  <span style={shared.lbl}>Cliente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>· quien contrata</span></span>
                   <button onClick={() => setShowNuevoCli(true)} style={{ ...shared.btnSm, fontSize: 11, padding: "2px 8px" }}>+ Nuevo</button>
                 </div>
                 <Combobox
-                  options={clientes.map(c => ({ value: c.id, label: c.empresa }))}
+                  options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` (${c.tipo})` : ""}` }))}
                   value={form.cliente_id}
                   onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
                   placeholder="Buscar cliente..."
                   emptyLabel="Sin cliente asignado"
                 />
+              </div>
+
+              {/* Comitente */}
+              <div style={{ marginBottom: 14 }}>
+                <span style={shared.lbl}>Comitente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>· propietario / comitente final (opcional)</span></span>
+                <Combobox
+                  options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` (${c.tipo})` : ""}` }))}
+                  value={form.comitente_id}
+                  onChange={(val, label) => setForm(p => ({ ...p, comitente_id: val, comitente_nombre: label }))}
+                  placeholder="Buscar comitente..."
+                  emptyLabel="Sin comitente (opcional)"
+                />
+                {!form.comitente_id && (
+                  <input
+                    value={form.comitente_nombre}
+                    onChange={e => setForm(p => ({ ...p, comitente_nombre: e.target.value }))}
+                    style={{ ...shared.inp, marginTop: 6, fontSize: 12 }}
+                    placeholder="O escribí el nombre del comitente si no está en la lista..."
+                  />
+                )}
               </div>
 
               <div style={{ marginBottom: 14 }}>
@@ -469,7 +498,9 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
                 <div>
                   <span style={shared.lbl}>Comitente</span>
-                  <div style={{ ...shared.inp, background: "#f8f8f8", color: "#555", display: "flex", alignItems: "center" }}>{form.cliente || "— sin cliente —"}</div>
+                  <div style={{ ...shared.inp, background: "#f8f8f8", color: "#555", display: "flex", alignItems: "center", fontSize: 13 }}>
+                    {form.comitente_nombre || form.cliente || "— sin comitente —"}
+                  </div>
                 </div>
               </div>
 
