@@ -24,11 +24,12 @@ const TIPOS_SERVICIO = [
 ];
 
 const ESTADOS = [
-  { v: "borrador",     label: "Borrador",     color: "#888" },
-  { v: "enviado",      label: "Enviado",      color: "#3b82f6" },
-  { v: "negociacion",  label: "Negociación",  color: "#f59e0b" },
-  { v: "aprobado",     label: "Aprobado",     color: "#22c55e" },
-  { v: "rechazado",    label: "Rechazado",    color: "#ef4444" },
+  { v: "borrador",    label: "Borrador",    color: "#888",    prob: 0   },
+  { v: "enviado",     label: "Enviado",     color: "#3b82f6", prob: 25  },
+  { v: "negociacion", label: "Negociación", color: "#f59e0b", prob: 60  },
+  { v: "aprobado",    label: "Aprobado",    color: "#22c55e", prob: 100 },
+  { v: "entregado",   label: "Entregado",   color: "#6366f1", prob: 100 },
+  { v: "rechazado",   label: "Rechazado",   color: "#ef4444", prob: 0   },
 ];
 
 const SISTEMAS_CONSTRUCTIVOS = [
@@ -192,17 +193,27 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   const tipoInfo = TIPOS_SERVICIO.find(t => t.v === form.tipo_servicio);
 
   function enviarWhatsApp() {
-    if (!pdfUrl || !clienteWsp) return;
+    if (!clienteWsp) return;
+    // Cambiar estado a enviado si estaba en borrador
+    if (form.estado === "borrador") {
+      setForm(p => ({ ...p, estado: "enviado", probabilidad: 25 }));
+      onGuardar({ ...form, estado: "enviado", probabilidad: 25 }).catch(() => {});
+    }
     const numero = clienteWsp.replace(/\D/g, "");
     const codigo = form.version ? `${form.codigo}-${form.version}` : form.codigo;
     const texto = encodeURIComponent(
-      `Hola! Te enviamos el presupuesto NPL *${codigo}* - ${form.descripcion || form.obra_nombre || ""}\n\nPodés verlo acá: ${pdfUrl}\n\nQuedamos a disposición para cualquier consulta.`
+      `Hola! Te enviamos el presupuesto NPL *${codigo}* - ${form.descripcion || form.obra_nombre || ""}\n\n${pdfUrl ? `Podés verlo acá: ${pdfUrl}\n\n` : ""}Quedamos a disposición para cualquier consulta.`
     );
     window.open(`https://wa.me/${numero}?text=${texto}`, "_blank");
   }
 
   function enviarEmail() {
     if (!clienteMail) return;
+    // Cambiar estado a enviado si estaba en borrador
+    if (form.estado === "borrador") {
+      setForm(p => ({ ...p, estado: "enviado", probabilidad: 25 }));
+      onGuardar({ ...form, estado: "enviado", probabilidad: 25 }).catch(() => {});
+    }
     const codigo = form.version ? `${form.codigo}-${form.version}` : form.codigo;
     const asunto = encodeURIComponent(`Presupuesto NPL ${codigo} - ${form.descripcion || form.obra_nombre || ""}`);
     const cuerpo = encodeURIComponent(
@@ -378,7 +389,10 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 10, marginBottom: 14 }}>
                 <div>
                   <span style={shared.lbl}>Estado</span>
-                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} style={shared.inp}>
+                  <select value={form.estado} onChange={e => {
+                    const est = ESTADOS.find(es => es.v === e.target.value);
+                    setForm(p => ({ ...p, estado: e.target.value, probabilidad: est?.prob ?? p.probabilidad }));
+                  }} style={shared.inp}>
                     {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
                   </select>
                 </div>
@@ -478,8 +492,8 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </button>
 
                 {/* 3. WhatsApp */}
-                <button onClick={enviarWhatsApp} disabled={!pdfUrl || !clienteWsp}
-                  style={{ padding: "12px", fontSize: 13, border: "1.5px solid #25d366", borderRadius: 10, background: pdfUrl && clienteWsp ? "#25d366" : "#f0f0f0", color: pdfUrl && clienteWsp ? "#fff" : "#aaa", cursor: pdfUrl && clienteWsp ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <button onClick={enviarWhatsApp} disabled={!clienteWsp}
+                  style={{ padding: "12px", fontSize: 13, border: "1.5px solid #25d366", borderRadius: 10, background: clienteWsp ? "#25d366" : "#f0f0f0", color: clienteWsp ? "#fff" : "#aaa", cursor: clienteWsp ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <span>💬</span><span>3. Enviar por WhatsApp</span>
                 </button>
 
@@ -666,8 +680,10 @@ export default function App({ deepLinkId }) {
 
   async function cambiarEstado(id, estado) {
     const tk = await getToken();
-    await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify({ estado }) });
-    setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, estado } : p));
+    const est = ESTADOS.find(e => e.v === estado);
+    const patch = { estado, probabilidad: est?.prob ?? 0 };
+    await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(patch) });
+    setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
   }
 
   async function archivar(id) {
