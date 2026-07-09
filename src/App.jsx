@@ -532,8 +532,12 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 /* ─── Card presupuesto ─── */
 function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar }) {
   const estado = ESTADOS.find(e => e.v === p.estado);
+  const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
+  const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
+  const precioM2 = p.monto && p.superficie && parseFloat(p.superficie) > 0
+    ? Math.round(parseFloat(p.monto) / parseFloat(p.superficie))
+    : null;
 
-  // Alerta de recontacto: días desde la última actualización
   const diasDesdeActualizacion = p.updated_at
     ? Math.floor((new Date() - new Date(p.updated_at)) / 86400000)
     : null;
@@ -543,77 +547,61 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
   function mensajeRecontacto() {
     const codigo = p.codigo || "";
     const texto = encodeURIComponent(
-      `Hola${p.cliente ? ` ${p.cliente}` : ""}! Te escribimos desde NPL Ingeniería para hacer un seguimiento del presupuesto *${codigo}* - ${p.descripcion || ""}.
-
-¿Pudiste revisar la propuesta? Quedamos a disposición para cualquier consulta o ajuste.
-
-¡Gracias!`
+      `Hola${p.cliente ? ` ${p.cliente}` : ""}! Te escribimos desde NPL Ingeniería para hacer un seguimiento del presupuesto *${codigo}* - ${p.descripcion || ""}.\n\n¿Pudiste revisar la propuesta? Quedamos a disposición para cualquier consulta.\n\n¡Gracias!`
     );
-    // Buscar el wsp del cliente — si no lo tenemos, abrir WhatsApp sin número
     return `https://wa.me/?text=${texto}`;
   }
-  const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
-  const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
-  const precioM2 = p.monto && p.superficie && parseFloat(p.superficie) > 0
-    ? (parseFloat(p.monto) / parseFloat(p.superficie))
-    : null;
 
   return (
-    <div style={{ ...shared.card, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-          {p.codigo && <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa" }}>{p.codigo}</span>}
-          {tipo && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 8, padding: "2px 8px", color: "#555" }}>{tipo.label}</span>}
-          {sistema && <span style={{ fontSize: 11, background: "#eef2ff", borderRadius: 8, padding: "2px 8px", color: "#6366f1", fontWeight: 600 }}>{sistema.icon} {sistema.v}</span>}
-          {necesitaRecontacto && (
-            <span style={{ fontSize: 10, background: "#fef3c7", color: "#c4781a", borderRadius: 6, padding: "2px 8px", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-              ⏰ Recontactar ({diasDesdeActualizacion}d)
-            </span>
-          )}
-        </div>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 3 }}>{p.descripcion || "Sin descripción"}</div>
-        <div style={{ fontSize: 13, color: "#888" }}>{p.cliente}</div>
-        {p.tipo && !p.tipo_servicio && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{p.tipo}</div>}
-        {p.fecha_emision && <div style={{ fontSize: 11, color: "#bbb", marginTop: 4 }}>📅 {new Date(p.fecha_emision+"T12:00").toLocaleDateString("es-AR")}</div>}
-        {p.obs && <div style={{ fontSize: 12, color: "#aaa", marginTop: 4, fontStyle: "italic" }}>{p.obs}</div>}
+    <div style={{
+      background: "#fff", borderRadius: 10, padding: "10px 14px",
+      border: `1px solid ${necesitaRecontacto ? "#f59e0b" : "#e8e8e8"}`,
+      borderLeft: `4px solid ${estado?.color || "#e0e0e0"}`,
+      display: "grid",
+      gridTemplateColumns: "90px 1fr auto auto",
+      gap: 12, alignItems: "center",
+    }}>
+      {/* Código + fecha */}
+      <div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{p.codigo || "—"}</div>
+        {p.fecha_emision && <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>{new Date(p.fecha_emision+"T12:00").toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"2-digit" })}</div>}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-        {p.monto && (
-          <div style={{ fontWeight: 800, fontSize: 16, color: "#111" }}>
-            {p.moneda === "USD" ? "u$s" : "$"} {parseFloat(p.monto).toLocaleString("es-AR")}
-          </div>
-        )}
-        {/* Precio por m2 debajo del monto */}
-        {precioM2 !== null && (
-          <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 600, background: "#f0fdf4", borderRadius: 6, padding: "1px 7px" }}>
-            {p.moneda === "USD" ? "u$s" : "$"}{precioM2.toLocaleString("es-AR", { maximumFractionDigits: 0 })}/m²
-          </div>
-        )}
+      {/* Info principal */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || "Sin descripción"}</span>
+          {necesitaRecontacto && <span style={{ fontSize: 10, background: "#fef3c7", color: "#c4781a", borderRadius: 4, padding: "1px 6px", fontWeight: 700, flexShrink: 0 }}>⏰ {diasDesdeActualizacion}d</span>}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {p.cliente && <span style={{ fontSize: 11, color: "#888" }}>{p.cliente}</span>}
+          {tipo && <span style={{ fontSize: 10, background: "#f0f0f0", borderRadius: 4, padding: "1px 6px", color: "#666" }}>{tipo.label}</span>}
+          {sistema && <span style={{ fontSize: 10, background: "#f0f4ff", borderRadius: 4, padding: "1px 6px", color: "#6366f1" }}>{sistema.icon} {sistema.v}</span>}
+        </div>
+      </div>
 
-        <select
-          value={p.estado || "borrador"}
-          onChange={e => onCambiarEstado(p.id, e.target.value)}
-          style={{
-            fontSize: 12, padding: "5px 8px", borderRadius: 8, cursor: "pointer",
-            border: `1px solid ${estado?.color || "#e0e0e0"}`,
-            color: estado?.color || "#888",
-            background: "#fff", fontWeight: 600,
-          }}
-        >
+      {/* Monto + precio m2 + estado */}
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        {p.monto && <div style={{ fontWeight: 800, fontSize: 14, color: "#111", fontFamily: "'JetBrains Mono', monospace" }}>
+          {p.moneda === "USD" ? "u$s" : "$"}{parseFloat(p.monto).toLocaleString("es-AR")}
+        </div>}
+        {precioM2 && <div style={{ fontSize: 10, color: "#1a8a5e", fontWeight: 600 }}>${precioM2.toLocaleString("es-AR")}/m²</div>}
+        <select value={p.estado || "borrador"} onChange={e => onCambiarEstado(p.id, e.target.value)}
+          style={{ fontSize: 11, padding: "3px 6px", borderRadius: 6, cursor: "pointer", border: `1px solid ${estado?.color || "#e0e0e0"}`, color: estado?.color || "#888", background: "#fff", fontWeight: 700, marginTop: 4 }}>
           {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
         </select>
+      </div>
 
-        <button onClick={() => onEditar(p)} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
+      {/* Acciones — siempre en una fila */}
+      <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}>
+        <button onClick={() => onEditar(p)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333", fontWeight: 600 }}>✏️</button>
         {necesitaRecontacto && (
           <a href={mensajeRecontacto()} target="_blank" rel="noreferrer"
-            style={{ ...shared.btnSm, fontSize: 12, background: "#25d366", color: "#fff", border: "none", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
-            💬 Recontactar
-          </a>
+            style={{ background: "#25d366", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 700, textDecoration: "none" }}>💬</a>
         )}
         {p.archivado === true
-          ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12 }}>↩ Restaurar</button>
-          : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12, color: "#888" }}>📦 Archivar</button>
+          ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333" }}>↩</button>
+          : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#999" }}>📦</button>
         }
       </div>
     </div>
@@ -799,64 +787,49 @@ export default function App({ deepLinkId }) {
         </div>
       )}
 
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
+      {/* KPIs compactos — una sola fila */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         {[
-          { label: "Total aprobado",      value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
-          { label: "Enviados",            value: enviados,        color: "#3b82f6" },
-          { label: "Negociación",         value: enNegociacion,   color: "#f59e0b" },
-          { label: "⏰ Recontactar",      value: paraRecontactar, color: paraRecontactar > 0 ? "#c4781a" : "#888" },
-          { label: "Monto en seguimiento",value: `$${montoEnviados.toLocaleString("es-AR")}`, color: "#6366f1" },
-          { label: "Total",               value: presupuestos.length, color: "#888" },
+          { label: "Aprobado",     value: `$${totalMonto.toLocaleString("es-AR")}`,          color: "#1a8a5e" },
+          { label: "Enviados",     value: enviados,                                            color: "#3b82f6" },
+          { label: "Negociación",  value: enNegociacion,                                       color: "#f59e0b" },
+          { label: "⏰ Recontactar", value: paraRecontactar,                                   color: paraRecontactar > 0 ? "#c4781a" : "#aaa" },
+          { label: "En seguimiento", value: `$${montoEnviados.toLocaleString("es-AR")}`,      color: "#6366f1" },
+          { label: "Total",        value: presupuestos.length,                                 color: "#888" },
         ].map(k => (
-          <div key={k.label} style={{ ...shared.card, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{k.label}</div>
+          <div key={k.label} style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: k.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>{k.value}</div>
+            <div style={{ fontSize: 10, color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
-        {/* Filtro estado — destacado para "enviado" */}
-        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{
-          ...shared.btnSm, padding: "8px 12px",
-          background: filtroEstado === "seguimiento" ? "#f59e0b18" : filtroEstado === "todos" ? "#f0f0f0" : "#f0f0f0",
-          color: filtroEstado === "seguimiento" ? "#c4781a" : "#333",
-          fontWeight: filtroEstado !== "todos" ? 700 : 400,
-          border: filtroEstado === "seguimiento" ? "1px solid #c4781a" : "1px solid transparent",
-        }}>
+      {/* Filtros compactos */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center", background: "#fff", borderRadius: 10, padding: "8px 12px", border: "1.5px solid #e8e8e8" }}>
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ fontSize: 12, padding: "5px 10px", border: filtroEstado === "seguimiento" ? "1.5px solid #c4781a" : "1.5px solid #e0e0e0", borderRadius: 7, background: filtroEstado === "seguimiento" ? "#fff7ed" : "#f8f8f8", color: filtroEstado === "seguimiento" ? "#c4781a" : "#333", fontWeight: 700, cursor: "pointer" }}>
           <option value="seguimiento">📨 En seguimiento</option>
-          <option value="todos">Todos los estados</option>
+          <option value="todos">Todos</option>
           {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
         </select>
-
-        {/* Filtro mes — desplegable */}
-        <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
+        <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} style={{ fontSize: 12, padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, background: "#f8f8f8", cursor: "pointer" }}>
           <option value="todos">📅 Todos los meses</option>
-          {mesesDisponibles.map(m => {
-            const [y, mo] = m.split("-");
-            return <option key={m} value={m}>{MESES[parseInt(mo)-1]} {y}</option>;
-          })}
+          {mesesDisponibles.map(m => { const [y, mo] = m.split("-"); return <option key={m} value={m}>{MESES[parseInt(mo)-1]} {y}</option>; })}
         </select>
-
-        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ fontSize: 12, padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, background: "#f8f8f8", cursor: "pointer" }}>
           <option value="todos">Todos los servicios</option>
           {TIPOS_SERVICIO.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
         </select>
-
-        <select value={filtroSistema} onChange={e => setFiltroSistema(e.target.value)} style={{ ...shared.btnSm, padding: "8px 12px" }}>
-          <option value="todos">🏗️ Todos los sistemas</option>
+        <select value={filtroSistema} onChange={e => setFiltroSistema(e.target.value)} style={{ fontSize: 12, padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, background: "#f8f8f8", cursor: "pointer" }}>
+          <option value="todos">🏗️ Sistemas</option>
           {SISTEMAS_CONSTRUCTIVOS.map(s => <option key={s.v} value={s.v}>{s.icon} {s.v}</option>)}
         </select>
-
-        {(filtroEstado !== "todos" || filtroTipo !== "todos" || filtroSistema !== "todos" || filtroMes !== "todos") && (
-          <button onClick={() => { setFiltroEstado("todos"); setFiltroTipo("todos"); setFiltroSistema("todos"); setFiltroMes("todos"); }} style={{ ...shared.btnSm, padding: "8px 12px" }}>✕ Limpiar</button>
+        {(filtroEstado !== "seguimiento" || filtroTipo !== "todos" || filtroSistema !== "todos" || filtroMes !== "todos") && (
+          <button onClick={() => { setFiltroEstado("seguimiento"); setFiltroTipo("todos"); setFiltroSistema("todos"); setFiltroMes("todos"); }} style={{ fontSize: 11, padding: "5px 10px", background: "none", border: "1px solid #e0e0e0", borderRadius: 7, cursor: "pointer", color: "#888" }}>✕</button>
         )}
-        <button onClick={() => setVerArchivados(v => !v)} style={{ ...shared.btnSm, padding: "8px 12px", background: verArchivados ? "#111" : "#f0f0f0", color: verArchivados ? "#fff" : "#333" }}>
-          📦 {verArchivados ? "Ver activos" : `Archivados${totalArchivados > 0 ? ` (${totalArchivados})` : ""}`}
+        <button onClick={() => setVerArchivados(v => !v)} style={{ fontSize: 11, padding: "5px 10px", background: verArchivados ? "#111" : "#f8f8f8", color: verArchivados ? "#fff" : "#666", border: "1.5px solid #e0e0e0", borderRadius: 7, cursor: "pointer" }}>
+          📦 {verArchivados ? "Activos" : `Archivados${totalArchivados > 0 ? ` (${totalArchivados})` : ""}`}
         </button>
-        <span style={{ fontSize: 13, color: "#aaa", alignSelf: "center" }}>{ordenados.length} resultados</span>
+        <span style={{ fontSize: 11, color: "#aaa", marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace" }}>{ordenados.length}</span>
       </div>
 
       {/* Lista */}
