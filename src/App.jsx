@@ -122,7 +122,6 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     obs:                  pres?.obs || "",
     // Campos para generación de PDF
     obra_nombre:          pres?.obra_nombre || "",
-    comitente:            pres?.comitente || pres?.cliente || "",
     descripcion_larga:    pres?.descripcion_larga || "Las tareas encomendadas incluyen el diseño y cálculo estructural para todos los sectores indicados en los planos, que contemplan una superficie aproximada de [X] metros cuadrados entre superficie cubierta y semi cubierta.",
     items_alcance:        pres?.items_alcance || ["Anteproyecto final en 3D.","Planos de replanteo de fundaciones.","Planos de estructura y detalles necesarios.","Planos de doblado de armadura (planos con despiece de vigas).","Detalle de elementos atípicos y detalle de uniones.","Cómputo y presupuesto de materiales de la estructura.","Servicio postventa: Checklist para control durante etapa de ejecución en obra y respaldo vía whatsapp."],
     modalidad_trabajo:    pres?.modalidad_trabajo || "-Será necesario contar con planos de planta, vistas y cortes, de ser posible volumetría, antes de iniciar los trabajos.\n-Se deberá contar con estudio de suelos.\n-Aprobación de anteproyecto previo a la entrega del legajo final (se envía 3d + cad).\n✓ Incluye volumetría completa del proyecto de referencia en etapas.\n✓ Asesoramiento técnico durante toda la etapa de ejecución de las tareas",
@@ -131,6 +130,9 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   const [tabModal, setTabModal] = useState("datos"); // "datos" | "documento"
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(pres?.pdf_url || "");
+  const [clienteWsp, setClienteWsp] = useState("");
+  const [clienteMail, setClienteMail] = useState("");
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [clientes, setClientes] = useState([]);
   const [showNuevoCli, setShowNuevoCli] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,6 +143,16 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       const tk = await getToken();
       const d = await fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json());
       setClientes(Array.isArray(d) ? d : []);
+
+      // Cargar wsp y mail del cliente vinculado
+      const clienteId = pres?.cliente_id || form.cliente_id;
+      if (clienteId) {
+        const cli = await fetch(`${SUPA_URL}/clientes?id=eq.${clienteId}&select=wsp,mail`, { headers: hdrs(tk) }).then(r => r.json());
+        if (Array.isArray(cli) && cli[0]) {
+          setClienteWsp(cli[0].wsp || "");
+          setClienteMail(cli[0].mail || "");
+        }
+      }
 
       // Auto-código solo si es presupuesto nuevo y no tiene código
       if (!pres?.id && !form.codigo) {
@@ -178,6 +190,26 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   }
 
   const tipoInfo = TIPOS_SERVICIO.find(t => t.v === form.tipo_servicio);
+
+  function enviarWhatsApp() {
+    if (!pdfUrl || !clienteWsp) return;
+    const numero = clienteWsp.replace(/\D/g, "");
+    const codigo = form.version ? `${form.codigo}-${form.version}` : form.codigo;
+    const texto = encodeURIComponent(
+      `Hola! Te enviamos el presupuesto NPL *${codigo}* - ${form.descripcion || form.obra_nombre || ""}\n\nPodés verlo acá: ${pdfUrl}\n\nQuedamos a disposición para cualquier consulta.`
+    );
+    window.open(`https://wa.me/${numero}?text=${texto}`, "_blank");
+  }
+
+  function enviarEmail() {
+    if (!clienteMail) return;
+    const codigo = form.version ? `${form.codigo}-${form.version}` : form.codigo;
+    const asunto = encodeURIComponent(`Presupuesto NPL ${codigo} - ${form.descripcion || form.obra_nombre || ""}`);
+    const cuerpo = encodeURIComponent(
+      `Hola${form.cliente ? ` ${form.cliente}` : ""},\n\nAdjuntamos el presupuesto ${codigo}${form.descripcion ? ` - ${form.descripcion}` : ""}.\n\n${pdfUrl ? `Podés verlo aquí: ${pdfUrl}\n\n` : ""}Quedamos a disposición para cualquier consulta.\n\nSaludos,\nNPL Ingeniería Civil\n(221) 455 0429`
+    );
+    window.open(`mailto:${clienteMail}?subject=${asunto}&body=${cuerpo}`, "_blank");
+  }
 
   async function generarPDF() {
     if (!pres?.id && !editando?.id) {
@@ -396,7 +428,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
                 <div>
                   <span style={shared.lbl}>Comitente</span>
-                  <input value={form.comitente} onChange={e => setForm(p => ({ ...p, comitente: e.target.value }))} style={shared.inp} placeholder="Estudio Hatrick" />
+                  <div style={{ ...shared.inp, background: "#f8f8f8", color: "#555", display: "flex", alignItems: "center" }}>{form.cliente || "— sin cliente —"}</div>
                 </div>
               </div>
 
@@ -431,16 +463,42 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
               {error && <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600 }}>❌ {error}</div>}
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button onClick={async () => { await guardar(); }} disabled={saving} style={{ ...shared.btnSm, fontSize: 13 }}>
-                  {saving ? "Guardando…" : "💾 Guardar"}
+              {/* 4 acciones en secuencia */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+                {/* 1. Guardar */}
+                <button onClick={async () => { await guardar(); }} disabled={saving}
+                  style={{ ...shared.btnSm, padding: "12px", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  {saving ? "Guardando…" : <><span>💾</span><span>1. Guardar</span></>}
                 </button>
-                <button onClick={generarPDF} disabled={generandoPDF || esNuevo} style={{ ...shared.btn, fontSize: 13 }}>
-                  {generandoPDF ? "Generando PDF…" : "📄 Generar PDF en Drive"}
+
+                {/* 2. Generar PDF */}
+                <button onClick={generarPDF} disabled={generandoPDF || esNuevo}
+                  style={{ ...shared.btn, padding: "12px", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: esNuevo ? 0.4 : 1 }}>
+                  {generandoPDF ? "Generando…" : <><span>📄</span><span>2. Generar PDF en Drive</span></>}
                 </button>
-                {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#1a73e8", textDecoration: "none" }}>📂 Ver PDF →</a>}
-                {esNuevo && <span style={{ fontSize: 11, color: "#aaa" }}>Guardá primero para poder generar el PDF</span>}
+
+                {/* 3. WhatsApp */}
+                <button onClick={enviarWhatsApp} disabled={!pdfUrl || !clienteWsp}
+                  style={{ padding: "12px", fontSize: 13, border: "1.5px solid #25d366", borderRadius: 10, background: pdfUrl && clienteWsp ? "#25d366" : "#f0f0f0", color: pdfUrl && clienteWsp ? "#fff" : "#aaa", cursor: pdfUrl && clienteWsp ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <span>💬</span><span>3. Enviar por WhatsApp</span>
+                </button>
+
+                {/* 4. Email */}
+                <button onClick={enviarEmail} disabled={!clienteMail}
+                  style={{ padding: "12px", fontSize: 13, border: "1.5px solid #3b82f6", borderRadius: 10, background: clienteMail ? "#3b82f6" : "#f0f0f0", color: clienteMail ? "#fff" : "#aaa", cursor: clienteMail ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <span>✉️</span><span>4. Enviar por Email</span>
+                </button>
               </div>
+
+              {/* Info de contacto del cliente */}
+              <div style={{ marginTop: 12, padding: "10px 14px", background: "#f8f8f8", borderRadius: 8, fontSize: 12, color: "#666", display: "flex", gap: 16 }}>
+                <span>👤 {form.cliente || "Sin cliente"}</span>
+                {clienteWsp ? <span style={{ color: "#25d366" }}>💬 {clienteWsp}</span> : <span style={{ color: "#ccc" }}>Sin WhatsApp</span>}
+                {clienteMail ? <span style={{ color: "#3b82f6" }}>✉️ {clienteMail}</span> : <span style={{ color: "#ccc" }}>Sin email</span>}
+              </div>
+
+              {pdfUrl && <div style={{ marginTop: 10, fontSize: 12 }}><a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: "#1a73e8", textDecoration: "none" }}>📂 Ver PDF en Drive →</a></div>}
+              {esNuevo && <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>Guardá primero para habilitar las acciones.</p>}
             </div>
           )} {/* fin tab documento */}
 
