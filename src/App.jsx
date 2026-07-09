@@ -566,6 +566,9 @@ export default function App({ deepLinkId }) {
           {msg}
         </div>
       )}
+
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { label: "Total aprobado",      value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
           { label: "📨 Enviados (seguimiento)", value: enviados, color: "#3b82f6" },
