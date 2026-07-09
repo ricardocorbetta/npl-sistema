@@ -334,10 +334,9 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 />
               </div>
 
-              {/* Descripción */}
               <div style={{ marginBottom: 14 }}>
-                <span style={shared.lbl}>Descripción *</span>
-                <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Breve descripción del trabajo" />
+                <span style={shared.lbl}>Descripción <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(opcional)</span></span>
+                <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Título corto del trabajo" />
               </div>
 
               {/* Observaciones */}
@@ -426,18 +425,16 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
               )}
 
-              {/* Aviso campos requeridos */}
-              {(!form.tipo_servicio || !form.descripcion) && (
+              {!form.tipo_servicio && (
                 <div style={{ background: "#fffbeb", color: "#c4781a", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12 }}>
-                  {!form.tipo_servicio && <div>⚠️ Seleccioná un <strong>tipo de servicio</strong></div>}
-                  {!form.descripcion && <div>⚠️ Completá la <strong>descripción</strong></div>}
+                  ⚠️ Seleccioná un <strong>tipo de servicio</strong> para continuar
                 </div>
               )}
 
               {/* Acciones */}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving}
-                  style={{ ...shared.btn, flex: 1, opacity: (!form.tipo_servicio || !form.descripcion || saving) ? 0.5 : 1, cursor: (!form.tipo_servicio || !form.descripcion) ? "not-allowed" : "pointer" }}>
+                <button onClick={guardar} disabled={!form.tipo_servicio || saving}
+                  style={{ ...shared.btn, flex: 1, opacity: (!form.tipo_servicio || saving) ? 0.5 : 1, cursor: !form.tipo_servicio ? "not-allowed" : "pointer" }}>
                   {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
                 </button>
                 <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
