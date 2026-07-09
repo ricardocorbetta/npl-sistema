@@ -129,7 +129,8 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     modalidad_trabajo:    pres?.modalidad_trabajo || "-Será necesario contar con planos de planta, vistas y cortes, de ser posible volumetría, antes de iniciar los trabajos.\n-Se deberá contar con estudio de suelos.\n-Aprobación de anteproyecto previo a la entrega del legajo final (se envía 3d + cad).\n✓ Incluye volumetría completa del proyecto de referencia en etapas.\n✓ Asesoramiento técnico durante toda la etapa de ejecución de las tareas",
     notas_pdf:            pres?.notas_pdf || "-Forma de pago: 50% Anticipo 50% Contra entrega final.\n-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal.\n-Medios de pago: Efectivo, transferencia bancaria. Se realiza factura tipo C.",
   });
-  const [tabModal, setTabModal] = useState("datos"); // "datos" | "documento"
+  const [tabModal, setTabModal] = useState(esNuevo ? "datos" : "documento"); // "datos" | "documento"
+  const [presupuestoCreado, setPresupuestoCreado] = useState(null); // ID del presupuesto recién creado
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(pres?.pdf_url || "");
   const [clienteWsp, setClienteWsp] = useState("");
@@ -262,20 +263,29 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
         <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 860, maxHeight: "92vh", overflowY: "auto" }}>
 
-          {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          {/* Header con stepper */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0a0a0a" }}>{esNuevo ? "Nuevo presupuesto" : "Editar presupuesto"}</h3>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0a0a0a" }}>
+                {esNuevo && tabModal === "datos" ? "Nuevo presupuesto" : esNuevo && tabModal === "documento" ? "Completar documento" : "Editar presupuesto"}
+              </h3>
               {form.codigo && <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "#888", fontWeight: 700 }}>[ {form.version ? `${form.codigo}-${form.version}` : form.codigo} ]</span>}
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {/* Tabs */}
-              <div style={{ display: "flex", background: "#f0f0f0", borderRadius: 8, padding: 3, gap: 3 }}>
-                {[["datos","📋 Datos"],["documento","📄 Documento"]].map(([id, label]) => (
-                  <button key={id} onClick={() => setTabModal(id)} style={{ padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: tabModal === id ? 700 : 400, background: tabModal === id ? "#111" : "transparent", color: tabModal === id ? "#fff" : "#666", cursor: "pointer" }}>{label}</button>
-                ))}
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {/* Stepper */}
+              <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                <div onClick={() => setTabModal("datos")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: "8px 0 0 8px", cursor: "pointer", background: tabModal === "datos" ? "#0a0a0a" : (!esNuevo ? "#f0f0f0" : "#f8f8f8"), border: "1.5px solid #e0e0e0", borderRight: "none" }}>
+                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: tabModal === "datos" ? "#fff" : (!esNuevo ? "#1a8a5e" : "#ccc"), color: tabModal === "datos" ? "#111" : "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {!esNuevo ? "✓" : "1"}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: tabModal === "datos" ? "#fff" : (!esNuevo ? "#555" : "#aaa") }}>Datos</span>
+                </div>
+                <div onClick={() => !esNuevo && setTabModal("documento")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: "0 8px 8px 0", cursor: !esNuevo ? "pointer" : "default", background: tabModal === "documento" ? "#0a0a0a" : "#f8f8f8", border: "1.5px solid #e0e0e0" }}>
+                  <span style={{ width: 18, height: 18, borderRadius: "50%", background: tabModal === "documento" ? "#fff" : "#e0e0e0", color: tabModal === "documento" ? "#111" : "#999", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>2</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: tabModal === "documento" ? "#fff" : (esNuevo ? "#ccc" : "#555") }}>Documento</span>
+                </div>
               </div>
-              <button onClick={onClose} style={{ ...shared.btnSm, padding: "6px 12px" }}>✕</button>
+              <button onClick={onClose} style={{ background: "#f0f0f0", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 16, color: "#555" }}>✕</button>
             </div>
           </div>
 
@@ -436,9 +446,12 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
               {/* Acciones */}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button onClick={guardar} disabled={!form.tipo_servicio || saving}
+                <button onClick={async () => {
+                  await guardar();
+                  if (!error) setTabModal("documento");
+                }} disabled={!form.tipo_servicio || saving}
                   style={{ ...shared.btn, flex: 1, opacity: (!form.tipo_servicio || saving) ? 0.5 : 1, cursor: !form.tipo_servicio ? "not-allowed" : "pointer" }}>
-                  {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
+                  {saving ? "Guardando…" : esNuevo ? "Crear y continuar →" : "Guardar cambios"}
                 </button>
                 <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
               </div>
@@ -698,6 +711,15 @@ export default function App({ deepLinkId }) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.message || err.details || `Error ${res.status}`);
         }
+        // Para nuevo presupuesto: no cerrar modal, actualizar editando con el id creado
+        const created = await res.json().catch(() => null);
+        if (created?.[0]?.id) {
+          setEditando(created[0]); // ahora editando tiene el id real
+          setMsg("✓ Presupuesto creado — completá el documento");
+          setTimeout(() => setMsg(""), 4000);
+          cargar();
+          return; // no cierra el modal
+        }
       }
 
       setShowModal(false);
@@ -853,6 +875,7 @@ export default function App({ deepLinkId }) {
 
       {showModal && (
         <ModalPresupuesto
+          key={editando?.id || "nuevo"}
           pres={editando}
           onGuardar={guardar}
           onClose={() => { setShowModal(false); setEditando(null); }}
