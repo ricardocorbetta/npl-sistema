@@ -228,18 +228,21 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   }
 
   async function generarPDF() {
-    if (!pres?.id && !editando?.id) {
+    if (!pres?.id) {
       setError("Guardá el presupuesto primero antes de generar el PDF.");
       return;
     }
     setGenerandoPDF(true);
     setError("");
     try {
+      // Guardar campos del documento antes de generar
+      await onGuardar(form);
+
       const tk = await getToken();
       const res = await fetch(`${EDGE_URL}/generar-presupuesto-pdf`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ presupuesto_id: pres?.id }),
+        body: JSON.stringify({ presupuesto_id: pres.id }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
