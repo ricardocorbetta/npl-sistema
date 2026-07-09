@@ -426,9 +426,18 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
               )}
 
+              {/* Aviso campos requeridos */}
+              {(!form.tipo_servicio || !form.descripcion) && (
+                <div style={{ background: "#fffbeb", color: "#c4781a", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12 }}>
+                  {!form.tipo_servicio && <div>⚠️ Seleccioná un <strong>tipo de servicio</strong></div>}
+                  {!form.descripcion && <div>⚠️ Completá la <strong>descripción</strong></div>}
+                </div>
+              )}
+
               {/* Acciones */}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving} style={{ ...shared.btn, flex: 1 }}>
+                <button onClick={guardar} disabled={!form.tipo_servicio || !form.descripcion || saving}
+                  style={{ ...shared.btn, flex: 1, opacity: (!form.tipo_servicio || !form.descripcion || saving) ? 0.5 : 1, cursor: (!form.tipo_servicio || !form.descripcion) ? "not-allowed" : "pointer" }}>
                   {saving ? "Guardando…" : esNuevo ? "Crear presupuesto" : "Guardar cambios"}
                 </button>
                 <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
