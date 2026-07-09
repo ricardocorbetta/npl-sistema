@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Combobox from "./Combobox.jsx";
+import AlertasPresupuestos from "./AlertasPresupuestos.jsx";
 import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
@@ -195,10 +196,12 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   function enviarWhatsApp() {
     if (!clienteWsp) return;
     // Cambiar estado a enviado si estaba en borrador
-    if (form.estado === "borrador") {
-      setForm(p => ({ ...p, estado: "enviado", probabilidad: 25 }));
-      onGuardar({ ...form, estado: "enviado", probabilidad: 25 }).catch(() => {});
-    }
+    const hoy = new Date().toISOString().slice(0,10);
+    const patch = form.estado === "borrador"
+      ? { estado: "enviado", probabilidad: 25, fecha_ultimo_contacto: hoy }
+      : { fecha_ultimo_contacto: hoy };
+    setForm(p => ({ ...p, ...patch }));
+    onGuardar({ ...form, ...patch }).catch(() => {});
     const numero = clienteWsp.replace(/\D/g, "");
     const codigo = form.version ? `${form.codigo}-${form.version}` : form.codigo;
     const texto = encodeURIComponent(
@@ -210,10 +213,12 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   function enviarEmail() {
     if (!clienteMail) return;
     // Cambiar estado a enviado si estaba en borrador
-    if (form.estado === "borrador") {
-      setForm(p => ({ ...p, estado: "enviado", probabilidad: 25 }));
-      onGuardar({ ...form, estado: "enviado", probabilidad: 25 }).catch(() => {});
-    }
+    const hoyE = new Date().toISOString().slice(0,10);
+    const patchE = form.estado === "borrador"
+      ? { estado: "enviado", probabilidad: 25, fecha_ultimo_contacto: hoyE }
+      : { fecha_ultimo_contacto: hoyE };
+    setForm(p => ({ ...p, ...patchE }));
+    onGuardar({ ...form, ...patchE }).catch(() => {});
     const codigo = form.version ? `${form.codigo}-${form.version}` : form.codigo;
     const asunto = encodeURIComponent(`Presupuesto NPL ${codigo} - ${form.descripcion || form.obra_nombre || ""}`);
     const cuerpo = encodeURIComponent(
@@ -527,6 +532,26 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 /* ─── Card presupuesto ─── */
 function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar }) {
   const estado = ESTADOS.find(e => e.v === p.estado);
+
+  // Alerta de recontacto: días desde la última actualización
+  const diasDesdeActualizacion = p.updated_at
+    ? Math.floor((new Date() - new Date(p.updated_at)) / 86400000)
+    : null;
+  const necesitaRecontacto = (p.estado === "enviado" || p.estado === "negociacion")
+    && diasDesdeActualizacion !== null && diasDesdeActualizacion >= 7;
+
+  function mensajeRecontacto() {
+    const codigo = p.codigo || "";
+    const texto = encodeURIComponent(
+      `Hola${p.cliente ? ` ${p.cliente}` : ""}! Te escribimos desde NPL Ingeniería para hacer un seguimiento del presupuesto *${codigo}* - ${p.descripcion || ""}.
+
+¿Pudiste revisar la propuesta? Quedamos a disposición para cualquier consulta o ajuste.
+
+¡Gracias!`
+    );
+    // Buscar el wsp del cliente — si no lo tenemos, abrir WhatsApp sin número
+    return `https://wa.me/?text=${texto}`;
+  }
   const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
   const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
   const precioM2 = p.monto && p.superficie && parseFloat(p.superficie) > 0
@@ -540,6 +565,11 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
           {p.codigo && <span style={{ fontSize: 11, fontWeight: 700, color: "#aaa" }}>{p.codigo}</span>}
           {tipo && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 8, padding: "2px 8px", color: "#555" }}>{tipo.label}</span>}
           {sistema && <span style={{ fontSize: 11, background: "#eef2ff", borderRadius: 8, padding: "2px 8px", color: "#6366f1", fontWeight: 600 }}>{sistema.icon} {sistema.v}</span>}
+          {necesitaRecontacto && (
+            <span style={{ fontSize: 10, background: "#fef3c7", color: "#c4781a", borderRadius: 6, padding: "2px 8px", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+              ⏰ Recontactar ({diasDesdeActualizacion}d)
+            </span>
+          )}
         </div>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#111", marginBottom: 3 }}>{p.descripcion || "Sin descripción"}</div>
         <div style={{ fontSize: 13, color: "#888" }}>{p.cliente}</div>
@@ -575,6 +605,12 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
         </select>
 
         <button onClick={() => onEditar(p)} style={{ ...shared.btnSm, fontSize: 12 }}>Editar</button>
+        {necesitaRecontacto && (
+          <a href={mensajeRecontacto()} target="_blank" rel="noreferrer"
+            style={{ ...shared.btnSm, fontSize: 12, background: "#25d366", color: "#fff", border: "none", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+            💬 Recontactar
+          </a>
+        )}
         {p.archivado === true
           ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12 }}>↩ Restaurar</button>
           : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ ...shared.btnSm, fontSize: 12, color: "#888" }}>📦 Archivar</button>
@@ -590,11 +626,12 @@ export default function App({ deepLinkId }) {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [filtroEstado, setFiltroEstado] = useState("enviado"); // Default: enviado, es el que se monitorea
+  const [filtroEstado, setFiltroEstado] = useState("seguimiento"); // Default: enviado + negociacion
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroSistema, setFiltroSistema] = useState("todos");
   const [filtroMes, setFiltroMes] = useState("todos");
   const [verArchivados, setVerArchivados] = useState(false);
+  const [showAlertas, setShowAlertas] = useState(false);
   const [msg, setMsg] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -709,7 +746,9 @@ export default function App({ deepLinkId }) {
   const filtrados = presupuestos.filter(p => {
     if (verArchivados) return p.archivado === true;
     if (p.archivado === true) return false;
-    const pasaEstado  = filtroEstado === "todos"   || p.estado === filtroEstado;
+    const pasaEstado  = filtroEstado === "todos"
+      || filtroEstado === "seguimiento" ? (p.estado === "enviado" || p.estado === "negociacion")
+      : p.estado === filtroEstado;
     const pasaTipo    = filtroTipo === "todos"     || p.tipo_servicio === filtroTipo;
     const pasaSistema = filtroSistema === "todos"  || p.sistema_constructivo === filtroSistema;
     const pasaMes     = filtroMes === "todos"      || (p.fecha_emision && p.fecha_emision.slice(0,7) === filtroMes);
@@ -724,7 +763,13 @@ export default function App({ deepLinkId }) {
   // KPIs
   const totalMonto    = presupuestos.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
   const enviados      = presupuestos.filter(p => p.estado === "enviado").length;
-  const montoEnviados = presupuestos.filter(p => p.estado === "enviado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const enNegociacion = presupuestos.filter(p => p.estado === "negociacion").length;
+  const montoEnviados = presupuestos.filter(p => p.estado === "enviado" || p.estado === "negociacion").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const paraRecontactar = presupuestos.filter(p =>
+    (p.estado === "enviado" || p.estado === "negociacion") &&
+    p.updated_at &&
+    Math.floor((new Date() - new Date(p.updated_at)) / 86400000) >= 7
+  ).length;
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: isMobile ? 16 : 28, maxWidth: 1100, margin: "0 auto" }}>
@@ -735,7 +780,17 @@ export default function App({ deepLinkId }) {
           <p style={{ margin: 0, fontSize: 12, color: "#999", fontWeight: 500 }}>NPL · Admin</p>
           <h1 style={{ margin: "2px 0 0", fontSize: isMobile ? 20 : 24, fontWeight: 700 }}>💰 Presupuestos</h1>
         </div>
-        <button onClick={() => { setEditando(null); setShowModal(true); }} style={shared.btn}>+ Nuevo presupuesto</button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button onClick={() => setShowAlertas(true)} style={{
+            padding: "9px 16px", background: paraRecontactar > 0 ? "#fef3c7" : "#f0f0f0",
+            color: paraRecontactar > 0 ? "#c4781a" : "#555",
+            border: paraRecontactar > 0 ? "1.5px solid #f59e0b" : "1.5px solid #e0e0e0",
+            borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+          }}>
+            🔔 Alertas {paraRecontactar > 0 ? `(${paraRecontactar})` : ""}
+          </button>
+          <button onClick={() => { setEditando(null); setShowModal(true); }} style={shared.btn}>+ Nuevo presupuesto</button>
+        </div>
       </div>
 
       {msg && (
@@ -745,11 +800,13 @@ export default function App({ deepLinkId }) {
       )}
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { label: "Total aprobado",      value: `$${totalMonto.toLocaleString("es-AR")}`, color: "#22c55e" },
-          { label: "📨 Enviados (seguimiento)", value: enviados, color: "#3b82f6" },
-          { label: "Monto en seguimiento", value: `$${montoEnviados.toLocaleString("es-AR")}`, color: "#3b82f6" },
+          { label: "Enviados",            value: enviados,        color: "#3b82f6" },
+          { label: "Negociación",         value: enNegociacion,   color: "#f59e0b" },
+          { label: "⏰ Recontactar",      value: paraRecontactar, color: paraRecontactar > 0 ? "#c4781a" : "#888" },
+          { label: "Monto en seguimiento",value: `$${montoEnviados.toLocaleString("es-AR")}`, color: "#6366f1" },
           { label: "Total",               value: presupuestos.length, color: "#888" },
         ].map(k => (
           <div key={k.label} style={{ ...shared.card, textAlign: "center" }}>
@@ -764,11 +821,12 @@ export default function App({ deepLinkId }) {
         {/* Filtro estado — destacado para "enviado" */}
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{
           ...shared.btnSm, padding: "8px 12px",
-          background: filtroEstado === "enviado" ? "#3b82f618" : "#f0f0f0",
-          color: filtroEstado === "enviado" ? "#3b82f6" : "#333",
-          fontWeight: filtroEstado === "enviado" ? 700 : 400,
-          border: filtroEstado === "enviado" ? "1px solid #3b82f6" : "1px solid transparent",
+          background: filtroEstado === "seguimiento" ? "#f59e0b18" : filtroEstado === "todos" ? "#f0f0f0" : "#f0f0f0",
+          color: filtroEstado === "seguimiento" ? "#c4781a" : "#333",
+          fontWeight: filtroEstado !== "todos" ? 700 : 400,
+          border: filtroEstado === "seguimiento" ? "1px solid #c4781a" : "1px solid transparent",
         }}>
+          <option value="seguimiento">📨 En seguimiento</option>
           <option value="todos">Todos los estados</option>
           {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.label}</option>)}
         </select>
@@ -817,6 +875,10 @@ export default function App({ deepLinkId }) {
           onGuardar={guardar}
           onClose={() => { setShowModal(false); setEditando(null); }}
         />
+      )}
+
+      {showAlertas && (
+        <AlertasPresupuestos onClose={() => setShowAlertas(false)} />
       )}
     </div>
   );
