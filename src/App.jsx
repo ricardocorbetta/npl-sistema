@@ -346,7 +346,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <span style={shared.lbl}>Cliente</span>
+                    <span style={shared.lbl}>Cliente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>(opcional)</span></span>
                     <button onClick={() => setShowNuevoCli(true)} style={{ fontSize: 10, padding: "1px 6px", background: "#f0f0f0", border: "none", borderRadius: 4, cursor: "pointer", color: "#555" }}>+ Nuevo</button>
                   </div>
                   <Combobox
@@ -618,7 +618,7 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
           {necesitaRecontacto && <span style={{ fontSize: 10, background: "#fef3c7", color: "#c4781a", borderRadius: 4, padding: "1px 6px", fontWeight: 700, flexShrink: 0 }}>⏰ {diasDesdeActualizacion}d</span>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {p.cliente && <span style={{ fontSize: 11, color: "#888" }}>{p.cliente}</span>}
+          {(p.cliente || p.comitente_nombre) && <span style={{ fontSize: 11, color: "#888" }}>{p.cliente || p.comitente_nombre}</span>}
           {tipo && <span style={{ fontSize: 10, background: "#f0f0f0", borderRadius: 4, padding: "1px 6px", color: "#666" }}>{tipo.label}</span>}
           {sistema && <span style={{ fontSize: 10, background: "#f0f4ff", borderRadius: 4, padding: "1px 6px", color: "#6366f1" }}>{sistema.icon} {sistema.v}</span>}
         </div>
