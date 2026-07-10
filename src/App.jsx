@@ -300,40 +300,41 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
           {/* Tab DATOS */}
           {tabModal === "datos" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
             {/* ─── Columna izquierda ─── */}
-            <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
               {/* Tipo de servicio */}
-              <div style={{ marginBottom: 16 }}>
+              <div>
                 <span style={shared.lbl}>Tipo de servicio *</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
                   {TIPOS_SERVICIO.map(t => (
                     <button key={t.v} onClick={() => setForm(p => ({ ...p, tipo_servicio: t.v }))} style={{
-                      padding: "9px 10px", textAlign: "left", borderRadius: 8, cursor: "pointer", fontSize: 12,
-                      border: form.tipo_servicio === t.v ? "2px solid #0a0a0a" : "1.5px solid #e0e0e0",
-                      background: form.tipo_servicio === t.v ? "#0a0a0a" : "#fff",
-                      color: form.tipo_servicio === t.v ? "#fff" : "#333",
-                      fontWeight: form.tipo_servicio === t.v ? 600 : 400,
+                      padding: "8px 10px", textAlign: "left", borderRadius: 8, cursor: "pointer", fontSize: 12,
+                      border: form.tipo_servicio === t.v ? "2px solid #0a0a0a" : "1.5px solid #ccc",
+                      background: form.tipo_servicio === t.v ? "#0a0a0a" : "#fafafa",
+                      color: form.tipo_servicio === t.v ? "#fff" : "#222",
+                      fontWeight: form.tipo_servicio === t.v ? 700 : 500,
                     }}>
-                      <div>{t.label}</div>
-                      {t.desc && <div style={{ fontSize: 10, opacity: .65, marginTop: 2 }}>{t.desc}</div>}
+                      <div style={{ fontSize: 12 }}>{t.label}</div>
+                      {t.desc && <div style={{ fontSize: 10, opacity: .6, marginTop: 1 }}>{t.desc}</div>}
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Sistema constructivo */}
-              <div style={{ marginBottom: 16 }}>
+              <div>
                 <span style={shared.lbl}>Sistema constructivo</span>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                   {SISTEMAS_CONSTRUCTIVOS.map(s => (
                     <button key={s.v} onClick={() => setForm(p => ({ ...p, sistema_constructivo: s.v }))} style={{
-                      padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12,
-                      border: form.sistema_constructivo === s.v ? "2px solid #0a0a0a" : "1.5px solid #e0e0e0",
-                      background: form.sistema_constructivo === s.v ? "#0a0a0a" : "#fff",
-                      color: form.sistema_constructivo === s.v ? "#fff" : "#555",
-                      fontWeight: form.sistema_constructivo === s.v ? 700 : 400,
+                      padding: "5px 11px", borderRadius: 7, cursor: "pointer", fontSize: 12,
+                      border: form.sistema_constructivo === s.v ? "2px solid #0a0a0a" : "1.5px solid #ccc",
+                      background: form.sistema_constructivo === s.v ? "#0a0a0a" : "#fafafa",
+                      color: form.sistema_constructivo === s.v ? "#fff" : "#222",
+                      fontWeight: form.sistema_constructivo === s.v ? 700 : 500,
                     }}>
                       {s.icon} {s.v}
                     </button>
@@ -341,57 +342,55 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
               </div>
 
-              {/* Cliente */}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <span style={shared.lbl}>Cliente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>· quien contrata</span></span>
-                  <button onClick={() => setShowNuevoCli(true)} style={{ ...shared.btnSm, fontSize: 11, padding: "2px 8px" }}>+ Nuevo</button>
-                </div>
-                <Combobox
-                  options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` (${c.tipo})` : ""}` }))}
-                  value={form.cliente_id}
-                  onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
-                  placeholder="Buscar cliente..."
-                  emptyLabel="Sin cliente asignado"
-                />
-              </div>
-
-              {/* Comitente */}
-              <div style={{ marginBottom: 14 }}>
-                <span style={shared.lbl}>Comitente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>· propietario / comitente final (opcional)</span></span>
-                <Combobox
-                  options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` (${c.tipo})` : ""}` }))}
-                  value={form.comitente_id}
-                  onChange={(val, label) => setForm(p => ({ ...p, comitente_id: val, comitente_nombre: label }))}
-                  placeholder="Buscar comitente..."
-                  emptyLabel="Sin comitente (opcional)"
-                />
-                {!form.comitente_id && (
-                  <input
-                    value={form.comitente_nombre}
-                    onChange={e => setForm(p => ({ ...p, comitente_nombre: e.target.value }))}
-                    style={{ ...shared.inp, marginTop: 6, fontSize: 12 }}
-                    placeholder="O escribí el nombre del comitente si no está en la lista..."
+              {/* Cliente + Comitente en grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={shared.lbl}>Cliente</span>
+                    <button onClick={() => setShowNuevoCli(true)} style={{ fontSize: 10, padding: "1px 6px", background: "#f0f0f0", border: "none", borderRadius: 4, cursor: "pointer", color: "#555" }}>+ Nuevo</button>
+                  </div>
+                  <Combobox
+                    options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` · ${c.tipo}` : ""}` }))}
+                    value={form.cliente_id}
+                    onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
+                    placeholder="Buscar cliente..."
+                    emptyLabel="Sin cliente"
                   />
-                )}
+                </div>
+                <div>
+                  <span style={shared.lbl}>Comitente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>(opcional)</span></span>
+                  <Combobox
+                    options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` · ${c.tipo}` : ""}` }))}
+                    value={form.comitente_id}
+                    onChange={(val, label) => setForm(p => ({ ...p, comitente_id: val, comitente_nombre: label }))}
+                    placeholder="Buscar comitente..."
+                    emptyLabel="Sin comitente"
+                  />
+                  {!form.comitente_id && (
+                    <input value={form.comitente_nombre} onChange={e => setForm(p => ({ ...p, comitente_nombre: e.target.value }))}
+                      style={{ ...shared.inp, marginTop: 5, fontSize: 12 }} placeholder="Nombre libre si no está en lista" />
+                  )}
+                </div>
               </div>
 
-              <div style={{ marginBottom: 14 }}>
-                <span style={shared.lbl}>Descripción <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(opcional)</span></span>
+              {/* Descripción */}
+              <div>
+                <span style={shared.lbl}>Descripción <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>(opcional)</span></span>
                 <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} style={shared.inp} placeholder="Título corto del trabajo" />
               </div>
 
               {/* Observaciones */}
-              <div style={{ marginBottom: 14 }}>
+              <div>
                 <span style={shared.lbl}>Observaciones</span>
-                <textarea value={form.obs} onChange={e => setForm(p => ({ ...p, obs: e.target.value }))} rows={4} style={{ ...shared.inp, resize: "vertical" }} placeholder="Notas internas…" />
+                <textarea value={form.obs} onChange={e => setForm(p => ({ ...p, obs: e.target.value }))} rows={2} style={{ ...shared.inp, resize: "none" }} placeholder="Notas internas…" />
               </div>
             </div>
 
             {/* ─── Columna derecha ─── */}
-            <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
               {/* Código y versión */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
                   <span style={shared.lbl}>Código</span>
                   <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value }))} style={shared.inp} placeholder="1159" />
@@ -406,7 +405,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               </div>
 
               {/* Monto, moneda, superficie */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px", gap: 10, marginBottom: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px", gap: 8 }}>
                 <div>
                   <span style={shared.lbl}>Monto</span>
                   <input type="number" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} style={shared.inp} placeholder="0" />
@@ -419,20 +418,20 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                   </select>
                 </div>
                 <div>
-                  <span style={shared.lbl}>Sup. m²</span>
+                  <span style={shared.lbl}>m²</span>
                   <input type="number" value={form.superficie} onChange={e => setForm(p => ({ ...p, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
                 </div>
               </div>
 
               {/* Precio por m² */}
               {precioM2 !== null && (
-                <div style={{ marginBottom: 14, background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#1a8a5e", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>
+                <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "7px 12px", fontSize: 13, color: "#1a8a5e", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>
                   {form.moneda === "USD" ? "u$s" : "$"} {precioM2.toLocaleString("es-AR", { maximumFractionDigits: 0 })} / m²
                 </div>
               )}
 
               {/* Estado y probabilidad */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 8 }}>
                 <div>
                   <span style={shared.lbl}>Estado</span>
                   <select value={form.estado} onChange={e => {
@@ -449,7 +448,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
               </div>
 
               {/* Fechas */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div>
                   <span style={shared.lbl}>Fecha emisión</span>
                   <input type="date" value={form.fecha_emision} onChange={e => setForm(p => ({ ...p, fecha_emision: e.target.value }))} style={shared.inp} />
@@ -460,29 +459,21 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
               </div>
 
-              {/* Error */}
-              {error && (
-                <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
-                  ❌ {error}
-                </div>
-              )}
+              {/* Separador */}
+              <div style={{ flex: 1 }} />
 
-              {!form.tipo_servicio && (
-                <div style={{ background: "#fffbeb", color: "#c4781a", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12 }}>
-                  ⚠️ Seleccioná un <strong>tipo de servicio</strong> para continuar
-                </div>
-              )}
+              {/* Error y aviso */}
+              {error && <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>❌ {error}</div>}
+              {!form.tipo_servicio && <div style={{ background: "#fffbeb", color: "#c4781a", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>⚠️ Seleccioná un <strong>tipo de servicio</strong></div>}
 
               {/* Acciones */}
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button onClick={async () => {
-                  await guardar();
-                  if (!error) setTabModal("documento");
-                }} disabled={!form.tipo_servicio || saving}
-                  style={{ ...shared.btn, flex: 1, opacity: (!form.tipo_servicio || saving) ? 0.5 : 1, cursor: !form.tipo_servicio ? "not-allowed" : "pointer" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async () => { await guardar(); if (!error) setTabModal("documento"); }}
+                  disabled={!form.tipo_servicio || saving}
+                  style={{ ...shared.btn, flex: 1, opacity: (!form.tipo_servicio || saving) ? 0.4 : 1 }}>
                   {saving ? "Guardando…" : esNuevo ? "Crear y continuar →" : "Guardar cambios"}
                 </button>
-                <button onClick={onClose} style={{ ...shared.btnSm, flex: 1, padding: "10px" }}>Cancelar</button>
+                <button onClick={onClose} style={{ ...shared.btnSm, padding: "10px 14px" }}>Cancelar</button>
               </div>
             </div>
           </div>
