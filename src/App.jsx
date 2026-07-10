@@ -712,6 +712,10 @@ export default function App({ deepLinkId }) {
       }
       delete body.version; // no existe en la tabla
 
+      // Limpiar campos UUID vacíos → null (Postgres rechaza "" como uuid)
+      if (!body.cliente_id) body.cliente_id = null;
+      if (!body.comitente_id) body.comitente_id = null;
+
       if (editando?.id) {
         // Edición — PATCH
         const res = await fetch(`${SUPA_URL}/presupuestos?id=eq.${editando.id}`, {
