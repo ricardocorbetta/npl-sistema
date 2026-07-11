@@ -720,6 +720,11 @@ export default function App({ deepLinkId }) {
       if (!body.fecha_emision) body.fecha_emision = null;
       if (!body.fecha_vencimiento) body.fecha_vencimiento = null;
 
+      // Limpiar campos numéricos vacíos → null
+      if (body.monto === "" || body.monto === undefined) body.monto = null;
+      if (body.superficie === "" || body.superficie === undefined) body.superficie = null;
+      if (body.probabilidad === "" || body.probabilidad === undefined) body.probabilidad = null;
+
       if (editando?.id) {
         // Edición — PATCH
         const res = await fetch(`${SUPA_URL}/presupuestos?id=eq.${editando.id}`, {
