@@ -64,19 +64,29 @@ export default function Configuracion() {
     setSaving(true);
     const tk = await getToken();
     try {
-      // Upsert todos los valores
-      const rows = Object.entries(config).map(([key, value]) => ({ key, value, label: LABELS[key] || key }));
-      await fetch(`${SUPA_URL}/configuracion`, {
-        method: "POST",
-        headers: {
-          apikey: ANON_KEY, Authorization: `Bearer ${tk}`,
-          "Content-Type": "application/json",
-          "Prefer": "resolution=merge-duplicates",
-        },
-        body: JSON.stringify(rows),
-      });
-      setMsg("✓ Configuración guardada");
-      setTimeout(() => setMsg(""), 3000);
+      // Actualizar cada clave individualmente con PATCH
+      const errores = [];
+      for (const [key, value] of Object.entries(config)) {
+        const res = await fetch(`${SUPA_URL}/configuracion?key=eq.${key}`, {
+          method: "PATCH",
+          headers: {
+            apikey: ANON_KEY, Authorization: `Bearer ${tk}`,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+          },
+          body: JSON.stringify({ value }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          errores.push(`${key}: ${err.message || res.status}`);
+        }
+      }
+      if (errores.length > 0) {
+        setMsg("❌ Errores: " + errores.join(", "));
+      } else {
+        setMsg("✓ Configuración guardada");
+        setTimeout(() => setMsg(""), 3000);
+      }
     } catch(e) {
       setMsg("❌ Error: " + e.message);
     }
