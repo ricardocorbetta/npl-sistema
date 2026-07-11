@@ -249,7 +249,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       await onGuardar(form);
 
       const tk = await getToken();
-      const res = await fetch(`${EDGE_URL}/generar-presupuesto-pdf`, {
+      const res = await fetch(`${EDGE_URL}/generar-presupuesto`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" },
         body: JSON.stringify({ presupuesto_id: pres.id }),
