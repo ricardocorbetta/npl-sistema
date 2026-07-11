@@ -133,7 +133,9 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     comitente_nombre:     pres?.comitente_nombre || "",
     // Campos para generación de PDF
     obra_nombre:          pres?.obra_nombre || "",
-    descripcion_larga:    pres?.descripcion_larga || "Las tareas encomendadas incluyen el diseño y cálculo estructural para todos los sectores indicados en los planos, que contemplan una superficie aproximada de [X] metros cuadrados entre superficie cubierta y semi cubierta.",
+    descripcion_larga:    pres?.descripcion_larga
+      ? pres.descripcion_larga.replace(/\[X\]/g, pres.superficie ? String(pres.superficie) : "[X]")
+      : "Las tareas encomendadas incluyen el diseño y cálculo estructural para todos los sectores indicados en los planos, que contemplan una superficie aproximada de [X] metros cuadrados entre superficie cubierta y semi cubierta.",
     items_alcance:        pres?.items_alcance || ["Anteproyecto final en 3D.","Planos de replanteo de fundaciones.","Planos de estructura y detalles necesarios.","Planos de doblado de armadura (planos con despiece de vigas).","Detalle de elementos atípicos y detalle de uniones.","Cómputo y presupuesto de materiales de la estructura.","Servicio postventa: Checklist para control durante etapa de ejecución en obra y respaldo vía whatsapp."],
     modalidad_trabajo:    pres?.modalidad_trabajo || "-Será necesario contar con planos de planta, vistas y cortes, de ser posible volumetría, antes de iniciar los trabajos.\n-Se deberá contar con estudio de suelos.\n-Aprobación de anteproyecto previo a la entrega del legajo final (se envía 3d + cad).\n✓ Incluye volumetría completa del proyecto de referencia en etapas.\n✓ Asesoramiento técnico durante toda la etapa de ejecución de las tareas",
     notas_pdf:            pres?.notas_pdf || "-Forma de pago: 50% Anticipo 50% Contra entrega final.\n-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal.\n-Medios de pago: Efectivo, transferencia bancaria. Se realiza factura tipo C.",
@@ -431,7 +433,17 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 </div>
                 <div>
                   <span style={shared.lbl}>m²</span>
-                  <input type="number" value={form.superficie} onChange={e => setForm(p => ({ ...p, superficie: e.target.value }))} style={shared.inp} placeholder="0" />
+                  <input type="number" value={form.superficie} onChange={e => {
+                    const sup = e.target.value;
+                    setForm(p => ({
+                      ...p,
+                      superficie: sup,
+                      // Auto-actualizar [X] en descripción larga si existe
+                      descripcion_larga: p.descripcion_larga
+                        ? p.descripcion_larga.replace(/\d+(?=\s*metros cuadrados)|\[X\]/g, sup || "[X]")
+                        : p.descripcion_larga
+                    }));
+                  }} style={shared.inp} placeholder="0" />
                 </div>
               </div>
 
