@@ -138,6 +138,8 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       : "Las tareas encomendadas incluyen el diseño y cálculo estructural para todos los sectores indicados en los planos, que contemplan una superficie aproximada de [X] metros cuadrados entre superficie cubierta y semi cubierta.",
     items_alcance:        pres?.items_alcance || ["Anteproyecto final en 3D.","Planos de replanteo de fundaciones.","Planos de estructura y detalles necesarios.","Planos de doblado de armadura (planos con despiece de vigas).","Detalle de elementos atípicos y detalle de uniones.","Cómputo y presupuesto de materiales de la estructura.","Servicio postventa: Checklist para control durante etapa de ejecución en obra y respaldo vía whatsapp."],
     modalidad_trabajo:    pres?.modalidad_trabajo || "-Será necesario contar con planos de planta, vistas y cortes, de ser posible volumetría, antes de iniciar los trabajos.\n-Se deberá contar con estudio de suelos.\n-Aprobación de anteproyecto previo a la entrega del legajo final (se envía 3d + cad).\n✓ Incluye volumetría completa del proyecto de referencia en etapas.\n✓ Asesoramiento técnico durante toda la etapa de ejecución de las tareas",
+    forma_pago:           pres?.forma_pago || "50_50",
+    forma_pago_custom:    pres?.forma_pago_custom || "",
     notas_pdf:            pres?.notas_pdf || "-Forma de pago: 50% Anticipo 50% Contra entrega final.\n-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal.\n-Medios de pago: Efectivo, transferencia bancaria. Se realiza factura tipo C.",
   });
   const [tabModal, setTabModal] = useState(esNuevo ? "datos" : "documento"); // "datos" | "documento"
@@ -506,7 +508,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
           {/* Tab DOCUMENTO */}
           {tabModal === "documento" && (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                 <div>
                   <span style={shared.lbl}>Nombre de la obra</span>
                   <input value={form.obra_nombre} onChange={e => setForm(p => ({ ...p, obra_nombre: e.target.value }))} style={shared.inp} placeholder="Vivienda Vrick Ensenada" />
@@ -516,6 +518,24 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                   <div style={{ ...shared.inp, background: "#f8f8f8", color: "#555", display: "flex", alignItems: "center", fontSize: 13 }}>
                     {form.comitente_nombre || form.cliente || "— sin comitente —"}
                   </div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <span style={shared.lbl}>Modalidad de pago</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {[
+                    { v: "50_50",   label: "50% Anticipo + 50% Contra entrega" },
+                    { v: "25_50_25", label: "25% Anticipo + 50% Anteproyecto + 25% Contra entrega" },
+                    { v: "custom",  label: "Personalizada" },
+                  ].map(opt => (
+                    <label key={opt.v} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", padding: "7px 10px", borderRadius: 8, border: `1.5px solid ${form.forma_pago === opt.v ? "#0a0a0a" : "#e0e0e0"}`, background: form.forma_pago === opt.v ? "#f8f8f8" : "#fff" }}>
+                      <input type="radio" name="modalidad_pago" value={opt.v} checked={form.forma_pago === opt.v} onChange={() => setForm(p => ({ ...p, forma_pago: opt.v }))} style={{ accentColor: "#111" }} />
+                      {opt.label}
+                    </label>
+                  ))}
+                  {form.forma_pago === "custom" && (
+                    <input value={form.forma_pago_custom || ""} onChange={e => setForm(p => ({ ...p, forma_pago_custom: e.target.value }))} style={{ ...shared.inp, marginTop: 4 }} placeholder="Ej: 30% anticipo + 40% a mitad + 30% contra entrega" />
+                  )}
                 </div>
               </div>
 
