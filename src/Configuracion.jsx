@@ -51,9 +51,15 @@ export default function Configuracion() {
   async function cargar() {
     setLoading(true);
     const tk = await getToken();
-    const r = await fetch(`${SUPA_URL}/configuracion?select=key,value`, {
+    const res = await fetch(`${SUPA_URL}/configuracion?select=key,value&order=key`, {
       headers: { apikey: ANON_KEY, Authorization: `Bearer ${tk}` }
-    }).then(r => r.json());
+    });
+    const r = await res.json();
+    if (!res.ok) {
+      setMsg("❌ Error cargando: " + (r.message || res.status));
+      setLoading(false);
+      return;
+    }
     const map = {};
     (Array.isArray(r) ? r : []).forEach((row) => { map[row.key] = row.value || ""; });
     setConfig(map);
