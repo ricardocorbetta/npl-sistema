@@ -7,6 +7,7 @@ import CRM from './CRM.jsx'
 import Dashboard from './Dashboard.jsx'
 import Obras from './Obras.jsx'
 import Biblioteca from './Biblioteca.jsx'
+import Configuracion from './Configuracion.jsx'
 import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
 
 const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
@@ -20,7 +21,8 @@ const APPS_ADMIN = [
   { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
   { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
   { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
-  { id: 'usuarios', label: 'Usuarios', icon: '⚙️', desc: 'Gestión de accesos' },
+  { id: 'configuracion', label: 'Config', icon: '⚙️', desc: 'Datos empresa' },
+  { id: 'usuarios', label: 'Usuarios', icon: '👤', desc: 'Gestión de accesos' },
 ]
 
 const APPS_JEFE = [
@@ -123,6 +125,7 @@ export default function Root() {
   if (current === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard /></Layout></ThemeContext.Provider>
   if (current === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
   if (current === 'biblioteca') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Biblioteca /></Layout></ThemeContext.Provider>
+  if (current === 'configuracion') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Configuracion /></Layout></ThemeContext.Provider>
   if (current === 'usuarios') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Usuarios session={session} palette={palette} /></Layout></ThemeContext.Provider>
 
   // ─── Pantalla de inicio (selector de apps) ───
