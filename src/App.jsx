@@ -257,7 +257,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setPdfUrl(data.pdf_url);
-      window.open(data.pdf_url, "_blank");
+      // No usamos window.open (bloqueado como popup) — el link aparece abajo
     } catch(e) {
       setError("Error generando PDF: " + e.message);
     }
@@ -560,7 +560,15 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 {clienteMail ? <span style={{ color: "#3b82f6" }}>✉️ {clienteMail}</span> : <span style={{ color: "#ccc" }}>Sin email</span>}
               </div>
 
-              {pdfUrl && <div style={{ marginTop: 10, fontSize: 12 }}><a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: "#1a73e8", textDecoration: "none" }}>📂 Ver PDF en Drive →</a></div>}
+              {pdfUrl && (
+                <div style={{ marginTop: 10, background: "#f0fdf4", borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>✅</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1a8a5e" }}>PDF generado en Drive</div>
+                    <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#1a73e8", textDecoration: "none" }}>📂 Abrir PDF →</a>
+                  </div>
+                </div>
+              )}
               {esNuevo && <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>Guardá primero para habilitar las acciones.</p>}
             </div>
           )} {/* fin tab documento */}
