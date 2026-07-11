@@ -245,10 +245,23 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     setGenerandoPDF(true);
     setError("");
     try {
-      // Guardar campos del documento antes de generar
-      await onGuardar(form);
-
+      // Guardar campos del documento directamente sin pasar por onGuardar (que cierra el modal)
       const tk = await getToken();
+      const body = { ...form };
+      delete body.version;
+      if (!body.cliente_id) body.cliente_id = null;
+      if (!body.comitente_id) body.comitente_id = null;
+      if (!body.fecha_emision) body.fecha_emision = null;
+      if (!body.fecha_vencimiento) body.fecha_vencimiento = null;
+      if (body.monto === "" || body.monto === undefined) body.monto = null;
+      if (body.superficie === "" || body.superficie === undefined) body.superficie = null;
+      if (body.probabilidad === "" || body.probabilidad === undefined) body.probabilidad = null;
+
+      await fetch(`${SUPA_URL}/presupuestos?id=eq.${pres.id}`, {
+        method: "PATCH", headers: hdrs(tk), body: JSON.stringify(body)
+      });
+
+      // Llamar a la Edge Function
       const res = await fetch(`${EDGE_URL}/generar-presupuesto`, {
         method: "POST",
         headers: { Authorization: `Bearer ${tk}`, "Content-Type": "application/json" },
@@ -257,7 +270,6 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setPdfUrl(data.pdf_url);
-      // No usamos window.open (bloqueado como popup) — el link aparece abajo
     } catch(e) {
       setError("Error generando PDF: " + e.message);
     }
@@ -560,7 +572,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 {clienteMail ? <span style={{ color: "#3b82f6" }}>✉️ {clienteMail}</span> : <span style={{ color: "#ccc" }}>Sin email</span>}
               </div>
 
-              {pdfUrl && (
+              {pdfUrl && !pdfUrl.includes("undefined") && (
                 <div style={{ marginTop: 10, background: "#f0fdf4", borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 16 }}>✅</span>
                   <div>
