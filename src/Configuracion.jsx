@@ -17,19 +17,27 @@ const shared = {
 };
 
 const GRUPOS = [
-  { id: "comercial", label: "🏢 Datos comerciales", desc: "Aparecen en el PDF del presupuesto y comunicaciones" },
-  { id: "bancario",  label: "🏦 Datos bancarios",   desc: "Para cobros y anticipo" },
+  { id: "comercial",     label: "🏢 Datos comerciales",    desc: "Aparecen en el PDF y comunicaciones" },
+  { id: "bancario",      label: "🏦 Datos bancarios",       desc: "Para cobros y anticipo" },
+  { id: "presupuestos",  label: "📋 Config presupuestos",   desc: "Valores por defecto al generar presupuestos" },
 ];
 
 const LABELS = {
-  empresa_nombre:   "Nombre de la empresa",
-  empresa_email:    "Email",
-  empresa_tel:      "Teléfono",
-  empresa_web:      "Sitio web",
-  empresa_direccion:"Dirección",
-  empresa_cbu:      "CBU",
-  empresa_alias:    "Alias CBU",
-  empresa_fiscal:   "Condición fiscal / Facturación",
+  empresa_nombre:         "Nombre de la empresa",
+  empresa_email:          "Email",
+  empresa_tel:            "Teléfono",
+  empresa_web:            "Sitio web",
+  empresa_whatsapp:       "WhatsApp (con código país)",
+  empresa_instagram:      "Instagram",
+  empresa_direccion_lp:   "Dirección La Plata",
+  empresa_direccion_caba: "Dirección CABA",
+  empresa_cbu:            "CBU",
+  empresa_alias:          "Alias CBU",
+  empresa_fiscal:         "Condición fiscal / Facturación",
+  presup_validez_dias:    "Validez presupuesto (días)",
+  presup_anticipo_pct:    "Anticipo %",
+  firma_nombre:           "Nombre para firma",
+  firma_cargo:            "Cargo para firma",
 };
 
 export default function Configuracion() {
@@ -97,8 +105,9 @@ export default function Configuracion() {
 
       {GRUPOS.map(grupo => {
         const keys = Object.keys(LABELS).filter(k => {
-          if (grupo.id === "comercial") return ["empresa_nombre","empresa_email","empresa_tel","empresa_web","empresa_direccion"].includes(k);
-          return ["empresa_cbu","empresa_alias","empresa_fiscal"].includes(k);
+          if (grupo.id === "comercial") return ["empresa_nombre","empresa_email","empresa_tel","empresa_web","empresa_whatsapp","empresa_instagram","empresa_direccion_lp","empresa_direccion_caba"].includes(k);
+          if (grupo.id === "bancario") return ["empresa_cbu","empresa_alias","empresa_fiscal"].includes(k);
+          return ["presup_validez_dias","presup_anticipo_pct","firma_nombre","firma_cargo"].includes(k);
         });
         return (
           <div key={grupo.id} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, padding: 20, marginBottom: 16 }}>
@@ -129,13 +138,20 @@ export default function Configuracion() {
         <div style={{ fontFamily: "Arial, sans-serif", fontSize: 12, color: "#555", display: "flex", justifyContent: "space-between" }}>
           <div>
             <strong style={{ fontSize: 13, color: "#111", display: "block", marginBottom: 4 }}>{config.empresa_nombre || "NPL Ingeniería Civil"}</strong>
-            {config.empresa_web} &nbsp;|&nbsp; {config.empresa_tel}
+            <div>{config.empresa_web} &nbsp;|&nbsp; {config.empresa_tel}</div>
+            {config.empresa_instagram && <div style={{ color: "#888", fontSize: 11 }}>{config.empresa_instagram}</div>}
           </div>
           <div style={{ textAlign: "right", color: "#888" }}>
-            {config.empresa_email}<br/>
-            {config.empresa_direccion}
+            <div>{config.empresa_email}</div>
+            {config.empresa_direccion_lp && <div style={{ fontSize: 11 }}>{config.empresa_direccion_lp}</div>}
+            {config.empresa_direccion_caba && <div style={{ fontSize: 11 }}>{config.empresa_direccion_caba}</div>}
           </div>
         </div>
+        {config.firma_nombre && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #eee", fontSize: 12, color: "#555" }}>
+            <strong style={{ color: "#111" }}>{config.firma_nombre}</strong> — {config.firma_cargo}
+          </div>
+        )}
       </div>
     </div>
   );
