@@ -140,7 +140,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     modalidad_trabajo:    pres?.modalidad_trabajo || "-Será necesario contar con planos de planta, vistas y cortes, de ser posible volumetría, antes de iniciar los trabajos.\n-Se deberá contar con estudio de suelos.\n-Aprobación de anteproyecto previo a la entrega del legajo final (se envía 3d + cad).\n✓ Incluye volumetría completa del proyecto de referencia en etapas.\n✓ Asesoramiento técnico durante toda la etapa de ejecución de las tareas",
     forma_pago:           pres?.forma_pago || "50_50",
     forma_pago_custom:    pres?.forma_pago_custom || "",
-    notas_pdf:            pres?.notas_pdf || "-Forma de pago: 50% Anticipo 50% Contra entrega final.\n-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal.\n-Medios de pago: Efectivo, transferencia bancaria. Se realiza factura tipo C.",
+    notas_pdf:            pres?.notas_pdf || "-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal. En caso de requerir por CIPBA se considera un 20% adicional para cubrir gastos totales.",
   });
   const [tabModal, setTabModal] = useState(esNuevo ? "datos" : "documento"); // "datos" | "documento"
   const [presupuestoCreado, setPresupuestoCreado] = useState(null); // ID del presupuesto recién creado
