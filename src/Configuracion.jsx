@@ -21,7 +21,7 @@ const GRUPOS = [
   { id: "bancario",  label: "🏦 Datos bancarios",   desc: "Para cobros y anticipo" },
 ];
 
-const LABELS: Record<string, string> = {
+const LABELS = {
   empresa_nombre:   "Nombre de la empresa",
   empresa_email:    "Email",
   empresa_tel:      "Teléfono",
@@ -33,7 +33,7 @@ const LABELS: Record<string, string> = {
 };
 
 export default function Configuracion() {
-  const [config, setConfig] = useState<Record<string, string>>({});
+  const [config, setConfig] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -46,8 +46,8 @@ export default function Configuracion() {
     const r = await fetch(`${SUPA_URL}/configuracion?select=key,value`, {
       headers: { apikey: ANON_KEY, Authorization: `Bearer ${tk}` }
     }).then(r => r.json());
-    const map: Record<string, string> = {};
-    (Array.isArray(r) ? r : []).forEach((row: any) => { map[row.key] = row.value || ""; });
+    const map = {};
+    (Array.isArray(r) ? r : []).forEach((row) => { map[row.key] = row.value || ""; });
     setConfig(map);
     setLoading(false);
   }
@@ -69,7 +69,7 @@ export default function Configuracion() {
       });
       setMsg("✓ Configuración guardada");
       setTimeout(() => setMsg(""), 3000);
-    } catch(e: any) {
+    } catch(e) {
       setMsg("❌ Error: " + e.message);
     }
     setSaving(false);
