@@ -155,15 +155,25 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function cargar() {
+    async function cargarAlertas() {
+    try {
+      const tk = await getToken();
+      const r = await fetch(`${SUPA_URL}/vista_alertas_presupuestos?nivel_alerta=neq.ok&select=id`, {
+        headers: hdrs(tk)
+      }).then(r => r.json());
+      setCantAlertas(Array.isArray(r) ? r.length : 0);
+    } catch(_) {}
+  }
+
+  async function cargar() {
       const tk = await getToken();
       const d = await fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json());
       setClientes(Array.isArray(d) ? d : []);
 
-      // Cargar wsp y mail del cliente vinculado
-      const clienteId = pres?.cliente_id || form.cliente_id;
+      // Cargar wsp y mail — primero cliente, si no hay buscar comitente
+      const clienteId = pres?.cliente_id || form.cliente_id || pres?.comitente_id || form.comitente_id;
       if (clienteId) {
-        const cli = await fetch(`${SUPA_URL}/clientes?id=eq.${clienteId}&select=wsp,mail`, { headers: hdrs(tk) }).then(r => r.json());
+        const cli = await fetch(`${SUPA_URL}/clientes?id=eq.${clienteId}&select=wsp,mail,empresa`, { headers: hdrs(tk) }).then(r => r.json());
         if (Array.isArray(cli) && cli[0]) {
           setClienteWsp(cli[0].wsp || "");
           setClienteMail(cli[0].mail || "");
@@ -366,7 +376,11 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                     <button onClick={() => setShowNuevoCli(true)} style={{ fontSize: 10, padding: "1px 6px", background: "#f0f0f0", border: "none", borderRadius: 4, cursor: "pointer", color: "#555" }}>+ Nuevo</button>
                   </div>
                   <Combobox
-                    options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` · ${c.tipo}` : ""}` }))}
+                    options={[
+                      // Incluir cliente actual si existe para que se muestre aunque las opciones aún no carguen
+                      ...(form.cliente_id && form.cliente ? [{ value: form.cliente_id, label: form.cliente }] : []),
+                      ...clientes.filter(c => c.id !== form.cliente_id).map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` · ${c.tipo}` : ""}` }))
+                    ]}
                     value={form.cliente_id}
                     onChange={(val, label) => setForm(p => ({ ...p, cliente_id: val, cliente: label }))}
                     placeholder="Buscar cliente..."
@@ -376,7 +390,10 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                 <div>
                   <span style={shared.lbl}>Comitente <span style={{ fontWeight: 400, color: "#bbb", textTransform: "none", letterSpacing: 0 }}>(opcional)</span></span>
                   <Combobox
-                    options={clientes.map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` · ${c.tipo}` : ""}` }))}
+                    options={[
+                      ...(form.comitente_id && form.comitente_nombre ? [{ value: form.comitente_id, label: form.comitente_nombre }] : []),
+                      ...clientes.filter(c => c.id !== form.comitente_id).map(c => ({ value: c.id, label: `${c.empresa}${c.tipo ? ` · ${c.tipo}` : ""}` }))
+                    ]}
                     value={form.comitente_id}
                     onChange={(val, label) => setForm(p => ({ ...p, comitente_id: val, comitente_nombre: label }))}
                     placeholder="Buscar comitente..."
@@ -599,7 +616,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 
               {/* Info de contacto del cliente */}
               <div style={{ marginTop: 12, padding: "10px 14px", background: "#f8f8f8", borderRadius: 8, fontSize: 12, color: "#666", display: "flex", gap: 16 }}>
-                <span>👤 {form.cliente || "Sin cliente"}</span>
+                <span>👤 {form.cliente || form.comitente_nombre || "Sin cliente/comitente"}</span>
                 {clienteWsp ? <span style={{ color: "#25d366" }}>💬 {clienteWsp}</span> : <span style={{ color: "#ccc" }}>Sin WhatsApp</span>}
                 {clienteMail ? <span style={{ color: "#3b82f6" }}>✉️ {clienteMail}</span> : <span style={{ color: "#ccc" }}>Sin email</span>}
               </div>
@@ -716,6 +733,7 @@ export default function App({ deepLinkId }) {
   const [filtroMes, setFiltroMes] = useState("todos");
   const [verArchivados, setVerArchivados] = useState(false);
   const [showAlertas, setShowAlertas] = useState(false);
+  const [cantAlertas, setCantAlertas] = useState(0);
   const [msg, setMsg] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -867,11 +885,12 @@ export default function App({ deepLinkId }) {
   const ordenados = [...filtrados].sort((a, b) => codigoNumero(b.codigo) - codigoNumero(a.codigo));
 
   // KPIs
-  const totalMonto    = presupuestos.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const enviados      = presupuestos.filter(p => p.estado === "enviado").length;
-  const enNegociacion = presupuestos.filter(p => p.estado === "negociacion").length;
-  const montoEnviados = presupuestos.filter(p => p.estado === "enviado" || p.estado === "negociacion").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const paraRecontactar = presupuestos.filter(p =>
+  // KPIs calculados sobre la lista filtrada (responden a los filtros activos)
+  const totalMonto    = ordenados.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const enviados      = ordenados.filter(p => p.estado === "enviado").length;
+  const enNegociacion = ordenados.filter(p => p.estado === "negociacion").length;
+  const montoEnviados = ordenados.filter(p => p.estado === "enviado" || p.estado === "negociacion").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const paraRecontactar = ordenados.filter(p =>
     (p.estado === "enviado" || p.estado === "negociacion") &&
     p.updated_at &&
     Math.floor((new Date() - new Date(p.updated_at)) / 86400000) >= 7
@@ -888,12 +907,12 @@ export default function App({ deepLinkId }) {
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button onClick={() => setShowAlertas(true)} style={{
-            padding: "9px 16px", background: paraRecontactar > 0 ? "#fef3c7" : "#f0f0f0",
-            color: paraRecontactar > 0 ? "#c4781a" : "#555",
-            border: paraRecontactar > 0 ? "1.5px solid #f59e0b" : "1.5px solid #e0e0e0",
+            padding: "9px 16px", background: cantAlertas > 0 ? "#fef3c7" : "#f0f0f0",
+            color: cantAlertas > 0 ? "#c4781a" : "#555",
+            border: cantAlertas > 0 ? "1.5px solid #f59e0b" : "1.5px solid #e0e0e0",
             borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
           }}>
-            🔔 Alertas {paraRecontactar > 0 ? `(${paraRecontactar})` : ""}
+            🔔 Alertas {cantAlertas > 0 ? `(${cantAlertas})` : ""}
           </button>
           <button onClick={() => { setEditando(null); setShowModal(true); }} style={shared.btn}>+ Nuevo presupuesto</button>
         </div>
@@ -970,7 +989,7 @@ export default function App({ deepLinkId }) {
       )}
 
       {showAlertas && (
-        <AlertasPresupuestos onClose={() => setShowAlertas(false)} />
+        <AlertasPresupuestos onClose={() => { setShowAlertas(false); cargarAlertas(); }} />
       )}
     </div>
   );
