@@ -29,7 +29,6 @@ const ESTADOS = [
   { v: "enviado",     label: "Enviado",     color: "#3b82f6", prob: 25  },
   { v: "negociacion", label: "Negociación", color: "#f59e0b", prob: 60  },
   { v: "aprobado",    label: "Aprobado",    color: "#22c55e", prob: 100 },
-  { v: "entregado",   label: "Entregado",   color: "#6366f1", prob: 100 },
   { v: "rechazado",   label: "Rechazado",   color: "#ef4444", prob: 0   },
 ];
 
