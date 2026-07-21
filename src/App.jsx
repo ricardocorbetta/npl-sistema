@@ -899,8 +899,14 @@ export default function App({ deepLinkId }) {
   const ordenados = [...filtrados].sort((a, b) => codigoNumero(b.codigo) - codigoNumero(a.codigo));
 
   // KPIs
-  // KPIs calculados sobre la lista filtrada (responden a los filtros activos)
-  const totalMonto    = ordenados.filter(p => p.estado === "aprobado").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  // KPIs: aprobados filtran por mes independientemente del filtro de estado
+  const aprobadosPorMes = presupuestos.filter(p => {
+    if (p.estado !== "aprobado") return false;
+    if (filtroMes === "todos") return true;
+    const fecha = p.fecha_aprobacion || p.fecha_emision;
+    return fecha && fecha.slice(0,7) === filtroMes;
+  });
+  const totalMonto    = aprobadosPorMes.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
   const enviados      = ordenados.filter(p => p.estado === "enviado").length;
   const enNegociacion = ordenados.filter(p => p.estado === "negociacion").length;
   const montoEnviados = ordenados.filter(p => p.estado === "enviado" || p.estado === "negociacion").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
@@ -941,7 +947,7 @@ export default function App({ deepLinkId }) {
       {/* KPIs compactos — una sola fila */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         {[
-          { label: "Aprobado",     value: `$${totalMonto.toLocaleString("es-AR")}`,          color: "#1a8a5e" },
+          { label: filtroMes !== "todos" ? `Aprobado ${MESES[parseInt(filtroMes.slice(5))-1]}` : "Aprobado",     value: `$${totalMonto.toLocaleString("es-AR")}`,          color: "#1a8a5e" },
           { label: "Enviados",     value: enviados,                                            color: "#3b82f6" },
           { label: "Negociación",  value: enNegociacion,                                       color: "#f59e0b" },
           { label: "⏰ Recontactar", value: paraRecontactar,                                   color: paraRecontactar > 0 ? "#c4781a" : "#aaa" },
