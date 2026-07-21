@@ -842,7 +842,13 @@ export default function App({ deepLinkId }) {
   async function cambiarEstado(id, estado) {
     const tk = await getToken();
     const est = ESTADOS.find(e => e.v === estado);
-    const patch = { estado, probabilidad: est?.prob ?? 0 };
+    const hoy = new Date().toISOString().slice(0, 10);
+    const patch = {
+      estado,
+      probabilidad: est?.prob ?? 0,
+      // Auto-registrar fecha de aprobación
+      ...(estado === "aprobado" ? { fecha_aprobacion: hoy } : {}),
+    };
     await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(patch) });
     setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
   }
@@ -863,7 +869,10 @@ export default function App({ deepLinkId }) {
 
   // Meses disponibles según datos reales (para el desplegable)
   const mesesDisponibles = [...new Set(
-    presupuestos.filter(p => p.fecha_emision).map(p => p.fecha_emision.slice(0,7))
+    presupuestos.flatMap(p => [
+      p.fecha_emision ? p.fecha_emision.slice(0,7) : null,
+      p.fecha_aprobacion ? p.fecha_aprobacion.slice(0,7) : null,
+    ].filter(Boolean))
   )].sort().reverse();
 
   // Filtros
@@ -871,11 +880,16 @@ export default function App({ deepLinkId }) {
     if (verArchivados) return p.archivado === true;
     if (p.archivado === true) return false;
     const pasaEstado  = filtroEstado === "todos"
-      || filtroEstado === "seguimiento" ? (p.estado === "enviado" || p.estado === "negociacion")
+      ? true
+      : filtroEstado === "seguimiento"
+      ? (p.estado === "enviado" || p.estado === "negociacion")
       : p.estado === filtroEstado;
     const pasaTipo    = filtroTipo === "todos"     || p.tipo_servicio === filtroTipo;
     const pasaSistema = filtroSistema === "todos"  || p.sistema_constructivo === filtroSistema;
-    const pasaMes     = filtroMes === "todos"      || (p.fecha_emision && p.fecha_emision.slice(0,7) === filtroMes);
+    const fechaRef = (filtroEstado === "aprobado" && p.fecha_aprobacion)
+      ? p.fecha_aprobacion
+      : p.fecha_emision;
+    const pasaMes     = filtroMes === "todos" || (fechaRef && fechaRef.slice(0,7) === filtroMes);
     return pasaEstado && pasaTipo && pasaSistema && pasaMes;
   });
 
