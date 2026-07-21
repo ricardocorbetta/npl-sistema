@@ -128,6 +128,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     probabilidad:         pres?.probabilidad || "",
     fecha_emision:        pres?.fecha_emision || new Date().toISOString().slice(0,10),
     fecha_vencimiento:    pres?.fecha_vencimiento || "",
+    fecha_aprobacion:     pres?.fecha_aprobacion || "",
     obs:                  pres?.obs || "",
     comitente_id:         pres?.comitente_id || "",
     comitente_nombre:     pres?.comitente_nombre || "",
@@ -267,6 +268,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
       if (!body.comitente_id) body.comitente_id = null;
       if (!body.fecha_emision) body.fecha_emision = null;
       if (!body.fecha_vencimiento) body.fecha_vencimiento = null;
+      if (!body.fecha_aprobacion) body.fecha_aprobacion = null;
       if (body.monto === "" || body.monto === undefined) body.monto = null;
       if (body.superficie === "" || body.superficie === undefined) body.superficie = null;
       if (body.probabilidad === "" || body.probabilidad === undefined) body.probabilidad = null;
@@ -501,6 +503,12 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                   <input type="date" value={form.fecha_vencimiento} onChange={e => setForm(p => ({ ...p, fecha_vencimiento: e.target.value }))} style={shared.inp} />
                 </div>
               </div>
+              {(form.estado === "aprobado" || form.fecha_aprobacion) && (
+                <div>
+                  <span style={shared.lbl}>Fecha aprobación <span style={{ fontWeight: 400, color: "#1a8a5e", textTransform: "none", letterSpacing: 0 }}>✓</span></span>
+                  <input type="date" value={form.fecha_aprobacion} onChange={e => setForm(p => ({ ...p, fecha_aprobacion: e.target.value }))} style={{ ...shared.inp, borderColor: "#1a8a5e" }} />
+                </div>
+              )}
 
               {/* Separador */}
               <div style={{ flex: 1 }} />
