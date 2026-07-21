@@ -658,8 +658,10 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
     ? Math.round(parseFloat(p.monto) / parseFloat(p.superficie))
     : null;
 
-  const diasDesdeActualizacion = p.updated_at
-    ? Math.floor((new Date() - new Date(p.updated_at)) / 86400000)
+  // Usar fecha_ultimo_contacto si existe, sino fecha_emision, nunca updated_at
+  const fechaRef = p.fecha_ultimo_contacto || p.fecha_emision;
+  const diasDesdeActualizacion = fechaRef
+    ? Math.floor((new Date() - new Date(fechaRef + "T12:00")) / 86400000)
     : null;
   const necesitaRecontacto = (p.estado === "enviado" || p.estado === "negociacion")
     && diasDesdeActualizacion !== null && diasDesdeActualizacion >= 7;
@@ -917,11 +919,12 @@ export default function App({ deepLinkId }) {
   const enviados      = ordenados.filter(p => p.estado === "enviado").length;
   const enNegociacion = ordenados.filter(p => p.estado === "negociacion").length;
   const montoEnviados = ordenados.filter(p => p.estado === "enviado" || p.estado === "negociacion").reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const paraRecontactar = ordenados.filter(p =>
-    (p.estado === "enviado" || p.estado === "negociacion") &&
-    p.updated_at &&
-    Math.floor((new Date() - new Date(p.updated_at)) / 86400000) >= 7
-  ).length;
+  const paraRecontactar = ordenados.filter(p => {
+    if (p.estado !== "enviado" && p.estado !== "negociacion") return false;
+    const ref = p.fecha_ultimo_contacto || p.fecha_emision;
+    if (!ref) return false;
+    return Math.floor((new Date() - new Date(ref + "T12:00")) / 86400000) >= 7;
+  }).length;
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: isMobile ? 16 : 28, maxWidth: 1100, margin: "0 auto" }}>
