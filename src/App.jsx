@@ -798,6 +798,7 @@ export default function App({ deepLinkId }) {
       // Limpiar campos date vacíos → null
       if (!body.fecha_emision) body.fecha_emision = null;
       if (!body.fecha_vencimiento) body.fecha_vencimiento = null;
+      if (!body.fecha_aprobacion) body.fecha_aprobacion = null;
 
       // Limpiar campos numéricos vacíos → null
       if (body.monto === "" || body.monto === undefined) body.monto = null;
