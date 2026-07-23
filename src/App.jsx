@@ -957,19 +957,78 @@ export default function App({ deepLinkId }) {
 
       {/* KPIs compactos — una sola fila */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        {[
-          { label: filtroMes !== "todos" ? `Aprobado ${MESES[parseInt(filtroMes.slice(5))-1]}` : "Aprobado",     value: `$${totalMonto.toLocaleString("es-AR")}`,          color: "#1a8a5e" },
-          { label: "Enviados",     value: enviados,                                            color: "#3b82f6" },
-          { label: "Negociación",  value: enNegociacion,                                       color: "#f59e0b" },
-          { label: "⏰ Recontactar", value: paraRecontactar,                                   color: paraRecontactar > 0 ? "#c4781a" : "#aaa" },
-          { label: "En seguimiento", value: `$${montoEnviados.toLocaleString("es-AR")}`,      color: "#6366f1" },
-          { label: "Total",        value: presupuestos.length,                                 color: "#888" },
-        ].map(k => (
-          <div key={k.label} style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: k.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>{k.value}</div>
-            <div style={{ fontSize: 10, color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</div>
+        {/* KPI Aprobados + Tasa conversión */}
+        {(() => {
+          const enviados_mes = filtroMes === "todos"
+            ? presupuestos.filter(p => ["enviado","negociacion","aprobado","rechazado"].includes(p.estado)).length
+            : presupuestos.filter(p => {
+                if (!["enviado","negociacion","aprobado","rechazado"].includes(p.estado)) return false;
+                const f = p.fecha_emision;
+                return f && f.slice(0,7) === filtroMes;
+              }).length;
+          const tasa = enviados_mes > 0 ? Math.round((aprobadosPorMes.length / enviados_mes) * 100) : null;
+          return (
+            <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 140 }}>
+              <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                {filtroMes !== "todos" ? `Aprobados ${MESES[parseInt(filtroMes.slice(5))-1]}` : "Aprobados"}
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 22, fontWeight: 900, color: "#1a8a5e", fontFamily: "'JetBrains Mono', monospace" }}>{aprobadosPorMes.length}</span>
+                <span style={{ fontSize: 12, color: "#1a8a5e", fontWeight: 600 }}>${totalMonto.toLocaleString("es-AR")}</span>
+              </div>
+              {tasa !== null && (
+                <div style={{ fontSize: 11, color: tasa >= 50 ? "#1a8a5e" : tasa >= 30 ? "#c4781a" : "#c0392b", fontWeight: 700, marginTop: 2 }}>
+                  {tasa}% conversión
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* KPI Enviados (todos los que salieron) */}
+        {(() => {
+          const total_enviados = filtroMes === "todos"
+            ? presupuestos.filter(p => ["enviado","negociacion","aprobado","rechazado"].includes(p.estado)).length
+            : presupuestos.filter(p => {
+                if (!["enviado","negociacion","aprobado","rechazado"].includes(p.estado)) return false;
+                const f = p.fecha_emision;
+                return f && f.slice(0,7) === filtroMes;
+              }).length;
+          return (
+            <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 120 }}>
+              <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                {filtroMes !== "todos" ? `Enviados ${MESES[parseInt(filtroMes.slice(5))-1]}` : "Enviados"}
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 22, fontWeight: 900, color: "#3b82f6", fontFamily: "'JetBrains Mono', monospace" }}>{total_enviados}</span>
+                <span style={{ fontSize: 11, color: "#888" }}>presupuestos</span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* KPI En seguimiento */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 120 }}>
+          <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>En seguimiento</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#6366f1", fontFamily: "'JetBrains Mono', monospace" }}>{enviados + enNegociacion}</span>
+            <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>${montoEnviados.toLocaleString("es-AR")}</span>
           </div>
-        ))}
+        </div>
+
+        {/* KPI Recontactar */}
+        {paraRecontactar > 0 && (
+          <div style={{ background: "#fffbeb", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #f59e0b", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
+            <div style={{ fontSize: 11, color: "#c4781a", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>⏰ Recontactar</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#c4781a", fontFamily: "'JetBrains Mono', monospace" }}>{paraRecontactar}</div>
+          </div>
+        )}
+
+        {/* KPI Total */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 80 }}>
+          <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#888", fontFamily: "'JetBrains Mono', monospace" }}>{presupuestos.length}</div>
+        </div>
       </div>
 
       {/* Filtros compactos */}
