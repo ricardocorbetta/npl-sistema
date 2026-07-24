@@ -321,6 +321,12 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onClose }) {
                   <span style={{ width: 18, height: 18, borderRadius: "50%", background: tabModal === "documento" ? "#fff" : "#e0e0e0", color: tabModal === "documento" ? "#111" : "#999", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>2</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: tabModal === "documento" ? "#fff" : (esNuevo ? "#ccc" : "#555") }}>Documento</span>
                 </div>
+                {pres?.estado === "aprobado" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, background: "#f0fdf4", border: "1.5px solid #1a8a5e", marginLeft: 4 }}>
+                    <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#1a8a5e", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>3</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1a8a5e" }}>Generar</span>
+                  </div>
+                )}
               </div>
               <button onClick={onClose} style={{ background: "#f0f0f0", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 16, color: "#555" }}>✕</button>
             </div>
@@ -533,6 +539,47 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onClose }) {
           {/* Tab DOCUMENTO */}
           {tabModal === "documento" && (
             <div>
+              {/* 3. Generar — solo para aprobados, siempre arriba */}
+              {!esNuevo && pres?.estado === "aprobado" && (() => {
+                const ts = pres.tipo_servicio;
+                const mostrarProyecto = ts !== "obra" && ts !== "auditoria";
+                const mostrarObra = ts !== "calculo" && ts !== "certificacion";
+                return (
+                  <div style={{ background: "#f0fdf4", border: "1.5px solid #1a8a5e", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, color: "#1a8a5e", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>3. Generar Proyecto / Obra</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "start" }}>
+                      {/* Preview datos */}
+                      <div style={{ fontSize: 12, color: "#555", display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div>📋 <strong>{pres.codigo}</strong> — {form.obra_nombre || pres.descripcion || "Sin nombre"}</div>
+                        <div>👤 {form.comitente_nombre || pres.cliente || "Sin cliente"}</div>
+                        {pres.sistema_constructivo && <div>🏗 {pres.sistema_constructivo}{pres.superficie ? ` · ${pres.superficie} m²` : ""}</div>}
+                      </div>
+                      {/* Botones */}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {mostrarProyecto && (
+                          <button onClick={() => onGenerar && onGenerar(pres, "proyecto")}
+                            style={{ padding: "8px 14px", background: "#6366f1", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            📐 Proyecto
+                          </button>
+                        )}
+                        {mostrarObra && (
+                          <button onClick={() => onGenerar && onGenerar(pres, "obra")}
+                            style={{ padding: "8px 14px", background: "#c4781a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            🏗 Obra
+                          </button>
+                        )}
+                        {mostrarProyecto && mostrarObra && (
+                          <button onClick={() => onGenerar && onGenerar(pres, "ambos")}
+                            style={{ padding: "8px 14px", background: "#0a0a0a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            ⚡ Ambos
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                 <div>
                   <span style={shared.lbl}>Nombre de la obra</span>
@@ -638,49 +685,6 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onClose }) {
                   </div>
                 </div>
               )}
-              {/* 3. Generar Proyecto / Obra */}
-              {!esNuevo && pres?.estado === "aprobado" && (() => {
-                const ts = pres.tipo_servicio;
-                const mostrarProyecto = ts !== "obra" && ts !== "auditoria";
-                const mostrarObra = ts !== "calculo" && ts !== "certificacion";
-                return (
-                  <div style={{ marginTop: 12, borderTop: "1px solid #f0f0f0", paddingTop: 12 }}>
-                    <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>3. Generar</div>
-                    {/* Preview datos heredados */}
-                    <div style={{ background: "#f8f8f8", borderRadius: 8, padding: "10px 12px", marginBottom: 10, fontSize: 12, color: "#555", border: "1px solid #e8e8e8" }}>
-                      <div style={{ fontWeight: 700, color: "#111", marginBottom: 6 }}>Datos a heredar:</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <div>📋 Código: <strong>{pres.codigo}</strong></div>
-                        <div>📝 Nombre: <strong>{form.obra_nombre || pres.descripcion || "—"}</strong></div>
-                        <div>👤 Cliente: <strong>{form.comitente_nombre || pres.cliente || "—"}</strong></div>
-                        {pres.sistema_constructivo && <div>🏗 Sistema: <strong>{pres.sistema_constructivo}</strong></div>}
-                        {pres.superficie && <div>📐 Superficie: <strong>{pres.superficie} m²</strong></div>}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {mostrarProyecto && (
-                        <button onClick={() => onGenerar && onGenerar(pres, "proyecto")}
-                          style={{ flex: 1, padding: "10px", background: "#6366f1", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                          📐 Generar Proyecto
-                        </button>
-                      )}
-                      {mostrarObra && (
-                        <button onClick={() => onGenerar && onGenerar(pres, "obra")}
-                          style={{ flex: 1, padding: "10px", background: "#c4781a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                          🏗 Generar Obra
-                        </button>
-                      )}
-                      {mostrarProyecto && mostrarObra && (
-                        <button onClick={() => onGenerar && onGenerar(pres, "ambos")}
-                          style={{ flex: 1, padding: "10px", background: "#0a0a0a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                          ⚡ Generar Ambos
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
               {esNuevo && <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>Guardá primero para habilitar las acciones.</p>}
             </div>
           )} {/* fin tab documento */}
