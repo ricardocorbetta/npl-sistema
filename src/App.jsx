@@ -651,7 +651,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
 }
 
 /* ─── Card presupuesto ─── */
-function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar }) {
+function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar, onGenerar }) {
   const estado = ESTADOS.find(e => e.v === p.estado);
   const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
   const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
@@ -716,17 +716,53 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
       </div>
 
       {/* Acciones — siempre en una fila */}
-      <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}>
-        <button onClick={() => onEditar(p)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333", fontWeight: 600 }}>✏️</button>
-        {necesitaRecontacto && (
-          <a href={mensajeRecontacto()} target="_blank" rel="noreferrer"
-            style={{ background: "#25d366", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 700, textDecoration: "none" }}>💬</a>
-        )}
-        {p.archivado === true
-          ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333" }}>↩</button>
-          : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#999" }}>📦</button>
-        }
-      </div>
+      <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center", flexDirection: "column" }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => onEditar(p)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333", fontWeight: 600 }}>✏️</button>
+          {necesitaRecontacto && (
+            <a href={mensajeRecontacto()} target="_blank" rel="noreferrer"
+              style={{ background: "#25d366", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#fff", fontWeight: 700, textDecoration: "none" }}>💬</a>
+          )}
+          {p.archivado === true
+            ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333" }}>↩</button>
+            : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#999" }}>📦</button>
+          }
+        </div>
+        {/* Botones generar — solo para aprobados */}
+        {p.estado === "aprobado" && onGenerar && (() => {
+          const ts = p.tipo_servicio;
+          const esCalculo = ts === "calculo" || ts === "certificacion" || ts === "otro";
+          const esObra = ts === "obra" || ts === "auditoria";
+          const esAmbos = ts === "calculo_obra";
+          return (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {(esCalculo || esAmbos) && (
+                <button onClick={() => onGenerar(p, "proyecto")}
+                  style={{ background: "#6366f1", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  + Proyecto
+                </button>
+              )}
+              {(esObra || esAmbos) && (
+                <button onClick={() => onGenerar(p, "obra")}
+                  style={{ background: "#c4781a", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  + Obra
+                </button>
+              )}
+              {esAmbos && (
+                <button onClick={() => onGenerar(p, "ambos")}
+                  style={{ background: "#0a0a0a", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  + Ambos
+                </button>
+              )}
+              {esCalculo && !esAmbos && !esObra && (
+                <button onClick={() => onGenerar(p, "obra")}
+                  style={{ background: "#c4781a", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  + Obra
+                </button>
+              )}
+            </div>
+          );
+        })()}
     </div>
   );
 }
@@ -847,6 +883,67 @@ export default function App({ deepLinkId }) {
       setMsg("❌ Error: " + e.message);
       setTimeout(() => setMsg(""), 6000);
       console.error("Error guardando presupuesto:", e);
+    }
+  }
+
+  async function generarDesdePresupuesto(pres, tipo) {
+    // tipo: "proyecto" | "obra" | "ambos"
+    const tk = await getToken();
+    try {
+      if (tipo === "proyecto" || tipo === "ambos") {
+        // Verificar si ya existe
+        const existe = await fetch(`${SUPA_URL}/proyectos?presupuesto_id=eq.${pres.id}&select=id`, { headers: hdrs(tk) }).then(r => r.json());
+        if (Array.isArray(existe) && existe.length > 0) {
+          setMsg("⚠️ Ya existe un proyecto vinculado a este presupuesto");
+          setTimeout(() => setMsg(""), 4000);
+        } else {
+          const body = {
+            codigo: pres.codigo,
+            numero_proyecto: pres.codigo,
+            descripcion: pres.descripcion || pres.obra_nombre || "",
+            cliente: pres.cliente || pres.comitente_nombre || "",
+            cliente_id: pres.cliente_id || null,
+            superficie: pres.superficie ? parseFloat(pres.superficie) : null,
+            tipo_obra: pres.sistema_constructivo || null,
+            presupuesto_id: pres.id,
+            estado: "onboarding",
+            anticipo: false,
+            check_diagnostico: false,
+            proyecto_ok: false,
+            entregado: false,
+            cobrado: false,
+            archivado: false,
+          };
+          await fetch(`${SUPA_URL}/proyectos`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) });
+          setMsg("✓ Proyecto generado correctamente");
+          setTimeout(() => setMsg(""), 3000);
+        }
+      }
+      if (tipo === "obra" || tipo === "ambos") {
+        const existe = await fetch(`${SUPA_URL}/obras_campo?presupuesto_id=eq.${pres.id}&select=id`, { headers: hdrs(tk) }).then(r => r.json());
+        if (Array.isArray(existe) && existe.length > 0) {
+          setMsg("⚠️ Ya existe una obra vinculada a este presupuesto");
+          setTimeout(() => setMsg(""), 4000);
+        } else {
+          const body = {
+            codigo: pres.codigo,
+            nombre: pres.descripcion || pres.obra_nombre || "",
+            cliente: pres.comitente_nombre || pres.cliente || "",
+            cliente_id: pres.cliente_id || null,
+            sistema_constructivo: pres.sistema_constructivo || null,
+            presupuesto_id: pres.id,
+            estado: "planificacion",
+            alcance: Array.isArray(pres.items_alcance) ? pres.items_alcance.join("\n") : "",
+          };
+          await fetch(`${SUPA_URL}/obras_campo`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) });
+          setMsg("✓ Obra generada correctamente");
+          setTimeout(() => setMsg(""), 3000);
+        }
+      }
+      cargar();
+    } catch(e) {
+      setMsg("❌ Error: " + e.message);
+      setTimeout(() => setMsg(""), 5000);
     }
   }
 
@@ -1071,7 +1168,7 @@ export default function App({ deepLinkId }) {
       {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {ordenados.map(p => (
-            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} onArchivar={archivar} onDesarchivar={desarchivar} />
+            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} onArchivar={archivar} onDesarchivar={desarchivar} onGenerar={generarDesdePresupuesto} />
           ))}
           {ordenados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
         </div>
