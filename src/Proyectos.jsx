@@ -326,7 +326,6 @@ function ModalProyecto({ proyecto, onClose, onGuardar }) {
     cobrado: !!proyecto?.cobrado,
     drive_url: proyecto?.drive_url || "",
     obs: proyecto?.obs || "",
-    proxima_tarea: proyecto?.proxima_tarea || "",
     presupuesto_id: proyecto?.presupuesto_id || "",
   });
   const [saving, setSaving] = useState(false);
@@ -368,7 +367,6 @@ function ModalProyecto({ proyecto, onClose, onGuardar }) {
       fecha_entrega_plan: emptyToNull(form.fecha_entrega_plan),
       drive_url: form.drive_url || null,
       obs: form.obs || null,
-      proxima_tarea: form.proxima_tarea || null,
       presupuesto_id: emptyToNull(form.presupuesto_id),
       entregado: delivered,
       archivado: delivered ? !!proyecto?.archivado : false,
@@ -409,27 +407,25 @@ function ModalProyecto({ proyecto, onClose, onGuardar }) {
           <div><span style={shared.lbl}>Descripción *</span><input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} style={shared.inp} placeholder="Descripción del proyecto" /></div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <span style={shared.lbl}>Cliente</span>
             <Combobox options={clientes.map(c => ({ value: c.id, label: c.empresa }))} value={form.cliente_id} onChange={(val, label) => setForm(f => ({ ...f, cliente_id: val, cliente: label || "" }))} placeholder="Buscar cliente" emptyLabel="Sin vincular" />
           </div>
           <div>
-            <span style={shared.lbl}>Encargado</span>
+            <span style={shared.lbl}>Calculista encargado</span>
             <select value={form.encargado} onChange={e => setForm(f => ({ ...f, encargado: e.target.value }))} style={shared.inp}>
               <option value="">Sin asignar</option>
               {calculistas.map(c => <option key={c.id} value={c.nombre}>{c.nombre} · {c.nivel}</option>)}
             </select>
           </div>
-          <div><span style={shared.lbl}>Categoría</span><input value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} style={shared.inp} /></div>
-          <div><span style={shared.lbl}>Tipo de obra</span><select value={form.tipo_obra} onChange={e => setForm(f => ({ ...f, tipo_obra: e.target.value }))} style={shared.inp}><option value="">Seleccionar</option>{TIPOS_OBRA.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-          <div><span style={shared.lbl}>Superficie m²</span><input type="number" min="0" value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} style={shared.inp} /></div>
-          <div><span style={shared.lbl}>Fecha entrega</span><input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={shared.inp} /></div>
-          <div><span style={shared.lbl}>Próxima tarea</span><input value={form.proxima_tarea} onChange={e => setForm(f => ({ ...f, proxima_tarea: e.target.value }))} style={shared.inp} /></div>
           <div>
-            <span style={shared.lbl}>Presupuesto</span>
+            <span style={shared.lbl}>Presupuesto vinculado</span>
             <Combobox options={presupuestos.map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}`.trim() }))} value={form.presupuesto_id} onChange={val => setForm(f => ({ ...f, presupuesto_id: val }))} placeholder="Buscar presupuesto" emptyLabel="Sin vincular" />
           </div>
+          <div><span style={shared.lbl}>Tipo de obra</span><select value={form.tipo_obra} onChange={e => setForm(f => ({ ...f, tipo_obra: e.target.value }))} style={shared.inp}><option value="">Seleccionar</option>{TIPOS_OBRA.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div><span style={shared.lbl}>Superficie m²</span><input type="number" min="0" value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} style={shared.inp} /></div>
+          <div><span style={shared.lbl}>Fecha entrega estimada</span><input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={shared.inp} /></div>
         </div>
 
         <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
@@ -476,8 +472,7 @@ function ProyectoCard({ proyecto, onEditar, onChecklist, onArchivar }) {
               <StatusPill proyecto={proyecto} />
               {proyecto.tipo_obra && <Badge color={COLORS.textMuted} label={proyecto.tipo_obra} />}
             </div>
-            <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 3 }}>{proyecto.cliente || "Sin cliente"}{proyecto.encargado ? ` · ${proyecto.encargado}` : ""}{proyecto.superficie ? ` · ${proyecto.superficie}m²` : ""}</div>
-            {proyecto.proxima_tarea && <div style={{ fontSize: 12, color: FUNC.info, marginTop: 4 }}>→ {proyecto.proxima_tarea}</div>}
+            <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 3 }}>{proyecto.cliente || "Sin cliente"}{proyecto.encargado ? ` · 👤 ${proyecto.encargado}` : ""}{proyecto.superficie ? ` · ${proyecto.superficie}m²` : ""}</div>
           </div>
         </button>
         <div style={{ display: "flex", alignItems: "flex-end", flexDirection: "column", gap: 5 }}>
@@ -636,7 +631,7 @@ function CronogramaMensual({ proyectos }) {
 /* ════════════════════════════════════════════
    PRINCIPAL
 ════════════════════════════════════════════ */
-export default function Proyectos({ deepLinkId }) {
+export default function Proyectos({ deepLinkId, perfil }) {
   const [proyectos, setProyectos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -660,8 +655,11 @@ export default function Proyectos({ deepLinkId }) {
     setLoading(true); setError("");
     try {
       let rows;
-      try { rows = await api("/vista_proyectos?order=numero_proyecto.desc.nullslast"); }
-      catch (_) { rows = await api("/proyectos?order=numero_proyecto.desc.nullslast"); }
+      // Calculistas solo ven sus proyectos asignados
+      const esCalculista = perfil?.rol === "calculista";
+      const filtroCalc = esCalculista && perfil?.nombre ? `&encargado=eq.${encodeURIComponent(perfil.nombre)}` : "";
+      try { rows = await api(`/vista_proyectos?order=numero_proyecto.desc.nullslast${filtroCalc}`); }
+      catch (_) { rows = await api(`/proyectos?order=numero_proyecto.desc.nullslast${filtroCalc}`); }
       setProyectos(Array.isArray(rows) ? rows : []);
     } catch (e) { setError(e.message); setProyectos([]); }
     setLoading(false);
@@ -701,7 +699,7 @@ export default function Proyectos({ deepLinkId }) {
 
   const visibles = base.filter(p => {
     if (!q) return true;
-    return [p.descripcion, p.cliente, p.numero_proyecto, p.encargado, p.proxima_tarea].some(v => (v || "").toLowerCase().includes(q));
+    return [p.descripcion, p.cliente, p.numero_proyecto, p.encargado].some(v => (v || "").toLowerCase().includes(q));
   });
 
   return (
@@ -725,7 +723,7 @@ export default function Proyectos({ deepLinkId }) {
       <div style={{ ...shared.card, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
           <EstadoDropdown tab={tab} setTab={setTab} />
-          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="🔍 Buscar proyecto, cliente, encargado…" style={{ ...shared.inp, maxWidth: 340 }} />
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="🔍 Buscar proyecto, cliente, calculista…" style={{ ...shared.inp, maxWidth: 340 }} />
         </div>
       </div>
 
