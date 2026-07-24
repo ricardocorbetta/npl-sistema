@@ -763,6 +763,7 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
             </div>
           );
         })()}
+      </div>
     </div>
   );
 }
