@@ -131,7 +131,7 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
     fecha_aprobacion:     pres?.fecha_aprobacion || "",
     obs:                  pres?.obs || "",
     comitente_id:         pres?.comitente_id || "",
-    comitente_nombre:     pres?.comitente_nombre || "",
+    comitente_nombre:     pres?.comitente_nombre || (!pres?.comitente_id && pres?.cliente ? pres.cliente : ""),
     // Campos para generación de PDF
     obra_nombre:          pres?.obra_nombre || "",
     descripcion_larga:    pres?.descripcion_larga
