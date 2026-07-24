@@ -961,9 +961,9 @@ export default function App({ deepLinkId }) {
         {(() => {
           // Denominador: todos los emitidos ese mes (sin borrador)
           const emitidos_mes = filtroMes === "todos"
-            ? presupuestos.filter(p => p.estado !== "borrador").length
+            ? presupuestos.filter(p => p.estado !== "borrador" && !p.archivado).length
             : presupuestos.filter(p => {
-                if (p.estado === "borrador") return false;
+                if (p.estado === "borrador" || p.archivado) return false;
                 const f = p.fecha_emision;
                 return f && f.slice(0,7) === filtroMes;
               }).length;
@@ -991,9 +991,9 @@ export default function App({ deepLinkId }) {
         {(() => {
           // Total emitidos ese mes (sin borrador) — mismo denominador que la tasa
           const total_enviados = filtroMes === "todos"
-            ? presupuestos.filter(p => p.estado !== "borrador").length
+            ? presupuestos.filter(p => p.estado !== "borrador" && !p.archivado).length
             : presupuestos.filter(p => {
-                if (p.estado === "borrador") return false;
+                if (p.estado === "borrador" || p.archivado) return false;
                 const f = p.fecha_emision;
                 return f && f.slice(0,7) === filtroMes;
               }).length;
