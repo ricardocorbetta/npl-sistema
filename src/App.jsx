@@ -782,7 +782,7 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
 }
 
 /* ─── Lista de presupuestos ─── */
-export default function App({ deepLinkId }) {
+export default function App({ deepLinkId, onNav }) {
   const [presupuestos, setPresupuestos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -901,43 +901,35 @@ export default function App({ deepLinkId }) {
   }
 
   async function generarDesdePresupuesto(pres, tipo) {
-    // tipo: "proyecto" | "obra" | "ambos"
     const tk = await getToken();
     try {
       if (tipo === "proyecto" || tipo === "ambos") {
-        // Verificar si ya existe
         const existe = await fetch(`${SUPA_URL}/proyectos?presupuesto_id=eq.${pres.id}&select=id`, { headers: hdrs(tk) }).then(r => r.json());
         if (Array.isArray(existe) && existe.length > 0) {
-          setMsg("⚠️ Ya existe un proyecto vinculado a este presupuesto");
-          setTimeout(() => setMsg(""), 4000);
+          setMsg("⚠️ Ya existe un proyecto vinculado — abriendo...");
+          setTimeout(() => { setMsg(""); setShowModal(false); setEditando(null); if (onNav) onNav("proyectos", existe[0].id); }, 1200);
         } else {
           const body = {
-            codigo: pres.codigo,
-            numero_proyecto: pres.codigo,
+            codigo: pres.codigo, numero_proyecto: pres.codigo,
             descripcion: pres.descripcion || pres.obra_nombre || "",
-            cliente: pres.cliente || pres.comitente_nombre || "",
+            cliente: pres.comitente_nombre || pres.cliente || "",
             cliente_id: pres.cliente_id || null,
             superficie: pres.superficie ? parseFloat(pres.superficie) : null,
             tipo_obra: pres.sistema_constructivo || null,
-            presupuesto_id: pres.id,
-            estado: "onboarding",
-            anticipo: false,
-            check_diagnostico: false,
-            proyecto_ok: false,
-            entregado: false,
-            cobrado: false,
-            archivado: false,
+            presupuesto_id: pres.id, estado: "onboarding",
+            anticipo: false, check_diagnostico: false, proyecto_ok: false, entregado: false, cobrado: false, archivado: false,
           };
-          await fetch(`${SUPA_URL}/proyectos`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) });
-          setMsg("✓ Proyecto generado correctamente");
-          setTimeout(() => setMsg(""), 3000);
+          const res = await fetch(`${SUPA_URL}/proyectos`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) }).then(r => r.json());
+          const nuevoId = Array.isArray(res) ? res[0]?.id : res?.id;
+          setMsg("✓ Proyecto generado");
+          setTimeout(() => { setMsg(""); setShowModal(false); setEditando(null); if (onNav) onNav("proyectos", nuevoId); }, 1200);
         }
       }
       if (tipo === "obra" || tipo === "ambos") {
         const existe = await fetch(`${SUPA_URL}/obras_campo?presupuesto_id=eq.${pres.id}&select=id`, { headers: hdrs(tk) }).then(r => r.json());
         if (Array.isArray(existe) && existe.length > 0) {
-          setMsg("⚠️ Ya existe una obra vinculada a este presupuesto");
-          setTimeout(() => setMsg(""), 4000);
+          setMsg("⚠️ Ya existe una obra vinculada — abriendo...");
+          setTimeout(() => { setMsg(""); setShowModal(false); setEditando(null); if (onNav) onNav("obras", existe[0].id); }, 1200);
         } else {
           const body = {
             codigo: pres.codigo,
@@ -945,13 +937,13 @@ export default function App({ deepLinkId }) {
             cliente: pres.comitente_nombre || pres.cliente || "",
             cliente_id: pres.cliente_id || null,
             sistema_constructivo: pres.sistema_constructivo || null,
-            presupuesto_id: pres.id,
-            estado: "planificacion",
+            presupuesto_id: pres.id, estado: "planificacion",
             alcance: Array.isArray(pres.items_alcance) ? pres.items_alcance.join("\n") : "",
           };
-          await fetch(`${SUPA_URL}/obras_campo`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) });
-          setMsg("✓ Obra generada correctamente");
-          setTimeout(() => setMsg(""), 3000);
+          const res = await fetch(`${SUPA_URL}/obras_campo`, { method: "POST", headers: hdrs(tk), body: JSON.stringify(body) }).then(r => r.json());
+          const nuevoId = Array.isArray(res) ? res[0]?.id : res?.id;
+          setMsg("✓ Obra generada");
+          setTimeout(() => { setMsg(""); setShowModal(false); setEditando(null); if (onNav) onNav("obras", nuevoId); }, 1200);
         }
       }
       cargar();
