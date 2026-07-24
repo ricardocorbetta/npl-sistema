@@ -111,7 +111,7 @@ function ModalNuevoCliente({ onCreado, onClose }) {
 }
 
 /* ─── Modal nuevo/editar presupuesto ─── */
-function ModalPresupuesto({ pres, onGuardar, onClose }) {
+function ModalPresupuesto({ pres, onGuardar, onGenerar, onClose }) {
   const esNuevo = !pres?.id;
   const [form, setForm] = useState({
     codigo:               pres?.codigo ? pres.codigo.replace(/-[A-Z]$/, '') : "",
@@ -638,6 +638,49 @@ function ModalPresupuesto({ pres, onGuardar, onClose }) {
                   </div>
                 </div>
               )}
+              {/* 3. Generar Proyecto / Obra */}
+              {!esNuevo && pres?.estado === "aprobado" && (() => {
+                const ts = pres.tipo_servicio;
+                const mostrarProyecto = ts !== "obra" && ts !== "auditoria";
+                const mostrarObra = ts !== "calculo" && ts !== "certificacion";
+                return (
+                  <div style={{ marginTop: 12, borderTop: "1px solid #f0f0f0", paddingTop: 12 }}>
+                    <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>3. Generar</div>
+                    {/* Preview datos heredados */}
+                    <div style={{ background: "#f8f8f8", borderRadius: 8, padding: "10px 12px", marginBottom: 10, fontSize: 12, color: "#555", border: "1px solid #e8e8e8" }}>
+                      <div style={{ fontWeight: 700, color: "#111", marginBottom: 6 }}>Datos a heredar:</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div>📋 Código: <strong>{pres.codigo}</strong></div>
+                        <div>📝 Nombre: <strong>{form.obra_nombre || pres.descripcion || "—"}</strong></div>
+                        <div>👤 Cliente: <strong>{form.comitente_nombre || pres.cliente || "—"}</strong></div>
+                        {pres.sistema_constructivo && <div>🏗 Sistema: <strong>{pres.sistema_constructivo}</strong></div>}
+                        {pres.superficie && <div>📐 Superficie: <strong>{pres.superficie} m²</strong></div>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {mostrarProyecto && (
+                        <button onClick={() => onGenerar && onGenerar(pres, "proyecto")}
+                          style={{ flex: 1, padding: "10px", background: "#6366f1", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          📐 Generar Proyecto
+                        </button>
+                      )}
+                      {mostrarObra && (
+                        <button onClick={() => onGenerar && onGenerar(pres, "obra")}
+                          style={{ flex: 1, padding: "10px", background: "#c4781a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          🏗 Generar Obra
+                        </button>
+                      )}
+                      {mostrarProyecto && mostrarObra && (
+                        <button onClick={() => onGenerar && onGenerar(pres, "ambos")}
+                          style={{ flex: 1, padding: "10px", background: "#0a0a0a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          ⚡ Generar Ambos
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {esNuevo && <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>Guardá primero para habilitar las acciones.</p>}
             </div>
           )} {/* fin tab documento */}
@@ -728,41 +771,7 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
             : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#999" }}>📦</button>
           }
         </div>
-        {/* Botones generar — solo para aprobados */}
-        {p.estado === "aprobado" && onGenerar && (() => {
-          const ts = p.tipo_servicio;
-          const esCalculo = ts === "calculo" || ts === "certificacion" || ts === "otro";
-          const esObra = ts === "obra" || ts === "auditoria";
-          const esAmbos = ts === "calculo_obra";
-          return (
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              {(esCalculo || esAmbos) && (
-                <button onClick={() => onGenerar(p, "proyecto")}
-                  style={{ background: "#6366f1", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
-                  + Proyecto
-                </button>
-              )}
-              {(esObra || esAmbos) && (
-                <button onClick={() => onGenerar(p, "obra")}
-                  style={{ background: "#c4781a", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
-                  + Obra
-                </button>
-              )}
-              {esAmbos && (
-                <button onClick={() => onGenerar(p, "ambos")}
-                  style={{ background: "#0a0a0a", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
-                  + Ambos
-                </button>
-              )}
-              {esCalculo && !esAmbos && !esObra && (
-                <button onClick={() => onGenerar(p, "obra")}
-                  style={{ background: "#c4781a", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
-                  + Obra
-                </button>
-              )}
-            </div>
-          );
-        })()}
+
       </div>
     </div>
   );
@@ -1180,6 +1189,7 @@ export default function App({ deepLinkId }) {
           key={editando?.id || "nuevo"}
           pres={editando}
           onGuardar={guardar}
+          onGenerar={generarDesdePresupuesto}
           onClose={() => { setShowModal(false); setEditando(null); }}
         />
       )}
