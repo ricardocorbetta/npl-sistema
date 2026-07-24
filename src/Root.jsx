@@ -118,7 +118,7 @@ export default function Root() {
 
   const themeCtx = { theme, palette };
 
-  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
+  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
   if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
   if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
   if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
