@@ -959,14 +959,16 @@ export default function App({ deepLinkId }) {
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         {/* KPI Aprobados + Tasa conversión */}
         {(() => {
-          const enviados_mes = filtroMes === "todos"
-            ? presupuestos.filter(p => ["enviado","negociacion","aprobado","rechazado"].includes(p.estado)).length
+          // Denominador: todos los emitidos ese mes (sin borrador)
+          const emitidos_mes = filtroMes === "todos"
+            ? presupuestos.filter(p => p.estado !== "borrador").length
             : presupuestos.filter(p => {
-                if (!["enviado","negociacion","aprobado","rechazado"].includes(p.estado)) return false;
+                if (p.estado === "borrador") return false;
                 const f = p.fecha_emision;
                 return f && f.slice(0,7) === filtroMes;
               }).length;
-          const tasa = enviados_mes > 0 ? Math.round((aprobadosPorMes.length / enviados_mes) * 100) : null;
+          // Numerador: aprobados ese mes por fecha_aprobacion
+          const tasa = emitidos_mes > 0 ? Math.round((aprobadosPorMes.length / emitidos_mes) * 100) : null;
           return (
             <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 140 }}>
               <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
@@ -987,10 +989,11 @@ export default function App({ deepLinkId }) {
 
         {/* KPI Enviados (todos los que salieron) */}
         {(() => {
+          // Total emitidos ese mes (sin borrador) — mismo denominador que la tasa
           const total_enviados = filtroMes === "todos"
-            ? presupuestos.filter(p => ["enviado","negociacion","aprobado","rechazado"].includes(p.estado)).length
+            ? presupuestos.filter(p => p.estado !== "borrador").length
             : presupuestos.filter(p => {
-                if (!["enviado","negociacion","aprobado","rechazado"].includes(p.estado)) return false;
+                if (p.estado === "borrador") return false;
                 const f = p.fecha_emision;
                 return f && f.slice(0,7) === filtroMes;
               }).length;
