@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Combobox from "./Combobox.jsx";
 import AlertasPresupuestos from "./AlertasPresupuestos.jsx";
+import GraficoObjetivos from "./GraficoObjetivos.jsx";
 import { supabase } from "./supabase.js";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
@@ -896,10 +897,11 @@ export default function App({ deepLinkId }) {
       : p.estado === filtroEstado;
     const pasaTipo    = filtroTipo === "todos"     || p.tipo_servicio === filtroTipo;
     const pasaSistema = filtroSistema === "todos"  || p.sistema_constructivo === filtroSistema;
-    const fechaRef = (filtroEstado === "aprobado" && p.fecha_aprobacion)
+    // Para aprobados: filtrar por fecha_aprobacion; para el resto por fecha_emision
+    const fechaRef = (p.estado === "aprobado" && p.fecha_aprobacion)
       ? p.fecha_aprobacion
       : p.fecha_emision;
-    const pasaMes     = filtroMes === "todos" || (fechaRef && fechaRef.slice(0,7) === filtroMes);
+    const pasaMes = filtroMes === "todos" || (fechaRef && fechaRef.slice(0,7) === filtroMes);
     return pasaEstado && pasaTipo && pasaSistema && pasaMes;
   });
 
@@ -1071,6 +1073,9 @@ export default function App({ deepLinkId }) {
           {ordenados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
         </div>
       )}
+
+      {/* Gráfico de objetivos */}
+      <GraficoObjetivos presupuestos={presupuestos} />
 
       {showModal && (
         <ModalPresupuesto
