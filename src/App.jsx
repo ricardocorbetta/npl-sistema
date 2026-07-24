@@ -913,7 +913,7 @@ export default function App({ deepLinkId }) {
   // KPIs
   // KPIs: aprobados filtran por mes independientemente del filtro de estado
   const aprobadosPorMes = presupuestos.filter(p => {
-    if (p.estado !== "aprobado") return false;
+    if (p.estado !== "aprobado" || p.archivado) return false;
     if (filtroMes === "todos") return true;
     const fecha = p.fecha_aprobacion || p.fecha_emision;
     return fecha && fecha.slice(0,7) === filtroMes;
@@ -1036,6 +1036,9 @@ export default function App({ deepLinkId }) {
         </div>
       </div>
 
+      {/* Gráfico objetivos */}
+      <GraficoObjetivos presupuestos={presupuestos} />
+
       {/* Filtros compactos */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center", background: "#fff", borderRadius: 10, padding: "8px 12px", border: "1.5px solid #e8e8e8" }}>
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ fontSize: 12, padding: "5px 10px", border: filtroEstado === "seguimiento" ? "1.5px solid #c4781a" : "1.5px solid #e0e0e0", borderRadius: 7, background: filtroEstado === "seguimiento" ? "#fff7ed" : "#f8f8f8", color: filtroEstado === "seguimiento" ? "#c4781a" : "#333", fontWeight: 700, cursor: "pointer" }}>
@@ -1073,9 +1076,6 @@ export default function App({ deepLinkId }) {
           {ordenados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
         </div>
       )}
-
-      {/* Gráfico de objetivos */}
-      <GraficoObjetivos presupuestos={presupuestos} />
 
       {showModal && (
         <ModalPresupuesto
