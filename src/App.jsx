@@ -111,7 +111,7 @@ function ModalNuevoCliente({ onCreado, onClose }) {
 }
 
 /* ─── Modal nuevo/editar presupuesto ─── */
-function ModalPresupuesto({ pres, onGuardar, onGenerar, onClose }) {
+function ModalPresupuesto({ pres, onGuardar, onGenerar, onNav, onClose }) {
   const esNuevo = !pres?.id;
   const [form, setForm] = useState({
     codigo:               pres?.codigo ? pres.codigo.replace(/-[A-Z]$/, '') : "",
@@ -554,21 +554,33 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onClose }) {
                         <div>👤 {form.comitente_nombre || pres.cliente || "Sin cliente"}</div>
                         {pres.sistema_constructivo && <div>🏗 {pres.sistema_constructivo}{pres.superficie ? ` · ${pres.superficie} m²` : ""}</div>}
                       </div>
-                      {/* Botones */}
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {/* Botones / Estado */}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", flexDirection: "column", alignItems: "flex-end" }}>
                         {mostrarProyecto && (
-                          <button onClick={() => onGenerar && onGenerar(pres, "proyecto")}
-                            style={{ padding: "8px 14px", background: "#6366f1", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                            📐 Proyecto
-                          </button>
+                          proyectoExistente
+                            ? <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#ede9fe", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>
+                                <span style={{ color: "#6366f1", fontWeight: 700 }}>✓ Proyecto generado</span>
+                                <button onClick={() => onNav && onNav("proyectos", proyectoExistente.id)}
+                                  style={{ background: "#6366f1", border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Ver →</button>
+                              </div>
+                            : <button onClick={() => onGenerar && onGenerar(pres, "proyecto")}
+                                style={{ padding: "8px 14px", background: "#6366f1", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                📐 Proyecto
+                              </button>
                         )}
                         {mostrarObra && (
-                          <button onClick={() => onGenerar && onGenerar(pres, "obra")}
-                            style={{ padding: "8px 14px", background: "#c4781a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                            🏗 Obra
-                          </button>
+                          obraExistente
+                            ? <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff7ed", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>
+                                <span style={{ color: "#c4781a", fontWeight: 700 }}>✓ Obra generada</span>
+                                <button onClick={() => onNav && onNav("obras", obraExistente.id)}
+                                  style={{ background: "#c4781a", border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Ver →</button>
+                              </div>
+                            : <button onClick={() => onGenerar && onGenerar(pres, "obra")}
+                                style={{ padding: "8px 14px", background: "#c4781a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                🏗 Obra
+                              </button>
                         )}
-                        {mostrarProyecto && mostrarObra && (
+                        {mostrarProyecto && mostrarObra && !proyectoExistente && !obraExistente && (
                           <button onClick={() => onGenerar && onGenerar(pres, "ambos")}
                             style={{ padding: "8px 14px", background: "#0a0a0a", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                             ⚡ Ambos
@@ -1186,6 +1198,7 @@ export default function App({ deepLinkId, onNav }) {
           pres={editando}
           onGuardar={guardar}
           onGenerar={generarDesdePresupuesto}
+          onNav={onNav}
           onClose={() => { setShowModal(false); setEditando(null); }}
         />
       )}
