@@ -144,7 +144,9 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onNav, onClose }) {
     notas_pdf:            pres?.notas_pdf || "-Para agendar los trabajos se solicita el cobro del anticipo.\n-No incluye: costos de timbrado de contratos, visado de colegio, estudio de suelos, ni gestión municipal. En caso de requerir por CIPBA se considera un 20% adicional para cubrir gastos totales.",
   });
   const [tabModal, setTabModal] = useState(esNuevo ? "datos" : "documento"); // "datos" | "documento"
-  const [presupuestoCreado, setPresupuestoCreado] = useState(null); // ID del presupuesto recién creado
+  const [presupuestoCreado, setPresupuestoCreado] = useState(null);
+  const [proyectoExistente, setProyectoExistente] = useState(null);
+  const [obraExistente, setObraExistente] = useState(null);
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(pres?.pdf_url || "");
   const [clienteWsp, setClienteWsp] = useState("");
@@ -196,6 +198,18 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onNav, onClose }) {
       }
     }
     cargar();
+    // Verificar si ya existen proyecto/obra vinculados
+    if (pres?.id) {
+      (async () => {
+        const tk = await getToken();
+        const [proy, obra] = await Promise.all([
+          fetch(`${SUPA_URL}/proyectos?presupuesto_id=eq.${pres.id}&select=id,descripcion`, { headers: hdrs(tk) }).then(r => r.json()),
+          fetch(`${SUPA_URL}/obras_campo?presupuesto_id=eq.${pres.id}&select=id,nombre`, { headers: hdrs(tk) }).then(r => r.json()),
+        ]);
+        if (Array.isArray(proy) && proy.length > 0) setProyectoExistente(proy[0]);
+        if (Array.isArray(obra) && obra.length > 0) setObraExistente(obra[0]);
+      })();
+    }
   }, []);
 
   function clienteCreado(cli) {
