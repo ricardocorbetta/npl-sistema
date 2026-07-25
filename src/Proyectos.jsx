@@ -770,6 +770,181 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
   );
 }
 
+
+/* ─── Panel de flujo de caja (solo admin) ─── */
+function FlujoCaja({ proyectos, presupuestosMap }) {
+  const [abierto, setAbierto] = useState(false);
+  const [anio, setAnio] = useState(new Date().getFullYear());
+
+  // Calcular flujo por mes
+  const meses = Array.from({ length: 12 }, (_, i) => i + 1);
+  const MESES_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  const flujoPorMes = meses.map(mes => {
+    const mesStr = String(mes).padStart(2, "0");
+    const prefijo = `${anio}-${mesStr}`;
+
+    // Proyectos entregados ese mes (fecha_entrega_real)
+    const entregados = proyectos.filter(p => p.fecha_entrega_real?.startsWith(prefijo));
+    // Proyectos cobrados ese mes (tiene cobrado=true y fecha_entrega_real ese mes)
+    const cobrados = entregados.filter(p => p.cobrado);
+    // Por cobrar = entregados sin cobrar
+    const porCobrar = entregados.filter(p => !p.cobrado);
+
+    // Montos desde presupuestos vinculados
+    const montoCobrado = cobrados.reduce((s, p) => {
+      const pres = presupuestosMap[p.presupuesto_id];
+      return s + (pres?.monto ? parseFloat(pres.monto) : 0);
+    }, 0);
+
+    const montoPorCobrar = porCobrar.reduce((s, p) => {
+      const pres = presupuestosMap[p.presupuesto_id];
+      return s + (pres?.monto ? parseFloat(pres.monto) : 0);
+    }, 0);
+
+    // Proyectos iniciados ese mes (anticipo a cobrar)
+    const iniciados = proyectos.filter(p => p.fecha_inicio_real?.startsWith(prefijo));
+    const montoAnticipo = iniciados.reduce((s, p) => {
+      const pres = presupuestosMap[p.presupuesto_id];
+      if (!pres?.monto) return s;
+      const m = parseFloat(pres.monto);
+      if (pres.forma_pago === "50_50") return s + Math.round(m * 0.5);
+      if (pres.forma_pago === "25_50_25") return s + Math.round(m * 0.25);
+      return s;
+    }, 0);
+
+    return { mes, label: MESES_LABELS[mes-1], entregados: entregados.length, cobrados: cobrados.length, porCobrar: porCobrar.length, montoCobrado, montoPorCobrar, montoAnticipo, iniciados: iniciados.length };
+  });
+
+  const totalCobrado = flujoPorMes.reduce((s, m) => s + m.montoCobrado, 0);
+  const totalPorCobrar = flujoPorMes.reduce((s, m) => s + m.montoPorCobrar, 0);
+  const maxMonto = Math.max(...flujoPorMes.map(m => m.montoCobrado + m.montoPorCobrar), 1);
+  const mesActual = new Date().getMonth() + 1;
+  const anioActual = new Date().getFullYear();
+
+  return (
+    <div style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, marginBottom: 16, overflow: "hidden" }}>
+      {/* Header toggle */}
+      <div onClick={() => setAbierto(a => !a)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", cursor: "pointer" }}
+        onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+        onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 16 }}>💵</span>
+          <div>
+            <span style={{ fontSize: 13, fontWeight: 800, color: "#111" }}>Flujo de ingresos</span>
+            <span style={{ fontSize: 11, color: "#aaa", marginLeft: 8 }}>{anio}</span>
+          </div>
+          {!abierto && (
+            <div style={{ display: "flex", gap: 12, marginLeft: 16 }}>
+              {totalCobrado > 0 && <span style={{ fontSize: 12, color: "#1a8a5e", fontWeight: 700 }}>✓ ${totalCobrado.toLocaleString("es-AR")} cobrado</span>}
+              {totalPorCobrar > 0 && <span style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700 }}>⏳ ${totalPorCobrar.toLocaleString("es-AR")} por cobrar</span>}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <select value={anio} onChange={e => { e.stopPropagation(); setAnio(parseInt(e.target.value)); }}
+            onClick={e => e.stopPropagation()}
+            style={{ fontSize: 11, padding: "3px 8px", border: "1.5px solid #e0e0e0", borderRadius: 6, cursor: "pointer" }}>
+            {[2023,2024,2025,2026,2027].map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <span style={{ color: "#aaa", fontSize: 18, transform: abierto ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>⌄</span>
+        </div>
+      </div>
+
+      {abierto && (
+        <div style={{ borderTop: "1px solid #f0f0f0", padding: 16 }}>
+          {/* KPIs anuales */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            {[
+              { label: "Cobrado en el año", value: `$${totalCobrado.toLocaleString("es-AR")}`, color: "#1a8a5e" },
+              { label: "Por cobrar", value: `$${totalPorCobrar.toLocaleString("es-AR")}`, color: "#f59e0b" },
+              { label: "Total proyectado", value: `$${(totalCobrado + totalPorCobrar).toLocaleString("es-AR")}`, color: "#3b82f6" },
+            ].map(k => (
+              <div key={k.label} style={{ background: "#f8f8f8", borderRadius: 8, padding: "8px 14px", flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 16, fontWeight: 900, color: k.color, fontFamily: "monospace" }}>{k.value}</div>
+                <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráfico de barras SVG */}
+          <div style={{ marginBottom: 16, overflowX: "auto" }}>
+            <svg width="660" height="120" style={{ display: "block" }}>
+              {flujoPorMes.map((m, i) => {
+                const x = i * 55 + 4;
+                const w = 46;
+                const hCobrado = maxMonto > 0 ? Math.round((m.montoCobrado / maxMonto) * 80) : 0;
+                const hPorCobrar = maxMonto > 0 ? Math.round((m.montoPorCobrar / maxMonto) * 80) : 0;
+                const hAnticipo = maxMonto > 0 ? Math.round((m.montoAnticipo / maxMonto) * 80) : 0;
+                const esActual = anio === anioActual && m.mes === mesActual;
+                return (
+                  <g key={m.mes}>
+                    {/* Fondo mes actual */}
+                    {esActual && <rect x={x} y={0} width={w} height={110} fill="#f0f9ff" rx={4} />}
+                    {/* Barra anticipo (azul claro) */}
+                    {hAnticipo > 0 && <rect x={x+2} y={90-hAnticipo} width={w-4} height={hAnticipo} fill="#bfdbfe" rx={3} />}
+                    {/* Barra por cobrar (amarillo) */}
+                    {hPorCobrar > 0 && <rect x={x+2} y={90-hPorCobrar} width={w-4} height={hPorCobrar} fill="#fde68a" rx={3} />}
+                    {/* Barra cobrado (verde) */}
+                    {hCobrado > 0 && <rect x={x+2} y={90-hCobrado} width={w-4} height={hCobrado} fill="#6ee7b7" rx={3} />}
+                    {/* Label mes */}
+                    <text x={x + w/2} y={108} textAnchor="middle" fontSize="10" fill={esActual ? "#111" : "#bbb"} fontWeight={esActual ? "700" : "400"}>{m.label}</text>
+                    {/* Cantidad */}
+                    {(m.entregados > 0 || m.iniciados > 0) && (
+                      <text x={x + w/2} y={85-Math.max(hCobrado, hPorCobrar)} textAnchor="middle" fontSize="9" fill="#555" fontWeight="700">
+                        {m.entregados > 0 ? m.entregados : ""}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+            <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#888", marginTop: 4 }}>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#6ee7b7", borderRadius: 2, marginRight: 4 }} />Cobrado</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#fde68a", borderRadius: 2, marginRight: 4 }} />Por cobrar</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#bfdbfe", borderRadius: 2, marginRight: 4 }} />Anticipo esperado</span>
+            </div>
+          </div>
+
+          {/* Tabla mensual */}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #f0f0f0" }}>
+                {["Mes","Proyectos iniciados","Anticipo esperado","Entregados","Cobrado","Por cobrar"].map(h => (
+                  <th key={h} style={{ padding: "5px 8px", textAlign: h === "Mes" ? "left" : "right", fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {flujoPorMes.filter(m => m.entregados > 0 || m.iniciados > 0 || (anio === anioActual && m.mes === mesActual)).map(m => {
+                const esActual = anio === anioActual && m.mes === mesActual;
+                return (
+                  <tr key={m.mes} style={{ borderBottom: "1px solid #f8f8f8", background: esActual ? "#f0f9ff" : "#fff" }}>
+                    <td style={{ padding: "6px 8px", fontWeight: esActual ? 800 : 500, color: esActual ? "#3b82f6" : "#333" }}>
+                      {m.label} {esActual && <span style={{ fontSize: 9, background: "#3b82f6", color: "#fff", borderRadius: 3, padding: "1px 4px", marginLeft: 3 }}>HOY</span>}
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#3b82f6" }}>{m.iniciados || "—"}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#6366f1", fontFamily: "monospace", fontWeight: 600 }}>
+                      {m.montoAnticipo > 0 ? `$${m.montoAnticipo.toLocaleString("es-AR")}` : "—"}
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#555" }}>{m.entregados || "—"}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#1a8a5e", fontFamily: "monospace", fontWeight: 700 }}>
+                      {m.montoCobrado > 0 ? `$${m.montoCobrado.toLocaleString("es-AR")}` : "—"}
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: m.montoPorCobrar > 0 ? "#f59e0b" : "#ccc", fontFamily: "monospace", fontWeight: m.montoPorCobrar > 0 ? 700 : 400 }}>
+                      {m.montoPorCobrar > 0 ? `$${m.montoPorCobrar.toLocaleString("es-AR")}` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Componente principal ─── */
 export default function Proyectos({ deepLinkId, perfil }) {
   const [proyectos, setProyectos] = useState([]);
@@ -872,6 +1047,9 @@ export default function Proyectos({ deepLinkId, perfil }) {
           </div>
         ))}
       </div>
+
+      {/* Flujo de caja — solo admin */}
+      {esAdmin && <FlujoCaja proyectos={proyectos} presupuestosMap={presupuestosMap} />}
 
       {/* Tabs + buscador */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
