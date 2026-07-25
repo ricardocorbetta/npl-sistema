@@ -492,8 +492,11 @@ function FormNuevoCalculista({ onCreado, onCancelar }) {
   }
 
   return (
-    <div style={{ background: "#f8f8f8", border: "1.5px solid #e0e0e0", borderRadius: 8, padding: 12, marginTop: 6 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#555", marginBottom: 8 }}>Nuevo calculista</div>
+    <div style={{ background: "#f0fdf4", border: "1.5px solid #1a8a5e", borderRadius: 8, padding: 12, marginTop: 6 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#1a8a5e", marginBottom: 6 }}>Nuevo calculista</div>
+      <div style={{ fontSize: 11, color: "#555", background: "#fff", borderRadius: 6, padding: "6px 10px", marginBottom: 8, border: "1px solid #e0e0e0" }}>
+        ⚠️ Después de crear, recordá ir a <strong>Usuarios</strong> para enviarle la invitación de acceso al sistema.
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
         <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} style={{ ...S.inp, fontSize: 12 }} placeholder="Nombre *" />
         <input value={form.mail} onChange={e => setForm(p => ({ ...p, mail: e.target.value }))} style={{ ...S.inp, fontSize: 12 }} placeholder="Email *" />
@@ -771,12 +774,221 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
 }
 
 
+
+/* ─── Panel de cobros ─── */
+function PanelCobros({ proyecto, presupuesto, onClose, onActualizar }) {
+  const [cobros, setCobros] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({});
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const cuotas = presupuesto ? cuotasDesdeModalidad(presupuesto.forma_pago, presupuesto.monto) : [];
+  const moneda = presupuesto?.moneda === "USD" ? "U$S" : "$";
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    const r = await api(`/proyecto_cobros?proyecto_id=eq.${proyecto.id}&order=fecha_cobro.desc`).catch(() => []);
+    setCobros(Array.isArray(r) ? r : []);
+    setLoading(false);
+  }, [proyecto.id]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  function initForm(concepto = "", monto = "") {
+    setForm({ concepto, monto, moneda: presupuesto?.moneda || "ARS", fecha_cobro: hoy, metodo: "transferencia", facturado: false, comprobante: "", nro_factura: "", notas: "" });
+    setShowForm(true);
+  }
+
+  async function guardar() {
+    if (!form.concepto || !form.monto) return;
+    setSaving(true);
+    await api("/proyecto_cobros", { method: "POST", body: JSON.stringify({ ...form, proyecto_id: proyecto.id, monto: parseFloat(form.monto) }) });
+    setShowForm(false);
+    await cargar();
+    onActualizar && onActualizar();
+    setSaving(false);
+  }
+
+  async function eliminar(id) {
+    if (!confirm("¿Eliminar este cobro?")) return;
+    await api(`/proyecto_cobros?id=eq.${id}`, { method: "DELETE" });
+    await cargar();
+    onActualizar && onActualizar();
+  }
+
+  async function toggleFactura(cobro) {
+    await api(`/proyecto_cobros?id=eq.${cobro.id}`, { method: "PATCH", body: JSON.stringify({ facturado: !cobro.facturado }) });
+    await cargar();
+  }
+
+  const totalCobrado = cobros.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+  const totalPresupuesto = presupuesto?.monto ? parseFloat(presupuesto.monto) : 0;
+  const pctCobrado = totalPresupuesto > 0 ? Math.round(totalCobrado / totalPresupuesto * 100) : null;
+  const saldoPendiente = totalPresupuesto - totalCobrado;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }}>
+      <div style={{ background: "#fff", width: "min(500px, 100vw)", height: "100vh", overflow: "auto", padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Cobros</h2>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{proyecto.descripcion}</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>✕</button>
+        </div>
+
+        {/* Resumen financiero */}
+        <div style={{ background: "#f8f8f8", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: pctCobrado !== null ? 10 : 0 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: "#111", fontFamily: "monospace" }}>{moneda}{totalPresupuesto.toLocaleString("es-AR")}</div>
+              <div style={{ fontSize: 10, color: "#aaa" }}>Total presupuesto</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: "#1a8a5e", fontFamily: "monospace" }}>{moneda}{totalCobrado.toLocaleString("es-AR")}</div>
+              <div style={{ fontSize: 10, color: "#aaa" }}>Cobrado</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: saldoPendiente > 0 ? "#f59e0b" : "#1a8a5e", fontFamily: "monospace" }}>{moneda}{saldoPendiente.toLocaleString("es-AR")}</div>
+              <div style={{ fontSize: 10, color: "#aaa" }}>Saldo pendiente</div>
+            </div>
+          </div>
+          {pctCobrado !== null && (
+            <div>
+              <div style={{ height: 6, background: "#e0e0e0", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(pctCobrado, 100)}%`, height: "100%", background: pctCobrado >= 100 ? "#1a8a5e" : "#3b82f6", transition: "width 0.3s" }} />
+              </div>
+              <div style={{ fontSize: 10, color: "#aaa", marginTop: 3, textAlign: "right" }}>{pctCobrado}% cobrado</div>
+            </div>
+          )}
+        </div>
+
+        {/* Cuotas sugeridas */}
+        {cuotas.length > 0 && !showForm && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Registrar cuota</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {cuotas.map((c, i) => {
+                const yaCobrada = cobros.some(cb => cb.concepto === c.label);
+                return (
+                  <button key={i} onClick={() => !yaCobrada && initForm(c.label, c.monto)}
+                    disabled={yaCobrada}
+                    style={{ ...S.btnSm, opacity: yaCobrada ? 0.4 : 1, cursor: yaCobrada ? "default" : "pointer", fontSize: 11 }}>
+                    {yaCobrada ? "✓ " : ""}{c.label} — {moneda}{c.monto.toLocaleString("es-AR")}
+                  </button>
+                );
+              })}
+              <button onClick={() => initForm()} style={{ ...S.btnSm, fontSize: 11 }}>+ Otro</button>
+            </div>
+          </div>
+        )}
+
+        {/* Formulario */}
+        {showForm && (
+          <div style={{ background: "#f8f8f8", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#333", marginBottom: 10 }}>Nuevo cobro</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <span style={S.lbl}>Concepto *</span>
+                <input value={form.concepto || ""} onChange={e => setForm(p => ({ ...p, concepto: e.target.value }))} style={S.inp} placeholder="Ej: 50% Anticipo" />
+              </div>
+              <div>
+                <span style={S.lbl}>Monto *</span>
+                <input type="number" value={form.monto || ""} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} style={S.inp} />
+              </div>
+              <div>
+                <span style={S.lbl}>Fecha</span>
+                <input type="date" value={form.fecha_cobro || hoy} onChange={e => setForm(p => ({ ...p, fecha_cobro: e.target.value }))} style={S.inp} />
+              </div>
+              <div>
+                <span style={S.lbl}>Método</span>
+                <select value={form.metodo || "transferencia"} onChange={e => setForm(p => ({ ...p, metodo: e.target.value }))} style={S.inp}>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+              <div>
+                <span style={S.lbl}>N° comprobante</span>
+                <input value={form.comprobante || ""} onChange={e => setForm(p => ({ ...p, comprobante: e.target.value }))} style={S.inp} placeholder="Nro de transferencia" />
+              </div>
+              <div style={{ gridColumn: "1 / -1", display: "flex", gap: 16 }}>
+                <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, cursor: "pointer" }}>
+                  <input type="checkbox" checked={form.facturado || false} onChange={e => setForm(p => ({ ...p, facturado: e.target.checked }))} style={{ accentColor: "#111" }} />
+                  Facturado
+                </label>
+                {form.facturado && (
+                  <input value={form.nro_factura || ""} onChange={e => setForm(p => ({ ...p, nro_factura: e.target.value }))} style={{ ...S.inp, width: "auto", flex: 1 }} placeholder="N° de factura" />
+                )}
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <span style={S.lbl}>Notas</span>
+                <input value={form.notas || ""} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} style={S.inp} placeholder="Observaciones opcionales" />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={guardar} disabled={saving || !form.concepto || !form.monto} style={S.btn}>{saving ? "Guardando…" : "💾 Guardar cobro"}</button>
+              <button onClick={() => setShowForm(false)} style={S.btnSm}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {!showForm && cuotas.length === 0 && (
+          <button onClick={() => initForm()} style={{ ...S.btn, marginBottom: 16, width: "100%" }}>+ Registrar cobro</button>
+        )}
+
+        {/* Lista de cobros */}
+        {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {cobros.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 20 }}>Sin cobros registrados</p>}
+            {cobros.map(c => (
+              <div key={c.id} style={{ background: "#f8f8f8", borderRadius: 9, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{c.concepto}</span>
+                    {c.facturado && <span style={{ fontSize: 10, background: "#f0fdf4", color: "#1a8a5e", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>Facturado {c.nro_factura ? `#${c.nro_factura}` : ""}</span>}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: "#1a8a5e", fontFamily: "monospace", marginBottom: 3 }}>
+                    {c.moneda === "USD" ? "U$S" : "$"}{parseFloat(c.monto).toLocaleString("es-AR")}
+                  </div>
+                  <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#aaa", flexWrap: "wrap" }}>
+                    {c.fecha_cobro && <span>📅 {fmtFecha(c.fecha_cobro)}</span>}
+                    <span>💳 {c.metodo}</span>
+                    {c.comprobante && <span>#{c.comprobante}</span>}
+                    {c.notas && <span>📝 {c.notas}</span>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                  <button onClick={() => toggleFactura(c)} style={{ ...S.btnSm, fontSize: 10 }} title={c.facturado ? "Quitar factura" : "Marcar facturado"}>
+                    {c.facturado ? "✓F" : "F"}
+                  </button>
+                  <button onClick={() => eliminar(c.id)} style={{ ...S.btnSm, fontSize: 10, color: "#c0392b", borderColor: "#fecaca" }}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Panel de flujo de caja (solo admin) ─── */
 function FlujoCaja({ proyectos, presupuestosMap }) {
   const [abierto, setAbierto] = useState(false);
   const [anio, setAnio] = useState(new Date().getFullYear());
+  const [cobros, setCobros] = useState([]);
 
-  // Calcular flujo por mes
+  useEffect(() => {
+    if (!abierto) return;
+    // Cargar todos los cobros del año
+    api(`/proyecto_cobros?fecha_cobro=gte.${anio}-01-01&fecha_cobro=lte.${anio}-12-31&order=fecha_cobro.asc`)
+      .then(r => setCobros(Array.isArray(r) ? r : []))
+      .catch(() => {});
+  }, [abierto, anio]);
+
   const meses = Array.from({ length: 12 }, (_, i) => i + 1);
   const MESES_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
@@ -784,25 +996,22 @@ function FlujoCaja({ proyectos, presupuestosMap }) {
     const mesStr = String(mes).padStart(2, "0");
     const prefijo = `${anio}-${mesStr}`;
 
-    // Proyectos entregados ese mes (fecha_entrega_real)
+    // Cobros reales registrados ese mes
+    const cobrosDelMes = cobros.filter(c => c.fecha_cobro?.startsWith(prefijo));
+    const montoCobrado = cobrosDelMes.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+    const cobradosConFactura = cobrosDelMes.filter(c => c.facturado).length;
+
+    // Proyectos entregados ese mes (saldo pendiente estimado)
     const entregados = proyectos.filter(p => p.fecha_entrega_real?.startsWith(prefijo));
-    // Proyectos cobrados ese mes (tiene cobrado=true y fecha_entrega_real ese mes)
-    const cobrados = entregados.filter(p => p.cobrado);
-    // Por cobrar = entregados sin cobrar
-    const porCobrar = entregados.filter(p => !p.cobrado);
-
-    // Montos desde presupuestos vinculados
-    const montoCobrado = cobrados.reduce((s, p) => {
+    const montoPorCobrar = entregados.reduce((s, p) => {
       const pres = presupuestosMap[p.presupuesto_id];
-      return s + (pres?.monto ? parseFloat(pres.monto) : 0);
+      if (!pres?.monto) return s;
+      const totalPres = parseFloat(pres.monto);
+      const cobradoProy = cobros.filter(c => c.proyecto_id === p.id).reduce((x, c) => x + parseFloat(c.monto || 0), 0);
+      return s + Math.max(0, totalPres - cobradoProy);
     }, 0);
 
-    const montoPorCobrar = porCobrar.reduce((s, p) => {
-      const pres = presupuestosMap[p.presupuesto_id];
-      return s + (pres?.monto ? parseFloat(pres.monto) : 0);
-    }, 0);
-
-    // Proyectos iniciados ese mes (anticipo a cobrar)
+    // Anticipos esperados (proyectos iniciados ese mes)
     const iniciados = proyectos.filter(p => p.fecha_inicio_real?.startsWith(prefijo));
     const montoAnticipo = iniciados.reduce((s, p) => {
       const pres = presupuestosMap[p.presupuesto_id];
@@ -813,7 +1022,7 @@ function FlujoCaja({ proyectos, presupuestosMap }) {
       return s;
     }, 0);
 
-    return { mes, label: MESES_LABELS[mes-1], entregados: entregados.length, cobrados: cobrados.length, porCobrar: porCobrar.length, montoCobrado, montoPorCobrar, montoAnticipo, iniciados: iniciados.length };
+    return { mes, label: MESES_LABELS[mes-1], entregados: entregados.length, cobrados: cobrosDelMes.length, cobradosConFactura, porCobrar: entregados.filter(p => !p.cobrado).length, montoCobrado, montoPorCobrar, montoAnticipo, iniciados: iniciados.length };
   });
 
   const totalCobrado = flujoPorMes.reduce((s, m) => s + m.montoCobrado, 0);
@@ -910,7 +1119,7 @@ function FlujoCaja({ proyectos, presupuestosMap }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #f0f0f0" }}>
-                {["Mes","Proyectos iniciados","Anticipo esperado","Entregados","Cobrado","Por cobrar"].map(h => (
+                {["Mes","Iniciados","Anticipo esp.","Entregados","Cobros registrados","Facturado","Pendiente"].map(h => (
                   <th key={h} style={{ padding: "5px 8px", textAlign: h === "Mes" ? "left" : "right", fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -924,14 +1133,17 @@ function FlujoCaja({ proyectos, presupuestosMap }) {
                       {m.label} {esActual && <span style={{ fontSize: 9, background: "#3b82f6", color: "#fff", borderRadius: 3, padding: "1px 4px", marginLeft: 3 }}>HOY</span>}
                     </td>
                     <td style={{ padding: "6px 8px", textAlign: "right", color: "#3b82f6" }}>{m.iniciados || "—"}</td>
-                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#6366f1", fontFamily: "monospace", fontWeight: 600 }}>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#6366f1", fontFamily: "monospace", fontSize: 11 }}>
                       {m.montoAnticipo > 0 ? `$${m.montoAnticipo.toLocaleString("es-AR")}` : "—"}
                     </td>
                     <td style={{ padding: "6px 8px", textAlign: "right", color: "#555" }}>{m.entregados || "—"}</td>
                     <td style={{ padding: "6px 8px", textAlign: "right", color: "#1a8a5e", fontFamily: "monospace", fontWeight: 700 }}>
-                      {m.montoCobrado > 0 ? `$${m.montoCobrado.toLocaleString("es-AR")}` : "—"}
+                      {m.montoCobrado > 0 ? `$${m.montoCobrado.toLocaleString("es-AR")} (${m.cobrados})` : "—"}
                     </td>
-                    <td style={{ padding: "6px 8px", textAlign: "right", color: m.montoPorCobrar > 0 ? "#f59e0b" : "#ccc", fontFamily: "monospace", fontWeight: m.montoPorCobrar > 0 ? 700 : 400 }}>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: "#888", fontSize: 11 }}>
+                      {m.cobradosConFactura > 0 ? `${m.cobradosConFactura} fact.` : "—"}
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: m.montoPorCobrar > 0 ? "#f59e0b" : "#ccc", fontFamily: "monospace", fontWeight: m.montoPorCobrar > 0 ? 700 : 400, fontSize: 11 }}>
                       {m.montoPorCobrar > 0 ? `$${m.montoPorCobrar.toLocaleString("es-AR")}` : "—"}
                     </td>
                   </tr>
@@ -957,6 +1169,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
   const [modal, setModal] = useState(null);
   const [panelChecklist, setPanelChecklist] = useState(null);
   const [panelHonorarios, setPanelHonorarios] = useState(null);
+  const [panelCobros, setPanelCobros] = useState(null);
   const esAdmin = perfil?.rol === "admin";
 
   useEffect(() => { cargar(); }, []);
@@ -1051,8 +1264,8 @@ export default function Proyectos({ deepLinkId, perfil }) {
       {/* Flujo de caja — solo admin */}
       {esAdmin && <FlujoCaja proyectos={proyectos} presupuestosMap={presupuestosMap} />}
 
-      {/* Tabs + buscador */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         {TABS.map(t => {
           const count = proyectos.filter(t.filter).length;
           return (
@@ -1066,7 +1279,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
           );
         })}
         <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="🔍 Buscar…"
-          style={{ ...S.inp, width: "auto", flex: 1, minWidth: 180, marginLeft: "auto" }} />
+          style={{ ...S.inp, width: "auto", maxWidth: 220, marginLeft: "auto", fontSize: 12, padding: "5px 10px" }} />
       </div>
 
       {msg && <div style={{ background: "#f0fdf4", color: "#1a8a5e", borderRadius: 8, padding: "7px 12px", marginBottom: 10, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
@@ -1078,29 +1291,91 @@ export default function Proyectos({ deepLinkId, perfil }) {
           {filtrados.map(p => {
             const pres = presupuestosMap[p.presupuesto_id];
             return (
-              <div key={p.id}>
-                <CardProyecto p={p} presupuesto={pres} onClick={() => setModal(p)} />
+              <div key={p.id} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, overflow: "hidden" }}>
+                {/* Header de la card */}
+                <div onClick={() => setModal(p)} style={{ padding: "12px 16px", cursor: "pointer", display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 12, alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{p.codigo || p.numero_proyecto || "—"}</div>
+                    {p.fecha_entrega_plan && <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>📅 {fmtFecha(p.fecha_entrega_plan)}</div>}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || "Sin descripción"}</div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      {p.cliente && <span style={{ fontSize: 12, color: "#888" }}>{p.cliente}</span>}
+                      {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}
+                      {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
+                      {p.superficie && <span style={{ fontSize: 11, color: "#aaa" }}>{p.superficie}m²</span>}
+                    </div>
+                    {p.checklist_total > 0 && (() => {
+                      const pct = Math.round((p.checklist_ok / p.checklist_total) * 100);
+                      return (
+                        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, height: 3, background: "#f0f0f0", borderRadius: 2, overflow: "hidden" }}>
+                            <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#1a8a5e" : "#3b82f6" }} />
+                          </div>
+                          <span style={{ fontSize: 10, color: "#aaa" }}>{pct}%</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                    <EstadoChip estado={p.estado} />
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {p.anticipo && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>💰</span>}
+                      {p.proyecto_ok && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>✅</span>}
+                      {p.cobrado && <span style={{ fontSize: 9, color: "#888", fontWeight: 700 }}>✓$</span>}
+                    </div>
+                  </div>
+                </div>
 
-                {/* Indicadores */}
-                <IndicadoresProyecto p={p} presupuesto={pres} />
+                {/* Indicadores — dentro del mismo bloque */}
+                {(pres || p.fecha_inicio_real) && (
+                  <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", background: "#fafafa" }}>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {(() => {
+                        const diasAprobacion = pres ? diasEntre(pres.fecha_emision, pres.fecha_aprobacion) : null;
+                        const diasEjecucion = diasEntre(p.fecha_inicio_real, p.fecha_entrega_real || new Date().toISOString().slice(0,10));
+                        const cuotas = pres ? cuotasDesdeModalidad(pres.forma_pago, pres.monto) : [];
+                        const moneda = pres?.moneda === "USD" ? "U$S" : "$";
+                        return (
+                          <>
+                            {diasAprobacion !== null && (
+                              <div style={{ fontSize: 12 }}>
+                                <span style={{ fontWeight: 800, color: diasAprobacion <= 7 ? "#1a8a5e" : diasAprobacion <= 30 ? "#f59e0b" : "#c0392b" }}>{diasAprobacion}d</span>
+                                <span style={{ color: "#aaa", marginLeft: 4 }}>ciclo comercial</span>
+                              </div>
+                            )}
+                            {p.fecha_inicio_real && diasEjecucion !== null && (
+                              <div style={{ fontSize: 12 }}>
+                                <span style={{ fontWeight: 800, color: "#3b82f6" }}>{diasEjecucion}d</span>
+                                <span style={{ color: "#aaa", marginLeft: 4 }}>en ejecución</span>
+                              </div>
+                            )}
+                            {cuotas.map((c, i) => (
+                              <div key={i} style={{ fontSize: 12 }}>
+                                <span style={{ fontWeight: 800, color: "#1a8a5e", fontFamily: "monospace" }}>{moneda}{c.monto.toLocaleString("es-AR")}</span>
+                                <span style={{ color: "#aaa", marginLeft: 4 }}>{c.label}</span>
+                              </div>
+                            ))}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
 
-                {/* Acciones */}
-                <div style={{ display: "flex", gap: 6, padding: "6px 4px 2px", flexWrap: "wrap" }}>
+                {/* Acciones — dentro del mismo bloque */}
+                <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={() => setModal(p)} style={S.btnSm}>✏️ Editar</button>
                   <button onClick={() => setPanelChecklist(p)} style={S.btnSm}>✅ Tareas</button>
                   {esAdmin && <button onClick={() => setPanelHonorarios(p)} style={S.btnSm}>💰 Honorarios</button>}
+                  {esAdmin && <button onClick={() => setPanelCobros(p)} style={{ ...S.btnSm, color: "#1a8a5e", borderColor: "#1a8a5e" }}>💵 Cobros</button>}
                   {p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ ...S.btnSm, textDecoration: "none" }}>📁 Drive</a>}
-
-                  {/* Avanzar estado */}
                   {esAdmin && (() => {
                     const idx = ESTADOS.findIndex(e => e.v === p.estado);
                     const siguiente = ESTADOS[idx + 1];
                     if (!siguiente || p.estado === "terminado") return null;
-                    return (
-                      <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>
-                        → {siguiente.label}
-                      </button>
-                    );
+                    return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
                   })()}
                 </div>
               </div>
@@ -1120,6 +1395,14 @@ export default function Proyectos({ deepLinkId, perfil }) {
       )}
       {panelChecklist && (
         <PanelChecklist proyectoId={panelChecklist.id} perfil={perfil} onClose={() => { setPanelChecklist(null); cargar(); }} />
+      )}
+      {panelCobros && (
+        <PanelCobros
+          proyecto={panelCobros}
+          presupuesto={presupuestosMap[panelCobros.presupuesto_id]}
+          onClose={() => setPanelCobros(null)}
+          onActualizar={cargar}
+        />
       )}
       {panelHonorarios && (
         <PanelHonorarios
