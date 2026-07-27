@@ -396,13 +396,13 @@ export function GlobalSearch({ palette = LIGHT, onNavegar }) {
   return (
     <>
       <button onClick={() => setOpen(true)} style={{
-        display: "flex", alignItems: "center", gap: 8, background: palette.bgSoft,
-        border: `1px solid ${palette.border}`, borderRadius: 8, padding: "6px 10px",
-        cursor: "pointer", color: palette.textMuted, fontSize: 12,
+        display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.1)",
+        border: `1px solid rgba(255,255,255,0.2)`, borderRadius: 8, padding: "6px 14px",
+        cursor: "pointer", color: "rgba(255,255,255,0.7)", fontSize: 12, minWidth: 200,
       }}>
         <span>🔍</span>
-        <span>Buscar…</span>
-        <span style={{ fontFamily: FONT_MONO, fontSize: 10, background: palette.border, padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>⌘K</span>
+        <span style={{ flex: 1, textAlign: "left" }}>Buscar…</span>
+        <span style={{ fontFamily: FONT_MONO, fontSize: 10, background: "rgba(255,255,255,0.15)", padding: "1px 5px", borderRadius: 4 }}>⌘K</span>
       </button>
 
       {open && (
