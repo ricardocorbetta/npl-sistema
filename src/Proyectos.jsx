@@ -1297,92 +1297,121 @@ export default function Proyectos({ deepLinkId, perfil }) {
             const pres = presupuestosMap[p.presupuesto_id];
             return (
               <div key={p.id} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, overflow: "hidden" }}>
-                {/* Header de la card */}
-                <div onClick={() => setModal(p)} style={{ padding: "12px 16px", cursor: "pointer", display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 12, alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{p.codigo || p.numero_proyecto || "—"}</div>
-                    {p.fecha_entrega_plan && <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>📅 {fmtFecha(p.fecha_entrega_plan)}</div>}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || "Sin descripción"}</div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      {p.cliente && <span style={{ fontSize: 12, color: "#888" }}>{p.cliente}</span>}
-                      {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}
-                      {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
-                      {p.superficie && <span style={{ fontSize: 11, color: "#aaa" }}>{p.superficie}m²</span>}
-                    </div>
-                    {p.checklist_total > 0 && (() => {
-                      const pct = Math.round((p.checklist_ok / p.checklist_total) * 100);
-                      return (
-                        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ flex: 1, height: 3, background: "#f0f0f0", borderRadius: 2, overflow: "hidden" }}>
-                            <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#1a8a5e" : "#3b82f6" }} />
-                          </div>
-                          <span style={{ fontSize: 10, color: "#aaa" }}>{pct}%</span>
+                {esAdmin ? (
+                  /* ── Vista ADMIN ── */
+                  <>
+                    <div onClick={() => setModal(p)} style={{ padding: "12px 16px", cursor: "pointer", display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 12, alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{p.codigo || p.numero_proyecto || "—"}</div>
+                        {p.fecha_entrega_plan && <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>📅 {fmtFecha(p.fecha_entrega_plan)}</div>}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || "Sin descripción"}</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          {p.cliente && <span style={{ fontSize: 12, color: "#888" }}>{p.cliente}</span>}
+                          {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}
+                          {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
+                          {p.superficie && <span style={{ fontSize: 11, color: "#aaa" }}>{p.superficie}m²</span>}
                         </div>
-                      );
-                    })()}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                    <EstadoChip estado={p.estado} />
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {p.anticipo && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>💰</span>}
-                      {p.proyecto_ok && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>✅</span>}
-                      {p.cobrado && <span style={{ fontSize: 9, color: "#888", fontWeight: 700 }}>✓$</span>}
+                        {p.checklist_total > 0 && (() => {
+                          const pct = Math.round((p.checklist_ok / p.checklist_total) * 100);
+                          return (
+                            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ flex: 1, height: 3, background: "#f0f0f0", borderRadius: 2, overflow: "hidden" }}>
+                                <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#1a8a5e" : "#3b82f6" }} />
+                              </div>
+                              <span style={{ fontSize: 10, color: "#aaa" }}>{pct}%</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                        <EstadoChip estado={p.estado} />
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {p.anticipo && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>💰</span>}
+                          {p.proyecto_ok && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>✅</span>}
+                          {p.cobrado && <span style={{ fontSize: 9, color: "#888", fontWeight: 700 }}>✓$</span>}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Indicadores — dentro del mismo bloque */}
-                {(pres || p.fecha_inicio_real) && (
-                  <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", background: "#fafafa" }}>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {(pres || p.fecha_inicio_real) && (
+                      <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", background: "#fafafa" }}>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          {(() => {
+                            const diasAprobacion = pres ? diasEntre(pres.fecha_emision, pres.fecha_aprobacion) : null;
+                            const diasEjecucion = diasEntre(p.fecha_inicio_real, p.fecha_entrega_real || new Date().toISOString().slice(0,10));
+                            const cuotas = pres ? cuotasDesdeModalidad(pres.forma_pago, pres.monto) : [];
+                            const moneda = pres?.moneda === "USD" ? "U$S" : "$";
+                            return (<>
+                              {diasAprobacion !== null && <div style={{ fontSize: 12 }}><span style={{ fontWeight: 800, color: diasAprobacion <= 7 ? "#1a8a5e" : diasAprobacion <= 30 ? "#f59e0b" : "#c0392b" }}>{diasAprobacion}d</span><span style={{ color: "#aaa", marginLeft: 4 }}>ciclo comercial</span></div>}
+                              {p.fecha_inicio_real && diasEjecucion !== null && <div style={{ fontSize: 12 }}><span style={{ fontWeight: 800, color: "#3b82f6" }}>{diasEjecucion}d</span><span style={{ color: "#aaa", marginLeft: 4 }}>en ejecución</span></div>}
+                              {cuotas.map((c, i) => <div key={i} style={{ fontSize: 12 }}><span style={{ fontWeight: 800, color: "#1a8a5e", fontFamily: "monospace" }}>{moneda}{c.monto.toLocaleString("es-AR")}</span><span style={{ color: "#aaa", marginLeft: 4 }}>{c.label}</span></div>)}
+                            </>);
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <button onClick={() => setModal(p)} style={S.btnSm}>✏️ Editar</button>
+                      <button onClick={() => setPanelChecklist(p)} style={S.btnSm}>✅ Tareas</button>
+                      <button onClick={() => setPanelHonorarios(p)} style={S.btnSm}>💰 Honorarios</button>
+                      <button onClick={() => setPanelCobros(p)} style={{ ...S.btnSm, color: "#1a8a5e", borderColor: "#1a8a5e" }}>💵 Cobros</button>
+                      {p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ ...S.btnSm, textDecoration: "none" }}>📁 Drive</a>}
                       {(() => {
-                        const diasAprobacion = pres ? diasEntre(pres.fecha_emision, pres.fecha_aprobacion) : null;
-                        const diasEjecucion = diasEntre(p.fecha_inicio_real, p.fecha_entrega_real || new Date().toISOString().slice(0,10));
-                        const cuotas = pres ? cuotasDesdeModalidad(pres.forma_pago, pres.monto) : [];
-                        const moneda = pres?.moneda === "USD" ? "U$S" : "$";
+                        const idx = ESTADOS.findIndex(e => e.v === p.estado);
+                        const siguiente = ESTADOS[idx + 1];
+                        if (!siguiente || p.estado === "terminado") return null;
+                        return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  /* ── Vista CALCULISTA — sin datos financieros del cliente ── */
+                  <>
+                    <div style={{ padding: "14px 16px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: 15, color: "#111", marginBottom: 4 }}>{p.descripcion || "Sin descripción"}</div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {p.cliente && <span style={{ fontSize: 12, color: "#888" }}>👤 {p.cliente}</span>}
+                            {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
+                            {p.superficie && <span style={{ fontSize: 11, color: "#aaa" }}>📐 {p.superficie}m²</span>}
+                          </div>
+                        </div>
+                        <EstadoChip estado={p.estado} />
+                      </div>
+                      {p.fecha_entrega_plan && (
+                        <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
+                          📅 Entrega estimada: <strong>{fmtFecha(p.fecha_entrega_plan)}</strong>
+                          {p.fecha_inicio_real && (() => {
+                            const dias = diasEntre(p.fecha_inicio_real, p.fecha_entrega_plan);
+                            const transcurridos = diasEntre(p.fecha_inicio_real, new Date().toISOString().slice(0,10));
+                            const restantes = dias ? dias - transcurridos : null;
+                            return restantes !== null ? <span style={{ marginLeft: 8, color: restantes < 7 ? "#c0392b" : restantes < 14 ? "#f59e0b" : "#888" }}>({restantes > 0 ? `${restantes}d restantes` : "Vencido"})</span> : null;
+                          })()}
+                        </div>
+                      )}
+                      {p.checklist_total > 0 && (() => {
+                        const pct = Math.round((p.checklist_ok / p.checklist_total) * 100);
                         return (
-                          <>
-                            {diasAprobacion !== null && (
-                              <div style={{ fontSize: 12 }}>
-                                <span style={{ fontWeight: 800, color: diasAprobacion <= 7 ? "#1a8a5e" : diasAprobacion <= 30 ? "#f59e0b" : "#c0392b" }}>{diasAprobacion}d</span>
-                                <span style={{ color: "#aaa", marginLeft: 4 }}>ciclo comercial</span>
-                              </div>
-                            )}
-                            {p.fecha_inicio_real && diasEjecucion !== null && (
-                              <div style={{ fontSize: 12 }}>
-                                <span style={{ fontWeight: 800, color: "#3b82f6" }}>{diasEjecucion}d</span>
-                                <span style={{ color: "#aaa", marginLeft: 4 }}>en ejecución</span>
-                              </div>
-                            )}
-                            {cuotas.map((c, i) => (
-                              <div key={i} style={{ fontSize: 12 }}>
-                                <span style={{ fontWeight: 800, color: "#1a8a5e", fontFamily: "monospace" }}>{moneda}{c.monto.toLocaleString("es-AR")}</span>
-                                <span style={{ color: "#aaa", marginLeft: 4 }}>{c.label}</span>
-                              </div>
-                            ))}
-                          </>
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#aaa", marginBottom: 4 }}>
+                              <span>Avance de tareas</span><span>{p.checklist_ok}/{p.checklist_total} · {pct}%</span>
+                            </div>
+                            <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#1a8a5e" : "#3b82f6", borderRadius: 3 }} />
+                            </div>
+                          </div>
                         );
                       })()}
                     </div>
-                  </div>
+                    <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", display: "flex", gap: 6 }}>
+                      <button onClick={() => setPanelChecklist(p)} style={{ ...S.btn, fontSize: 12, padding: "7px 16px" }}>✅ Mis tareas</button>
+                      <button onClick={() => setPanelHonorarios(p)} style={{ ...S.btnSm }}>💰 Mis honorarios</button>
+                      {p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ ...S.btnSm, textDecoration: "none" }}>📁 Drive</a>}
+                    </div>
+                  </>
                 )}
-
-                {/* Acciones — dentro del mismo bloque */}
-                <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <button onClick={() => setModal(p)} style={S.btnSm}>✏️ Editar</button>
-                  <button onClick={() => setPanelChecklist(p)} style={S.btnSm}>✅ Tareas</button>
-                  {esAdmin && <button onClick={() => setPanelHonorarios(p)} style={S.btnSm}>💰 Honorarios</button>}
-                  {esAdmin && <button onClick={() => setPanelCobros(p)} style={{ ...S.btnSm, color: "#1a8a5e", borderColor: "#1a8a5e" }}>💵 Cobros</button>}
-                  {p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ ...S.btnSm, textDecoration: "none" }}>📁 Drive</a>}
-                  {esAdmin && (() => {
-                    const idx = ESTADOS.findIndex(e => e.v === p.estado);
-                    const siguiente = ESTADOS[idx + 1];
-                    if (!siguiente || p.estado === "terminado") return null;
-                    return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
-                  })()}
-                </div>
               </div>
             );
           })}
