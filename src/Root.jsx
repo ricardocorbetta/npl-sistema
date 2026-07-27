@@ -83,6 +83,7 @@ export default function Root() {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
     setPerfil(data)
     if (data?.rol === 'jefe_obra') navTo('obras')
+    if (data?.rol === 'calculista') navTo('legajos')
     setLoading(false)
   }
 
@@ -120,6 +121,7 @@ export default function Root() {
 
   if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
   if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
+  if (current === 'legajos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={true}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
   if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
   if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
   if (current === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard /></Layout></ThemeContext.Provider>
@@ -132,7 +134,6 @@ export default function Root() {
   return (
     <div style={{ ...sans, minHeight: '100vh', background: palette.bgApp, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ position: 'fixed', top: 20, right: 20, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <GlobalSearch palette={palette} onNavegar={(modulo, id) => navTo(modulo, id)} />
         <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
       </div>
       <div style={{ marginBottom: 32, textAlign: 'center' }}>
@@ -158,10 +159,11 @@ export default function Root() {
 }
 
 /* ─── Layout — header global con marca + nav + theme toggle, una sola vez ─── */
-function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette, children }) {
+function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette, children, hideBuscador }) {
   if (perfil?.rol === 'jefe_obra') {
     return <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>{children}</div>
   }
+  const esCalculista = perfil?.rol === 'calculista';
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>
       <div style={{ background: palette.bgInverse, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 48, overflowX: 'auto' }}>
@@ -179,7 +181,11 @@ function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <GlobalSearch palette={palette} onNavegar={(modulo, id) => onNav(modulo, id)} />
+        {!hideBuscador && !esCalculista && (
+          <div style={{ position: 'relative' }}>
+            <GlobalSearch palette={palette} onNavegar={(modulo, id) => onNav(modulo, id)} />
+          </div>
+        )}
         <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
         <span style={{ fontSize: 11, color: '#777', flexShrink: 0, marginLeft: 4 }}>{perfil?.nombre}</span>
         <button onClick={onLogout} style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>Salir</button>
@@ -290,11 +296,19 @@ function Usuarios({ session, palette }) {
   const cargar = async () => {
     setLoading(true)
     const { data: { session: s } } = await supabase.auth.getSession()
-    const res = await fetch(EDGE_LIST_URL, {
-      headers: { 'Authorization': `Bearer ${s.access_token}` }
-    })
+    const res = await fetch(EDGE_LIST_URL, { headers: { 'Authorization': `Bearer ${s.access_token}` } })
     const json = await res.json()
-    setUsers(json.data || [])
+    const lista = json.data || []
+
+    // Verificar cuáles calculistas están vinculados
+    const emails = lista.filter(u => u.rol === 'calculista').map(u => u.mail).filter(Boolean)
+    let vinculados = new Set()
+    if (emails.length > 0) {
+      const { data: calcs } = await supabase.from('calculistas').select('mail, perfil_id').in('mail', emails)
+      if (calcs) calcs.forEach(c => { if (c.perfil_id || c.mail) vinculados.add(c.mail) })
+    }
+
+    setUsers(lista.map(u => ({ ...u, calculista_vinculado: u.rol === 'calculista' && vinculados.has(u.mail) })))
     setLoading(false)
   }
 
@@ -310,7 +324,6 @@ function Usuarios({ session, palette }) {
     setSaving(true); setMsg('')
     try {
       const { data: { session: s } } = await supabase.auth.getSession()
-      // 1. Crear usuario via invitación (Supabase envía email automáticamente)
       const res = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
@@ -318,7 +331,20 @@ function Usuarios({ session, palette }) {
       })
       const data = await res.json()
       if (data.error) { setMsg('❌ ' + data.error); setSaving(false); return }
-      setMsg(`✓ Invitación enviada a ${form.email} — recibirá un email para configurar su contraseña`)
+
+      // Si es calculista, vincular con tabla calculistas por email
+      if (form.rol === 'calculista' && data.id) {
+        const { data: calcs } = await supabase.from('calculistas').select('id').eq('mail', form.email).limit(1)
+        if (calcs && calcs.length > 0) {
+          await supabase.from('calculistas').update({ perfil_id: data.id }).eq('id', calcs[0].id)
+          setMsg(`✓ Invitación enviada a ${form.email} — vinculado con calculista existente`)
+        } else {
+          setMsg(`✓ Invitación enviada a ${form.email} — recibirá un email para configurar su contraseña`)
+        }
+      } else {
+        setMsg(`✓ Invitación enviada a ${form.email}`)
+      }
+
       setForm({ nombre: '', email: '', rol: 'calculista' })
       setShowForm(false)
       cargar()
@@ -389,7 +415,14 @@ function Usuarios({ session, palette }) {
         {users.map(u => (
           <div key={u.id} style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: palette.text }}>{u.nombre || '—'}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: palette.text }}>{u.nombre || '—'}</p>
+                {u.rol === 'calculista' && (
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: u.calculista_vinculado ? '#f0fdf4' : '#fef9c3', color: u.calculista_vinculado ? '#1a8a5e' : '#c4781a', fontWeight: 700, border: `1px solid ${u.calculista_vinculado ? '#1a8a5e40' : '#f59e0b40'}` }}>
+                    {u.calculista_vinculado ? '✓ Vinculado' : '⚠ Sin vincular en Calculistas'}
+                  </span>
+                )}
+              </div>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{u.mail}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
