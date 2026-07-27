@@ -121,6 +121,7 @@ export default function Root() {
 
   if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
   if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
+  if (current === 'perfil') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} /></Layout></ThemeContext.Provider>
   if (current === 'legajos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={true}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
   if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
   if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
@@ -159,6 +160,78 @@ export default function Root() {
 }
 
 /* ─── Layout — header global con marca + nav + theme toggle, una sola vez ─── */
+/* ─── Panel de perfil editable ─── */
+function PanelPerfil({ perfil, palette, onVolver }) {
+  const shared = makeShared(palette)
+  const [form, setForm] = useState({ nombre: perfil?.nombre || '', mail: perfil?.mail || '', wsp: '', ciudad: '' })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [passForm, setPassForm] = useState({ nueva: '', confirmar: '' })
+  const [changingPass, setChangingPass] = useState(false)
+
+  async function guardar() {
+    setSaving(true)
+    const { error } = await supabase.from('perfiles').update({ nombre: form.nombre }).eq('id', perfil.id)
+    if (error) setMsg('❌ ' + error.message)
+    else setMsg('✓ Perfil actualizado')
+    setTimeout(() => setMsg(''), 3000)
+    setSaving(false)
+  }
+
+  async function cambiarPassword() {
+    if (passForm.nueva !== passForm.confirmar) return setMsg('❌ Las contraseñas no coinciden')
+    if (passForm.nueva.length < 6) return setMsg('❌ Mínimo 6 caracteres')
+    setChangingPass(true)
+    const { error } = await supabase.auth.updateUser({ password: passForm.nueva })
+    if (error) setMsg('❌ ' + error.message)
+    else { setMsg('✓ Contraseña actualizada'); setPassForm({ nueva: '', confirmar: '' }) }
+    setTimeout(() => setMsg(''), 3000)
+    setChangingPass(false)
+  }
+
+  return (
+    <div style={{ maxWidth: 520, margin: '40px auto', padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <button onClick={onVolver} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#888' }}>← Volver</button>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: palette.text }}>Mi perfil</h2>
+        <span style={{ fontSize: 11, background: palette.bgSoft, color: palette.textMuted, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>{perfil?.rol}</span>
+      </div>
+
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: palette.text }}>Datos personales</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={shared.lbl}>Nombre completo</label>
+            <input style={shared.inp} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
+          </div>
+          <div>
+            <label style={shared.lbl}>Email</label>
+            <input style={{ ...shared.inp, background: palette.bgSoft, color: palette.textMuted }} value={form.mail} disabled />
+            <p style={{ fontSize: 11, color: palette.textFaint, margin: '3px 0 0' }}>El email no se puede cambiar</p>
+          </div>
+        </div>
+        {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#1a8a5e' : '#c0392b', margin: '10px 0 0', fontWeight: 600 }}>{msg}</p>}
+        <button onClick={guardar} disabled={saving} style={{ ...shared.btn, marginTop: 14 }}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+      </div>
+
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20 }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: palette.text }}>Cambiar contraseña</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={shared.lbl}>Nueva contraseña</label>
+            <input type="password" style={shared.inp} value={passForm.nueva} onChange={e => setPassForm(p => ({ ...p, nueva: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+          </div>
+          <div>
+            <label style={shared.lbl}>Confirmar contraseña</label>
+            <input type="password" style={shared.inp} value={passForm.confirmar} onChange={e => setPassForm(p => ({ ...p, confirmar: e.target.value }))} placeholder="Repetí la contraseña" />
+          </div>
+        </div>
+        <button onClick={cambiarPassword} disabled={changingPass || !passForm.nueva} style={{ ...shared.btn, marginTop: 14 }}>{changingPass ? 'Actualizando…' : 'Cambiar contraseña'}</button>
+      </div>
+    </div>
+  )
+}
+
 function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette, children, hideBuscador }) {
   if (perfil?.rol === 'jefe_obra') {
     return <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>{children}</div>
@@ -187,7 +260,9 @@ function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette
           </div>
         )}
         <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
-        <span style={{ fontSize: 11, color: '#777', flexShrink: 0, marginLeft: 4 }}>{perfil?.nombre}</span>
+        <button onClick={() => onNav('perfil')} style={{ fontSize: 11, color: '#aaa', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', flexShrink: 0 }}>
+          👤 {perfil?.nombre}
+        </button>
         <button onClick={onLogout} style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>Salir</button>
       </div>
       <div>{children}</div>
