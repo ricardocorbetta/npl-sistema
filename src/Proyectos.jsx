@@ -1185,7 +1185,12 @@ export default function Proyectos({ deepLinkId, perfil }) {
     setLoading(true); setError("");
     try {
       const esCalculista = perfil?.rol === "calculista";
-      const filtro = esCalculista && perfil?.nombre ? `&encargado=eq.${encodeURIComponent(perfil.nombre)}` : "";
+      // Filtrar por email (campo llave) o nombre como fallback
+      const filtro = esCalculista && perfil?.mail
+        ? `&encargado_mail=eq.${encodeURIComponent(perfil.mail)}`
+        : esCalculista && perfil?.nombre
+        ? `&encargado=eq.${encodeURIComponent(perfil.nombre)}`
+        : "";
       const rows = await api(`/proyectos?order=created_at.desc${filtro}`).catch(() => []);
       setProyectos(Array.isArray(rows) ? rows : []);
 
