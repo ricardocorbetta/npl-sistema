@@ -1,343 +1,520 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, createContext, useContext } from 'react'
+import { supabase } from './supabase.js'
+import App from './App.jsx'
+import Proyectos from './Proyectos.jsx'
+import Calculistas from './Calculistas.jsx'
+import CRM from './CRM.jsx'
+import Dashboard from './Dashboard.jsx'
+import Obras from './Obras.jsx'
+import Biblioteca from './Biblioteca.jsx'
+import Configuracion from './Configuracion.jsx'
+import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
+import Postulacion from './Postulacion.jsx'
 
-const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
+const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
+const EDGE_LIST_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
 
-const SISTEMAS = ["Hormigón armado","Steel frame","Wood frame","Panel SIP","Estructuras metálicas","Mampostería portante","Fundaciones superficiales","Fundaciones profundas","Refuerzos estructurales","Ampliaciones / reformas"];
-const TIPOS_PROYECTO = ["Viviendas unifamiliares","Viviendas multifamiliares","PH / dúplex","Ampliaciones de viviendas existentes","Locales comerciales","Galpones / naves industriales","Estructuras livianas","Obras de mayor escala"];
-const ENTREGABLES = ["Modelo estructural","Memoria de cálculo","Planos de estructura","Planillas de armaduras","Detalles constructivos","Cómputo de materiales","Informe técnico","Documentación municipal","Revisión / verificación de estructuras"];
-const NIVELES_SW = ["No lo utilizo","Básico","Intermedio","Avanzado","Experto / uso profesional frecuente"];
-const DISPONIBILIDAD = ["Menos de 10 horas semanales","Más de 10 y menos de 20","Más de 20 horas semanales"];
-const EXPERIENCIA_NIVEL = ["No tengo experiencia aún","Sí, experiencia inicial","Sí, experiencia intermedia","Sí, amplia experiencia"];
-const FORMACION = ["Estudiante avanzado/a de Ingeniería Civil","Estudiante avanzado/a de Arquitectura","Ingeniero/a Civil","Arquitecto/a","Otro"];
+const APPS_ADMIN = [
+  { id: 'dashboard', label: 'Dashboard', icon: '📊', desc: 'Panel de control' },
+  { id: 'presupuestos', label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
+  { id: 'proyectos', label: 'Proyectos', icon: '🗂️', desc: 'Kanban de proyectos' },
+  { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
+  { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
+  { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
+  { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
+  { id: 'configuracion', label: 'Config', icon: '⚙️', desc: 'Datos empresa' },
+  { id: 'usuarios', label: 'Usuarios', icon: '👤', desc: 'Gestión de accesos' },
+]
 
-const inp = {
-  width: "100%", padding: "10px 14px", border: "1.5px solid #e0e0e0",
-  borderRadius: 8, fontSize: 14, boxSizing: "border-box",
-  background: "#fff", fontFamily: "inherit", color: "#111",
-};
-const lbl = { fontSize: 13, fontWeight: 600, color: "#333", marginBottom: 6, display: "block" };
-const sublbl = { fontSize: 12, color: "#888", marginBottom: 8, display: "block" };
+const APPS_JEFE = [
+  { id: 'obras', label: 'Mis obras', icon: '🏗️', desc: 'Seguimiento diario' },
+]
 
-function CheckGroup({ opciones, value = [], onChange, cols = 2 }) {
-  const toggle = (op) => {
-    if (value.includes(op)) onChange(value.filter(x => x !== op));
-    else onChange([...value, op]);
-  };
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
-      {opciones.map(op => (
-        <label key={op} onClick={() => toggle(op)} style={{
-          display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
-          borderRadius: 8, cursor: "pointer", fontSize: 13,
-          border: `1.5px solid ${value.includes(op) ? "#0a0a0a" : "#e0e0e0"}`,
-          background: value.includes(op) ? "#f8f8f8" : "#fff",
-          fontWeight: value.includes(op) ? 600 : 400,
-        }}>
-          <input type="checkbox" checked={value.includes(op)} onChange={() => {}} style={{ marginTop: 2, accentColor: "#111" }} />
-          <span>{op}</span>
-        </label>
-      ))}
-    </div>
-  );
+const APPS_CALCULISTA = [
+  { id: 'legajos', label: 'Mis legajos', icon: '🗂️', desc: 'Proyectos asignados' },
+]
+
+/* ─── Contexto de tema — para que cualquier módulo hijo pueda leer palette/theme
+   sin tener que recibirlo por props explícitas ─── */
+const ThemeContext = createContext(null);
+export function useNplTheme() {
+  return useContext(ThemeContext);
 }
 
-function RadioGroup({ opciones, value, onChange }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {opciones.map(op => (
-        <label key={op} onClick={() => onChange(op)} style={{
-          display: "flex", alignItems: "center", gap: 10, padding: "9px 14px",
-          borderRadius: 8, cursor: "pointer", fontSize: 13,
-          border: `1.5px solid ${value === op ? "#0a0a0a" : "#e0e0e0"}`,
-          background: value === op ? "#f8f8f8" : "#fff",
-          fontWeight: value === op ? 600 : 400,
-        }}>
-          <input type="radio" checked={value === op} onChange={() => {}} style={{ accentColor: "#111" }} />
-          {op}
-        </label>
-      ))}
-    </div>
-  );
-}
+export default function Root() {
+  const [session, setSession] = useState(null)
+  const [perfil, setPerfil] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [current, setCurrent] = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash.split(":")[0] || null;
+  })
+  const [deepLinkId, setDeepLinkId] = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash.split(":")[1] || null;
+  })
+  const { theme, toggle, palette } = useTheme();
 
-function SoftwareRow({ software, value, onChange }) {
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      const [mod, id] = hash.split(":");
+      setCurrent(mod || null);
+      setDeepLinkId(id || null);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      if (session) cargarPerfil(session.user.id)
+      else setLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setSession(session)
+      if (session) cargarPerfil(session.user.id)
+      else { setPerfil(null); setLoading(false) }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const cargarPerfil = async (uid) => {
+    const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
+    setPerfil(data)
+    if (data?.rol === 'jefe_obra') navTo('obras')
+    if (data?.rol === 'calculista') navTo('legajos')
+    setLoading(false)
+  }
+
+  const navTo = (modulo, deepId) => {
+    const hashValue = deepId ? `${modulo}:${deepId}` : modulo;
+    setCurrent(modulo)
+    setDeepLinkId(deepId || null)
+    if (modulo) {
+      window.location.hash = hashValue
+    } else {
+      window.history.pushState(null, '', window.location.pathname)
+    }
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
+    navTo(null)
+  }
+
+  const shared = makeShared(palette);
+  const sans = { fontFamily: 'system-ui, -apple-system, sans-serif' };
+
+  if (loading) return (
+    <div style={{ ...sans, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: palette.textFaint, fontSize: 14, background: palette.bgApp }}>
+      Cargando...
+    </div>
+  )
+
+  if (current === 'postulacion') return <Postulacion />
+  if (!session) return <LoginScreen palette={palette} />
+  if (!perfil || !perfil.activo) return <PendienteScreen onLogout={logout} perfil={perfil} palette={palette} />
+
+  const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
+
+  const themeCtx = { theme, palette };
+
+  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
+  if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
+  if (current === 'perfil') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} /></Layout></ThemeContext.Provider>
+  if (current === 'legajos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={true}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
+  if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
+  if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
+  if (current === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard /></Layout></ThemeContext.Provider>
+  if (current === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
+  if (current === 'biblioteca') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Biblioteca /></Layout></ThemeContext.Provider>
+  if (current === 'configuracion') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Configuracion /></Layout></ThemeContext.Provider>
+  if (current === 'usuarios') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Usuarios session={session} palette={palette} /></Layout></ThemeContext.Provider>
+
+  // ─── Pantalla de inicio (selector de apps) ───
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-      <span style={{ fontSize: 13, color: "#333", fontWeight: 500 }}>{software}</span>
-      <div style={{ display: "flex", gap: 4 }}>
-        {NIVELES_SW.map(n => (
-          <button key={n} onClick={() => onChange(n)} style={{
-            padding: "4px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer",
-            border: `1.5px solid ${value === n ? "#0a0a0a" : "#e0e0e0"}`,
-            background: value === n ? "#0a0a0a" : "#fff",
-            color: value === n ? "#fff" : "#888",
-            fontWeight: value === n ? 700 : 400,
-            whiteSpace: "nowrap",
-          }}>
-            {n === "Experto / uso profesional frecuente" ? "Experto" : n}
+    <div style={{ ...sans, minHeight: '100vh', background: palette.bgApp, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ position: 'fixed', top: 20, right: 20, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
+      </div>
+      <div style={{ marginBottom: 32, textAlign: 'center' }}>
+        <div style={{ width: 52, height: 52, background: palette.bgInverse, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 12px', color: palette.textInverse, fontWeight: 900, fontFamily: FONT_MONO }}>N</div>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: palette.text, letterSpacing: -0.3 }}>NPL Sistema</h1>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: palette.textMuted }}>Bienvenido, {perfil.nombre}</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, width: '100%', maxWidth: 600 }}>
+        {apps.map(a => (
+          <button key={a.id} onClick={() => navTo(a.id)}
+            style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: '20px 16px', cursor: 'pointer', textAlign: 'left' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = palette.bgInverse}
+            onMouseLeave={e => e.currentTarget.style.borderColor = palette.border}>
+            <div style={{ fontSize: 26, marginBottom: 8 }}>{a.icon}</div>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: palette.text }}>{a.label}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{a.desc}</p>
           </button>
         ))}
       </div>
+      <button onClick={logout} style={{ marginTop: 32, fontSize: 12, color: palette.textFaint, background: 'none', border: 'none', cursor: 'pointer' }}>Cerrar sesión</button>
     </div>
-  );
+  )
 }
 
-function Seccion({ numero, titulo, children }) {
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, paddingBottom: 12, borderBottom: "2px solid #f0f0f0" }}>
-        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#0a0a0a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{numero}</div>
-        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#111" }}>{titulo}</h2>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
+/* ─── Layout — header global con marca + nav + theme toggle, una sola vez ─── */
+/* ─── Panel de perfil editable ─── */
+function PanelPerfil({ perfil, palette, onVolver }) {
+  const shared = makeShared(palette)
+  const [form, setForm] = useState({ nombre: perfil?.nombre || '', mail: perfil?.mail || '', wsp: '', ciudad: '' })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [passForm, setPassForm] = useState({ nueva: '', confirmar: '' })
+  const [changingPass, setChangingPass] = useState(false)
 
-function Campo({ label, hint, children, required }) {
-  return (
-    <div>
-      <label style={lbl}>{label}{required && <span style={{ color: "#c0392b", marginLeft: 2 }}>*</span>}</label>
-      {hint && <span style={sublbl}>{hint}</span>}
-      {children}
-    </div>
-  );
-}
-
-export default function Postulacion() {
-  const [paso, setPaso] = useState(1);
-  const [enviado, setEnviado] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const [form, setForm] = useState({
-    nombre: "", edad: "", ciudad: "", mail: "", wsp: "", linkedin: "",
-    formacion: "", universidad: "", estudios_complementarios: "",
-    experiencia: "", sistemas: [], experiencia_detalle: "",
-    tipos_proyecto: [], entregables: [],
-    cypecad: "", autocad: "", sketchup: "",
-    otros_software: "", adaptacion_metodologia: "",
-    disponibilidad: "", freelance: "", relacion_dependencia: "",
-    factura: "", cv_url: "",
-  });
-
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const TOTAL_PASOS = 4;
-
-  async function enviar() {
-    if (!form.nombre || !form.mail) { setError("Completá nombre y email"); return; }
-    setSaving(true); setError("");
-    try {
-      const body = {
-        nombre: form.nombre,
-        mail: form.mail,
-        wsp: form.wsp || null,
-        ciudad: form.ciudad || null,
-        experiencia: form.experiencia_detalle || null,
-        sistemas: form.sistemas.join(", ") || null,
-        cypecad: form.cypecad || null,
-        autocad: form.autocad || null,
-        sketchup: form.sketchup || null,
-        otros_software: form.otros_software || null,
-        experiencia: form.experiencia || null,
-        disponibilidad: form.disponibilidad || null,
-        factura: form.factura === "Sí",
-        freelance: form.freelance === "Sí",
-        ig: form.linkedin || null,
-        estado: "postulante",
-        tipo: "postulante",
-        disponible: false,
-        observaciones: [
-          form.formacion && `Formación: ${form.formacion}`,
-          form.universidad && `Universidad: ${form.universidad}`,
-          form.estudios_complementarios && `Estudios complementarios: ${form.estudios_complementarios}`,
-          form.adaptacion_metodologia && `Adaptación metodología: ${form.adaptacion_metodologia}`,
-          form.relacion_dependencia && `Relación de dependencia: ${form.relacion_dependencia}`,
-          form.tipos_proyecto.length && `Tipos de proyecto: ${form.tipos_proyecto.join(", ")}`,
-          form.entregables.length && `Entregables: ${form.entregables.join(", ")}`,
-          form.cv_url && `CV: ${form.cv_url}`,
-        ].filter(Boolean).join("\n") || null,
-      };
-
-      const res = await fetch(`${SUPA_URL}/calculistas`, {
-        method: "POST",
-        headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Error al enviar");
-      }
-      setEnviado(true);
-    } catch(e) { setError(e.message); }
-    setSaving(false);
+  async function guardar() {
+    setSaving(true)
+    const { error } = await supabase.from('perfiles').update({ nombre: form.nombre }).eq('id', perfil.id)
+    if (error) setMsg('❌ ' + error.message)
+    else setMsg('✓ Perfil actualizado')
+    setTimeout(() => setMsg(''), 3000)
+    setSaving(false)
   }
 
-  if (enviado) return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", maxWidth: 600, margin: "0 auto", padding: "60px 24px", textAlign: "center" }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: "#111", marginBottom: 8 }}>¡Postulación recibida!</h1>
-      <p style={{ fontSize: 15, color: "#666", lineHeight: 1.6 }}>Gracias por tu interés en trabajar con NPL Ingeniería Civil. Revisaremos tu perfil y nos pondremos en contacto a la brevedad.</p>
-      <div style={{ marginTop: 24, padding: "16px 20px", background: "#f8f8f8", borderRadius: 10, fontSize: 13, color: "#888" }}>
-        Podés seguirnos en Instagram <strong>@nplingenieria</strong> para estar al tanto de nuevas oportunidades.
-      </div>
-    </div>
-  );
+  async function cambiarPassword() {
+    if (passForm.nueva !== passForm.confirmar) return setMsg('❌ Las contraseñas no coinciden')
+    if (passForm.nueva.length < 6) return setMsg('❌ Mínimo 6 caracteres')
+    setChangingPass(true)
+    const { error } = await supabase.auth.updateUser({ password: passForm.nueva })
+    if (error) setMsg('❌ ' + error.message)
+    else { setMsg('✓ Contraseña actualizada'); setPassForm({ nueva: '', confirmar: '' }) }
+    setTimeout(() => setMsg(''), 3000)
+    setChangingPass(false)
+  }
 
   return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", maxWidth: 700, margin: "0 auto", padding: "40px 24px", color: "#111" }}>
-
-      {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 8 }}>NPL Ingeniería Civil</div>
-        <h1 style={{ fontSize: 26, fontWeight: 900, margin: "0 0 8px", letterSpacing: -0.5 }}>Búsqueda de calculistas estructurales</h1>
-        <p style={{ fontSize: 14, color: "#666", margin: 0, lineHeight: 1.6 }}>Trabajamos con profesionales freelance especializados en cálculo estructural para proyectos de pequeña y mediana escala en todo el país.</p>
+    <div style={{ maxWidth: 520, margin: '40px auto', padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <button onClick={onVolver} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#888' }}>← Volver</button>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: palette.text }}>Mi perfil</h2>
+        <span style={{ fontSize: 11, background: palette.bgSoft, color: palette.textMuted, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>{perfil?.rol}</span>
       </div>
 
-      {/* Progress */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 36, alignItems: "center" }}>
-        {Array.from({ length: TOTAL_PASOS }, (_, i) => (
-          <React.Fragment key={i}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0,
-              background: paso > i + 1 ? "#1a8a5e" : paso === i + 1 ? "#0a0a0a" : "#e0e0e0",
-              color: paso >= i + 1 ? "#fff" : "#aaa" }}>
-              {paso > i + 1 ? "✓" : i + 1}
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: palette.text }}>Datos personales</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={shared.lbl}>Nombre completo</label>
+            <input style={shared.inp} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
+          </div>
+          <div>
+            <label style={shared.lbl}>Email</label>
+            <input style={{ ...shared.inp, background: palette.bgSoft, color: palette.textMuted }} value={form.mail} disabled />
+            <p style={{ fontSize: 11, color: palette.textFaint, margin: '3px 0 0' }}>El email no se puede cambiar</p>
+          </div>
+        </div>
+        {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#1a8a5e' : '#c0392b', margin: '10px 0 0', fontWeight: 600 }}>{msg}</p>}
+        <button onClick={guardar} disabled={saving} style={{ ...shared.btn, marginTop: 14 }}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+      </div>
+
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20 }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: palette.text }}>Cambiar contraseña</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={shared.lbl}>Nueva contraseña</label>
+            <input type="password" style={shared.inp} value={passForm.nueva} onChange={e => setPassForm(p => ({ ...p, nueva: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+          </div>
+          <div>
+            <label style={shared.lbl}>Confirmar contraseña</label>
+            <input type="password" style={shared.inp} value={passForm.confirmar} onChange={e => setPassForm(p => ({ ...p, confirmar: e.target.value }))} placeholder="Repetí la contraseña" />
+          </div>
+        </div>
+        <button onClick={cambiarPassword} disabled={changingPass || !passForm.nueva} style={{ ...shared.btn, marginTop: 14 }}>{changingPass ? 'Actualizando…' : 'Cambiar contraseña'}</button>
+      </div>
+    </div>
+  )
+}
+
+function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette, children, hideBuscador }) {
+  if (perfil?.rol === 'jefe_obra') {
+    return <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>{children}</div>
+  }
+  const esCalculista = perfil?.rol === 'calculista';
+  return (
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>
+      <div style={{ background: palette.bgInverse, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 48, overflowX: 'auto' }}>
+        <button onClick={() => onNav(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: palette.textInverse, fontWeight: 900, fontSize: 16, padding: 0, flexShrink: 0, fontFamily: FONT_MONO, letterSpacing: -0.5 }}>N</button>
+        <div style={{ width: 1, height: 20, background: theme === 'dark' ? '#333' : '#2a2a2a', flexShrink: 0 }} />
+        {apps.map(a => (
+          <button key={a.id} onClick={() => onNav(a.id)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+              color: current === a.id ? palette.textInverse : '#888',
+              padding: '0 4px', borderBottom: current === a.id ? `2px solid ${palette.textInverse}` : '2px solid transparent',
+              height: 48, whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+            {a.label}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {!hideBuscador && !esCalculista && (
+          <div style={{ position: 'relative' }}>
+            <GlobalSearch palette={palette} onNavegar={(modulo, id) => onNav(modulo, id)} />
+          </div>
+        )}
+        <ThemeToggle theme={theme} onToggle={toggle} palette={palette} />
+        <button onClick={() => onNav('perfil')} style={{ fontSize: 11, color: '#aaa', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', flexShrink: 0 }}>
+          👤 {perfil?.nombre}
+        </button>
+        <button onClick={onLogout} style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>Salir</button>
+      </div>
+      <div>{children}</div>
+    </div>
+  )
+}
+
+/* ─── Login ─── */
+function LoginScreen({ palette }) {
+  const [tab, setTab] = useState('login')
+  const [mail, setMail] = useState('')
+  const [pass, setPass] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+  const shared = makeShared(palette);
+
+  const login = async () => {
+    setLoading(true); setMsg('')
+    const { error } = await supabase.auth.signInWithPassword({ email: mail, password: pass })
+    if (error) setMsg(error.message)
+    setLoading(false)
+  }
+
+  const registro = async () => {
+    if (!nombre.trim()) return setMsg('El nombre es obligatorio')
+    setLoading(true); setMsg('')
+    const { error } = await supabase.auth.signUp({ email: mail, password: pass, options: { data: { nombre } } })
+    if (error) setMsg(error.message)
+    else setMsg('¡Registro exitoso! Tu cuenta está pendiente de activación por el administrador.')
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 16, padding: '32px 28px', width: '100%', maxWidth: 380 }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ width: 48, height: 48, background: palette.bgInverse, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, margin: '0 auto 12px', color: palette.textInverse, fontWeight: 900, fontFamily: FONT_MONO }}>N</div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: palette.text }}>NPL Sistema</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: palette.textMuted }}>Ingeniería Civil</p>
+        </div>
+        <div style={{ display: 'flex', border: `1.5px solid ${palette.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+          {[['login', 'Ingresar'], ['registro', 'Registrarse']].map(([id, label]) => (
+            <button key={id} onClick={() => { setTab(id); setMsg('') }}
+              style={{ flex: 1, padding: '8px', fontSize: 13, fontWeight: 700, background: tab === id ? palette.bgInverse : palette.bgCard, color: tab === id ? palette.textInverse : palette.textMuted, border: 'none', cursor: 'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === 'registro' && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: palette.textSoft, marginBottom: 5 }}>Nombre completo</label>
+            <input style={shared.inp} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
+          </div>
+        )}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: palette.textSoft, marginBottom: 5 }}>Email</label>
+          <input style={shared.inp} type="email" value={mail} onChange={e => setMail(e.target.value)} placeholder="tu@mail.com" />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: palette.textSoft, marginBottom: 5 }}>Contraseña</label>
+          <input style={shared.inp} type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
+            onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? login() : registro())} />
+        </div>
+        {msg && <p style={{ fontSize: 13, color: msg.includes('exitoso') ? '#1a8a5e' : '#c0392b', marginBottom: 14, textAlign: 'center' }}>{msg}</p>}
+        <button onClick={tab === 'login' ? login : registro} disabled={loading}
+          style={{ width: '100%', padding: '13px', fontSize: 15, fontWeight: 700, borderRadius: 10, border: 'none', background: loading ? palette.textFaint : palette.bgInverse, color: palette.textInverse, cursor: loading ? 'not-allowed' : 'pointer' }}>
+          {loading ? 'Cargando...' : tab === 'login' ? 'Ingresar' : 'Crear cuenta'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Pantalla pendiente ─── */
+function PendienteScreen({ onLogout, perfil, palette }) {
+  return (
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 16, padding: '32px 28px', width: '100%', maxWidth: 380, textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800, color: palette.text }}>Cuenta pendiente</h2>
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: palette.textMuted, lineHeight: 1.5 }}>
+          Tu cuenta fue creada correctamente. El administrador de NPL debe activarla y asignarte un rol antes de que puedas acceder.
+        </p>
+        <p style={{ margin: '0 0 24px', fontSize: 12, color: palette.textFaint }}>{perfil?.mail}</p>
+        <button onClick={onLogout} style={{ padding: '10px 24px', fontSize: 14, fontWeight: 700, borderRadius: 10, border: `1.5px solid ${palette.border}`, background: palette.bgCard, color: palette.textSoft, cursor: 'pointer' }}>
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Panel de usuarios ─── */
+function Usuarios({ session, palette }) {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [form, setForm] = useState({ nombre: '', email: '', rol: 'calculista' })
+  const shared = makeShared(palette);
+
+  useEffect(() => { cargar() }, [])
+
+  const cargar = async () => {
+    setLoading(true)
+    const { data: { session: s } } = await supabase.auth.getSession()
+    const res = await fetch(EDGE_LIST_URL, { headers: { 'Authorization': `Bearer ${s.access_token}` } })
+    const json = await res.json()
+    const lista = json.data || []
+
+    // Verificar cuáles calculistas están vinculados
+    const emails = lista.filter(u => u.rol === 'calculista').map(u => u.mail).filter(Boolean)
+    let vinculados = new Set()
+    if (emails.length > 0) {
+      const { data: calcs } = await supabase.from('calculistas').select('mail, perfil_id').in('mail', emails)
+      if (calcs) calcs.forEach(c => { if (c.perfil_id || c.mail) vinculados.add(c.mail) })
+    }
+
+    setUsers(lista.map(u => ({ ...u, calculista_vinculado: u.rol === 'calculista' && vinculados.has(u.mail) })))
+    setLoading(false)
+  }
+
+  const actualizar = async (id, campo, valor) => {
+    await supabase.from('perfiles').update({ [campo]: valor }).eq('id', id)
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, [campo]: valor } : u))
+  }
+
+  const invitarUsuario = async () => {
+    if (!form.nombre || !form.email) return setMsg('Completá nombre y email')
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(form.email)) return setMsg('Email inválido')
+    setSaving(true); setMsg('')
+    try {
+      const { data: { session: s } } = await supabase.auth.getSession()
+      const res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
+        body: JSON.stringify({ nombre: form.nombre, email: form.email, rol: form.rol, invite: true }),
+      })
+      const data = await res.json()
+      if (data.error) { setMsg('❌ ' + data.error); setSaving(false); return }
+
+      // Si es calculista, vincular con tabla calculistas por email
+      if (form.rol === 'calculista' && data.id) {
+        const { data: calcs } = await supabase.from('calculistas').select('id').eq('mail', form.email).limit(1)
+        if (calcs && calcs.length > 0) {
+          await supabase.from('calculistas').update({ perfil_id: data.id }).eq('id', calcs[0].id)
+          setMsg(`✓ Invitación enviada a ${form.email} — vinculado con calculista existente`)
+        } else {
+          setMsg(`✓ Invitación enviada a ${form.email} — recibirá un email para configurar su contraseña`)
+        }
+      } else {
+        setMsg(`✓ Invitación enviada a ${form.email}`)
+      }
+
+      setForm({ nombre: '', email: '', rol: 'calculista' })
+      setShowForm(false)
+      cargar()
+    } catch (e) { setMsg('❌ Error de conexión') }
+    setSaving(false)
+  }
+
+  const ROLES = [
+    { value: 'admin', label: '🔑 Admin', desc: 'Acceso completo' },
+    { value: 'calculista', label: '📐 Calculista', desc: 'Ve sus proyectos asignados' },
+    { value: 'jefe_obra', label: '🏗 Jefe de Obra', desc: 'Ve sus obras asignadas' },
+  ]
+
+  return (
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', padding: '24px 20px', maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: palette.text }}>⚙️ Gestión de usuarios</h1>
+        <button onClick={() => { setShowForm(!showForm); setMsg('') }} style={shared.btn}>
+          {showForm ? 'Cancelar' : '+ Nuevo usuario'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={{ background: palette.bgSoft, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: palette.text }}>Invitar usuario</h3>
+          <p style={{ margin: '0 0 16px', fontSize: 12, color: palette.textFaint }}>El usuario recibirá un email para configurar su contraseña y acceder al sistema.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={shared.lbl}>Nombre completo *</label>
+              <input style={shared.inp} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Joaquín García" />
             </div>
-            {i < TOTAL_PASOS - 1 && <div style={{ flex: 1, height: 2, background: paso > i + 1 ? "#1a8a5e" : "#e0e0e0", borderRadius: 1 }} />}
-          </React.Fragment>
+            <div>
+              <label style={shared.lbl}>Email *</label>
+              <input style={shared.inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="calculista@mail.com" />
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={shared.lbl}>Rol *</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {ROLES.map(r => (
+                <label key={r.value} onClick={() => setForm(p => ({ ...p, rol: r.value }))} style={{
+                  display: 'flex', flexDirection: 'column', gap: 2, padding: '10px 16px', borderRadius: 10, cursor: 'pointer',
+                  border: `2px solid ${form.rol === r.value ? '#0a0a0a' : palette.border}`,
+                  background: form.rol === r.value ? '#0a0a0a' : palette.bgCard,
+                  color: form.rol === r.value ? '#fff' : palette.text,
+                  minWidth: 140,
+                }}>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{r.label}</span>
+                  <span style={{ fontSize: 11, opacity: 0.7 }}>{r.desc}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#1a8a5e' : '#c0392b', margin: '0 0 12px' }}>{msg}</p>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={invitarUsuario} disabled={saving} style={shared.btn}>
+              {saving ? 'Enviando invitación…' : '📧 Enviar invitación'}
+            </button>
+            <button onClick={() => { setShowForm(false); setMsg(''); }} style={shared.btnSm}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {msg && !showForm && <p style={{ fontSize: 13, color: '#1a8a5e', marginBottom: 16 }}>{msg}</p>}
+      {loading && <p style={{ color: palette.textFaint }}>Cargando...</p>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {users.map(u => (
+          <div key={u.id} style={{ background: palette.bgCard, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: palette.text }}>{u.nombre || '—'}</p>
+                {u.rol === 'calculista' && (
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: u.calculista_vinculado ? '#f0fdf4' : '#fef9c3', color: u.calculista_vinculado ? '#1a8a5e' : '#c4781a', fontWeight: 700, border: `1px solid ${u.calculista_vinculado ? '#1a8a5e40' : '#f59e0b40'}` }}>
+                    {u.calculista_vinculado ? '✓ Vinculado' : '⚠ Sin vincular en Calculistas'}
+                  </span>
+                )}
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{u.mail}</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={u.rol} onChange={e => actualizar(u.id, 'rol', e.target.value)}
+                style={{ fontSize: 12, padding: '5px 8px', border: `1px solid ${palette.border}`, borderRadius: 8, background: palette.bgSoft, cursor: 'pointer', color: palette.text }}>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+              <button onClick={() => actualizar(u.id, 'activo', !u.activo)}
+                style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: u.activo ? '#1a8a5e1a' : palette.bgSoft, color: u.activo ? '#1a8a5e' : palette.textMuted, fontWeight: 700 }}>
+                {u.activo ? '✓ Activo' : 'Inactivo'}
+              </button>
+            </div>
+          </div>
         ))}
       </div>
-
-      {/* Paso 1 — Datos personales */}
-      {paso === 1 && (
-        <Seccion numero={1} titulo="Datos personales">
-          <Campo label="Nombre completo" required>
-            <input style={inp} value={form.nombre} onChange={e => set("nombre", e.target.value)} placeholder="Tu nombre y apellido" />
-          </Campo>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <Campo label="Edad" required>
-              <input type="number" style={inp} value={form.edad} onChange={e => set("edad", e.target.value)} placeholder="Ej: 28" />
-            </Campo>
-            <Campo label="Localidad y provincia">
-              <input style={inp} value={form.ciudad} onChange={e => set("ciudad", e.target.value)} placeholder="Ej: La Plata, Buenos Aires" />
-            </Campo>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <Campo label="Correo electrónico" required>
-              <input type="email" style={inp} value={form.mail} onChange={e => set("mail", e.target.value)} placeholder="tu@mail.com" />
-            </Campo>
-            <Campo label="WhatsApp">
-              <input style={inp} value={form.wsp} onChange={e => set("wsp", e.target.value)} placeholder="+54 9 11 ..." />
-            </Campo>
-          </div>
-          <Campo label="LinkedIn / Instagram">
-            <input style={inp} value={form.linkedin} onChange={e => set("linkedin", e.target.value)} placeholder="linkedin.com/in/tuperfil o @tuusuario" />
-          </Campo>
-        </Seccion>
-      )}
-
-      {/* Paso 2 — Formación y experiencia */}
-      {paso === 2 && (
-        <Seccion numero={2} titulo="Formación y experiencia">
-          <Campo label="Estado de la formación" required>
-            <RadioGroup opciones={FORMACION} value={form.formacion} onChange={v => set("formacion", v)} />
-          </Campo>
-          <Campo label="Universidad / institución">
-            <input style={inp} value={form.universidad} onChange={e => set("universidad", e.target.value)} placeholder="Ej: Universidad Nacional de La Plata" />
-          </Campo>
-          <Campo label="Estudios complementarios relacionados con estructuras">
-            <textarea style={{ ...inp, resize: "none" }} rows={3} value={form.estudios_complementarios} onChange={e => set("estudios_complementarios", e.target.value)} placeholder="Cursos, certificaciones, especializaciones..." />
-          </Campo>
-          <Campo label="¿Tenés experiencia en diseño y cálculo de estructuras para viviendas?" required>
-            <RadioGroup opciones={EXPERIENCIA_NIVEL} value={form.experiencia} onChange={v => set("experiencia", v)} />
-          </Campo>
-          <Campo label="¿En qué sistemas estructurales tenés experiencia?">
-            <CheckGroup opciones={SISTEMAS} value={form.sistemas} onChange={v => set("sistemas", v)} cols={2} />
-          </Campo>
-          <Campo label="Describí brevemente tu experiencia en proyectos residenciales">
-            <textarea style={{ ...inp, resize: "none" }} rows={4} value={form.experiencia_detalle} onChange={e => set("experiencia_detalle", e.target.value)} placeholder="Tipo de proyectos, m², cantidad, complejidad, entregables que realizaste..." />
-          </Campo>
-          <Campo label="¿Qué tipo de proyectos calculaste con mayor frecuencia?">
-            <CheckGroup opciones={TIPOS_PROYECTO} value={form.tipos_proyecto} onChange={v => set("tipos_proyecto", v)} cols={2} />
-          </Campo>
-          <Campo label="¿Qué entregables técnicos acostumbrás preparar?">
-            <CheckGroup opciones={ENTREGABLES} value={form.entregables} onChange={v => set("entregables", v)} cols={2} />
-          </Campo>
-        </Seccion>
-      )}
-
-      {/* Paso 3 — Software y metodología */}
-      {paso === 3 && (
-        <Seccion numero={3} titulo="Software y metodología">
-          <Campo label="Nivel de manejo de software principal" hint="Seleccioná tu nivel para cada programa">
-            <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "4px 12px" }}>
-              <SoftwareRow software="CYPECAD" value={form.cypecad} onChange={v => set("cypecad", v)} />
-              <SoftwareRow software="AutoCAD" value={form.autocad} onChange={v => set("autocad", v)} />
-              <SoftwareRow software="SketchUp" value={form.sketchup} onChange={v => set("sketchup", v)} />
-            </div>
-          </Campo>
-          <Campo label="Otros softwares que utilizás" hint="Ej: SAP2000, Revit, Robot Structural, Excel avanzado, IDEA StatiCa...">
-            <textarea style={{ ...inp, resize: "none" }} rows={3} value={form.otros_software} onChange={e => set("otros_software", e.target.value)} placeholder="Listá los softwares y tu nivel de manejo" />
-          </Campo>
-          <Campo label="¿Tenés inconvenientes en adaptarte a la metodología NPL (CYPECAD, RAM Advanse)?">
-            <textarea style={{ ...inp, resize: "none" }} rows={3} value={form.adaptacion_metodologia} onChange={e => set("adaptacion_metodologia", e.target.value)} placeholder="Contanos tu experiencia con estos programas y tu disposición a aprender" />
-          </Campo>
-          <Campo label="Utilizás Dropbox o Google Drive para compartir archivos">
-            <RadioGroup opciones={["Sí, Drive","Sí, Dropbox","Sí, ambos","No, pero puedo adaptarme"]} value={form.drive} onChange={v => set("drive", v)} />
-          </Campo>
-        </Seccion>
-      )}
-
-      {/* Paso 4 — Disponibilidad y datos de trabajo */}
-      {paso === 4 && (
-        <Seccion numero={4} titulo="Disponibilidad y datos de trabajo">
-          <Campo label="¿Tenés experiencia trabajando como asesor externo / freelance?">
-            <RadioGroup opciones={["Sí","No"]} value={form.freelance} onChange={v => set("freelance", v)} />
-          </Campo>
-          <Campo label="¿Actualmente estás trabajando en relación de dependencia?">
-            <RadioGroup opciones={["Sí","No"]} value={form.relacion_dependencia} onChange={v => set("relacion_dependencia", v)} />
-          </Campo>
-          <Campo label="Disponibilidad horaria para trabajar como asesor externo">
-            <RadioGroup opciones={DISPONIBILIDAD} value={form.disponibilidad} onChange={v => set("disponibilidad", v)} />
-          </Campo>
-          <Campo label="¿Estás inscripto en monotributo / podés facturar tus honorarios?">
-            <RadioGroup opciones={["Sí","No, pero puedo regularizarlo","No"]} value={form.factura} onChange={v => set("factura", v)} />
-          </Campo>
-          <Campo label="Link a tu CV" hint="Google Drive, Dropbox, LinkedIn o similar">
-            <input style={inp} value={form.cv_url} onChange={e => set("cv_url", e.target.value)} placeholder="https://drive.google.com/..." />
-          </Campo>
-
-          {error && (
-            <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600 }}>❌ {error}</div>
-          )}
-        </Seccion>
-      )}
-
-      {/* Navegación */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-        {paso > 1
-          ? <button onClick={() => setPaso(p => p - 1)} style={{ padding: "10px 20px", background: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>← Anterior</button>
-          : <div />
-        }
-        {paso < TOTAL_PASOS
-          ? <button onClick={() => {
-              if (paso === 1 && (!form.nombre || !form.mail)) { setError("Completá nombre y email para continuar"); return; }
-              setError(""); setPaso(p => p + 1);
-            }} style={{ padding: "10px 24px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-              Siguiente →
-            </button>
-          : <button onClick={enviar} disabled={saving} style={{ padding: "12px 28px", background: saving ? "#aaa" : "#1a8a5e", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
-              {saving ? "Enviando…" : "✓ Enviar postulación"}
-            </button>
-        }
-      </div>
-
-      <p style={{ textAlign: "center", fontSize: 12, color: "#bbb", marginTop: 24 }}>NPL Ingeniería Civil · npl-sistema.vercel.app</p>
     </div>
-  );
+  )
 }
