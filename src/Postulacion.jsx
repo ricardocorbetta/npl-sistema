@@ -107,13 +107,14 @@ export default function Root() {
   const shared = makeShared(palette);
   const sans = { fontFamily: 'system-ui, -apple-system, sans-serif' };
 
+  if (current === 'postulacion') return <Postulacion />
+
   if (loading) return (
     <div style={{ ...sans, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: palette.textFaint, fontSize: 14, background: palette.bgApp }}>
       Cargando...
     </div>
   )
 
-  if (current === 'postulacion') return <Postulacion />
   if (!session) return <LoginScreen palette={palette} />
   if (!perfil || !perfil.activo) return <PendienteScreen onLogout={logout} perfil={perfil} palette={palette} />
 
