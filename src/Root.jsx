@@ -66,7 +66,10 @@ export default function Root() {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
+  const isPostulacion = window.location.hash.replace("#", "").split(":")[0] === "postulacion";
+
   useEffect(() => {
+    if (isPostulacion) return; // No inicializar auth para formulario público
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) cargarPerfil(session.user.id)
