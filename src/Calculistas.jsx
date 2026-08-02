@@ -23,42 +23,42 @@ const NIVELES_SW = ["No lo utilizo", "Básico", "Intermedio", "Avanzado", "Exper
 const CIUDADES_GBA = ["buenos aires", "caba", "capital federal", "gba", "gran buenos aires", "palermo", "belgrano", "flores", "caballito", "lanús", "lomas", "quilmes", "avellaneda", "morón", "merlo", "moreno", "tigre", "san isidro", "vicente lópez"];
 
 /* ─── Algoritmo de ranking ─── */
-function calcularScore(c) {
+function calcularScore(c, pesos = { experiencia: 35, disponibilidad: 25, cypecad: 20, factura: 10, freelance: 5, interior: 10 }) {
   let score = 0;
   const notas = [];
 
-  // Experiencia (0-35 pts)
+  // Experiencia
   const exp = (c.experiencia || "").toLowerCase();
-  if (exp.includes("amplia")) { score += 35; notas.push("Amplia experiencia +35"); }
-  else if (exp.includes("intermedia")) { score += 22; notas.push("Experiencia intermedia +22"); }
-  else if (exp.includes("inicial")) { score += 10; notas.push("Experiencia inicial +10"); }
+  if (exp.includes("amplia")) { const pts = pesos.experiencia; score += pts; notas.push(`Amplia experiencia +${pts}`); }
+  else if (exp.includes("intermedia")) { const pts = Math.round(pesos.experiencia * 0.63); score += pts; notas.push(`Experiencia intermedia +${pts}`); }
+  else if (exp.includes("inicial")) { const pts = Math.round(pesos.experiencia * 0.29); score += pts; notas.push(`Experiencia inicial +${pts}`); }
 
-  // Disponibilidad (0-25 pts)
+  // Disponibilidad
   const disp = (c.disponibilidad || "").toLowerCase();
-  if (disp.includes("más de 20") || disp.includes("mas de 20")) { score += 25; notas.push("+20h disponibles +25"); }
-  else if (disp.includes("10") && disp.includes("20")) { score += 15; notas.push("10-20h disponibles +15"); }
-  else if (disp.includes("menos")) { score += 5; notas.push("<10h disponibles +5"); }
+  if (disp.includes("más de 20") || disp.includes("mas de 20")) { const pts = pesos.disponibilidad; score += pts; notas.push(`+20h disponibles +${pts}`); }
+  else if (disp.includes("10") && disp.includes("20")) { const pts = Math.round(pesos.disponibilidad * 0.6); score += pts; notas.push(`10-20h disponibles +${pts}`); }
+  else if (disp.includes("menos")) { const pts = Math.round(pesos.disponibilidad * 0.2); score += pts; notas.push(`<10h disponibles +${pts}`); }
 
-  // CYPECAD (0-20 pts)
+  // CYPECAD
   const cyp = (c.cypecad || "").toLowerCase();
-  if (cyp.includes("experto")) { score += 20; notas.push("CYPECAD experto +20"); }
-  else if (cyp.includes("avanzado")) { score += 15; notas.push("CYPECAD avanzado +15"); }
-  else if (cyp.includes("intermedio")) { score += 8; notas.push("CYPECAD intermedio +8"); }
-  else if (cyp.includes("básico") || cyp.includes("basico")) { score += 3; notas.push("CYPECAD básico +3"); }
+  if (cyp.includes("experto")) { const pts = pesos.cypecad; score += pts; notas.push(`CYPECAD experto +${pts}`); }
+  else if (cyp.includes("avanzado")) { const pts = Math.round(pesos.cypecad * 0.75); score += pts; notas.push(`CYPECAD avanzado +${pts}`); }
+  else if (cyp.includes("intermedio")) { const pts = Math.round(pesos.cypecad * 0.4); score += pts; notas.push(`CYPECAD intermedio +${pts}`); }
+  else if (cyp.includes("básico") || cyp.includes("basico")) { const pts = Math.round(pesos.cypecad * 0.15); score += pts; notas.push(`CYPECAD básico +${pts}`); }
 
-  // Factura (0-10 pts)
-  if (c.factura) { score += 10; notas.push("Factura +10"); }
+  // Factura
+  if (c.factura) { score += pesos.factura; notas.push(`Factura +${pesos.factura}`); }
 
-  // Freelance (0-5 pts)
-  if (c.freelance) { score += 5; notas.push("Experiencia freelance +5"); }
+  // Freelance
+  if (c.freelance) { score += pesos.freelance; notas.push(`Experiencia freelance +${pesos.freelance}`); }
 
-  // Bonus interior del país (0-10 pts)
+  // Interior del país
   const ciudad = (c.ciudad || "").toLowerCase();
   const esGBA = CIUDADES_GBA.some(g => ciudad.includes(g));
-  if (ciudad && !esGBA) { score += 10; notas.push("Interior del país +10"); }
+  if (ciudad && !esGBA) { score += pesos.interior; notas.push(`Interior del país +${pesos.interior}`); }
 
-  // Puntaje manual como tiebreaker (0-5 pts)
-  if (c.puntaje) { score += Math.round((c.puntaje / 10) * 5); }
+  // Puntaje manual tiebreaker
+  if (c.puntaje) { const pts = Math.round((c.puntaje / 10) * 5); score += pts; notas.push(`Puntaje manual +${pts}`); }
 
   return { score: Math.min(score, 100), notas };
 }
@@ -121,7 +121,7 @@ function CardCalculista({ calc, onClick, onCopiarLink }) {
             {calc.experiencia && <span style={{ fontSize: 11, background: "#fafafa", borderRadius: 5, padding: "2px 8px", color: "#666" }}>💼 {calc.experiencia.split(",")[0]?.slice(0, 30)}</span>}
           </div>
         </div>
-        <ScoreBadge score={score} notas={notas} />
+        <ScoreBadge score={calc._score || score} notas={calc._notas || notas} />
       </div>
       <div style={{ borderTop: "1px solid #f5f5f5", padding: "7px 16px", display: "flex", gap: 6, alignItems: "center" }}>
         <button onClick={onClick} style={S.btnSm}>✏️ Editar</button>
@@ -248,6 +248,15 @@ export default function Calculistas() {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [ordenar, setOrdenar] = useState("score");
   const [msg, setMsg] = useState("");
+  const [showPesos, setShowPesos] = useState(false);
+  const [pesos, setPesos] = useState({
+    experiencia: 35,
+    disponibilidad: 25,
+    cypecad: 20,
+    factura: 10,
+    freelance: 5,
+    interior: 10,
+  });
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -267,7 +276,7 @@ export default function Calculistas() {
   }
 
   // Aplicar score a todos
-  const conScore = calculistas.map(c => ({ ...c, _score: calcularScore(c).score }));
+  const conScore = calculistas.map(c => ({ ...c, _score: calcularScore(c, pesos).score, _notas: calcularScore(c, pesos).notas }));
 
   // Filtrar
   const filtrados = conScore.filter(c => {
@@ -343,6 +352,62 @@ export default function Calculistas() {
           </div>
         </div>
       )}
+
+      {/* Panel de pesos del algoritmo */}
+      <div style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
+        <div onClick={() => setShowPesos(v => !v)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", cursor: "pointer" }}
+          onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>⚙️</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>Algoritmo de ranking</span>
+            <span style={{ fontSize: 11, color: "#aaa" }}>— ajustá los pesos de cada factor</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "#888" }}>Total: {Object.values(pesos).reduce((s, v) => s + v, 0)} pts</span>
+            <span style={{ color: "#aaa", fontSize: 16, transform: showPesos ? "rotate(180deg)" : "none", transition: "0.2s" }}>⌄</span>
+          </div>
+        </div>
+        {showPesos && (
+          <div style={{ borderTop: "1px solid #f0f0f0", padding: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+              {[
+                { key: "experiencia", label: "💼 Experiencia", desc: "Nivel técnico declarado" },
+                { key: "disponibilidad", label: "🕐 Disponibilidad", desc: "Horas semanales disponibles" },
+                { key: "cypecad", label: "💻 CYPECAD", desc: "Dominio del software principal" },
+                { key: "factura", label: "🧾 Factura", desc: "Inscripto en monotributo" },
+                { key: "freelance", label: "🤝 Freelance", desc: "Experiencia independiente" },
+                { key: "interior", label: "🗺 Interior", desc: "Fuera de CABA/GBA" },
+              ].map(({ key, label, desc }) => (
+                <div key={key}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#333" }}>{label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: "#111", fontFamily: "monospace", minWidth: 28, textAlign: "right" }}>{pesos[key]}</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#aaa", marginBottom: 6 }}>{desc}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button onClick={() => setPesos(p => ({ ...p, [key]: Math.max(0, p[key] - 5) }))}
+                      style={{ width: 24, height: 24, borderRadius: 6, border: "1.5px solid #e0e0e0", background: "#f8f8f8", cursor: "pointer", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                    <input type="range" min="0" max="50" step="5" value={pesos[key]}
+                      onChange={e => setPesos(p => ({ ...p, [key]: parseInt(e.target.value) }))}
+                      style={{ flex: 1, accentColor: "#0a0a0a" }} />
+                    <button onClick={() => setPesos(p => ({ ...p, [key]: Math.min(50, p[key] + 5) }))}
+                      style={{ width: 24, height: 24, borderRadius: 6, border: "1.5px solid #e0e0e0", background: "#f8f8f8", cursor: "pointer", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                  </div>
+                  <div style={{ height: 4, background: "#f0f0f0", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${(pesos[key] / 50) * 100}%`, height: "100%", background: "#0a0a0a", borderRadius: 2 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center" }}>
+              <button onClick={() => setPesos({ experiencia: 35, disponibilidad: 25, cypecad: 20, factura: 10, freelance: 5, interior: 10 })}
+                style={S.btnSm}>↺ Restablecer</button>
+              <span style={{ fontSize: 11, color: "#aaa" }}>Los cambios se aplican en tiempo real al ranking</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Filtros */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center", background: "#fff", borderRadius: 10, padding: "8px 12px", border: "1.5px solid #e8e8e8" }}>
