@@ -149,7 +149,7 @@ export default function Postulacion() {
         freelance: form.freelance === "Sí",
         ig: form.linkedin || null,
         estado: "postulante",
-        tipo: "postulante",
+        tipo: "externo",
         disponible: false,
         observaciones: [
           form.formacion && `Formación: ${form.formacion}`,
