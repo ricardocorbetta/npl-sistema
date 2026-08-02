@@ -96,7 +96,7 @@ function ScoreBadge({ score, notas }) {
 }
 
 /* ─── Card calculista ─── */
-function CardCalculista({ calc, onClick, onCopiarLink }) {
+function CardCalculista({ calc, onClick, onCopiarLink, onCambiarEstado, onToggleDisponible }) {
   const { score, notas } = calcularScore(calc);
   const esInterior = calc.ciudad && !CIUDADES_GBA.some(g => (calc.ciudad || "").toLowerCase().includes(g));
 
@@ -123,7 +123,7 @@ function CardCalculista({ calc, onClick, onCopiarLink }) {
         </div>
         <ScoreBadge score={calc._score || score} notas={calc._notas || notas} />
       </div>
-      <div style={{ borderTop: "1px solid #f5f5f5", padding: "7px 16px", display: "flex", gap: 6, alignItems: "center" }}>
+      <div style={{ borderTop: "1px solid #f5f5f5", padding: "7px 16px", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={onClick} style={S.btnSm}>✏️ Editar</button>
         {calc.wsp && (
           <a href={`https://wa.me/${calc.wsp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"
@@ -131,6 +131,25 @@ function CardCalculista({ calc, onClick, onCopiarLink }) {
         )}
         {calc.mail && (
           <a href={`mailto:${calc.mail}`} style={{ ...S.btnSm, textDecoration: "none" }}>📧 Email</a>
+        )}
+        {/* Acciones rápidas de estado */}
+        {calc.estado === "postulante" && (
+          <button onClick={() => onCambiarEstado && onCambiarEstado(calc.id, "activo")}
+            style={{ ...S.btnSm, color: "#1a8a5e", borderColor: "#1a8a5e", background: "#f0fdf4" }}>✓ Activar</button>
+        )}
+        {calc.estado === "activo" && (
+          <>
+            <button onClick={() => onToggleDisponible && onToggleDisponible(calc.id, calc.disponible)}
+              style={{ ...S.btnSm, color: calc.disponible ? "#1a8a5e" : "#888", borderColor: calc.disponible ? "#1a8a5e" : "#e0e0e0", background: calc.disponible ? "#f0fdf4" : "#f8f8f8" }}>
+              {calc.disponible ? "✓ Disponible" : "○ No disponible"}
+            </button>
+            <button onClick={() => onCambiarEstado && onCambiarEstado(calc.id, "pausado")}
+              style={{ ...S.btnSm, color: "#c4781a", borderColor: "#f59e0b" }}>⏸ Pausar</button>
+          </>
+        )}
+        {calc.estado === "pausado" && (
+          <button onClick={() => onCambiarEstado && onCambiarEstado(calc.id, "activo")}
+            style={{ ...S.btnSm, color: "#3b82f6", borderColor: "#3b82f6" }}>▶ Reactivar</button>
         )}
         <button onClick={() => onCopiarLink(calc)} style={{ ...S.btnSm, marginLeft: "auto" }} title="Copiar link de postulación">🔗 Compartir</button>
       </div>
@@ -265,6 +284,26 @@ export default function Calculistas() {
     setCalculistas(Array.isArray(r) ? r : []);
     setLoading(false);
   }, []);
+
+  async function cambiarEstado(id, nuevoEstado) {
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/calculistas?id=eq.${id}`, {
+      method: "PATCH", headers: hdrs(tk),
+      body: JSON.stringify({ estado: nuevoEstado, disponible: nuevoEstado === "activo" })
+    });
+    setMsg(`✓ Estado actualizado a ${nuevoEstado}`);
+    setTimeout(() => setMsg(""), 2000);
+    cargar();
+  }
+
+  async function toggleDisponible(id, actual) {
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/calculistas?id=eq.${id}`, {
+      method: "PATCH", headers: hdrs(tk),
+      body: JSON.stringify({ disponible: !actual })
+    });
+    cargar();
+  }
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -435,7 +474,7 @@ export default function Calculistas() {
       {!loading && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {ordenados.map(c => (
-            <CardCalculista key={c.id} calc={c} onClick={() => setModal(c)} onCopiarLink={copiarLink} />
+            <CardCalculista key={c.id} calc={c} onClick={() => setModal(c)} onCopiarLink={copiarLink} onCambiarEstado={cambiarEstado} onToggleDisponible={toggleDisponible} />
           ))}
           {ordenados.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#aaa" }}>Sin resultados</div>}
         </div>
