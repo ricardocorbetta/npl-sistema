@@ -173,6 +173,23 @@ export default function Postulacion() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || "Error al enviar");
       }
+
+      // Enviar emails de confirmación
+      await fetch("https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/enviar-email", {
+        method: "POST",
+        headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "nueva_postulacion",
+          datos: {
+            nombre: form.nombre,
+            mail: form.mail,
+            ciudad: form.ciudad,
+            experiencia: form.experiencia,
+            disponibilidad: form.disponibilidad,
+          }
+        }),
+      }).catch(() => {}); // No bloqueamos si falla el email
+
       setEnviado(true);
     } catch(e) { setError(e.message); }
     setSaving(false);
