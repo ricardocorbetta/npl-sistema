@@ -160,7 +160,7 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const esAdmin = perfil?.rol === "admin";
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [itemSeleccionado, setItemSeleccionado] = useState(null);
+  const [itemSel, setItemSel] = useState(null);
   const [mensajes, setMensajes] = useState([]);
   const [nuevoMsg, setNuevoMsg] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -168,12 +168,19 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const [saving, setSaving] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const msgEndRef = React.useRef(null);
+  const inputMsgRef = React.useRef(null);
 
   const SECCIONES_DEFAULT = {
     "Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
     "Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
     "Legajo": ["Legajo en AutoCAD", "Proyecto en SketchUp", "Resumen de materiales", "Entrega final completa en carpeta"],
   };
+
+  // Fecha entrega del proyecto
+  const fechaEntrega = proyecto?.fecha_entrega_plan;
+  const diasRestantes = fechaEntrega
+    ? Math.ceil((new Date(fechaEntrega + "T12:00") - new Date()) / 86400000)
+    : null;
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -188,11 +195,9 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     });
     const cls2 = (Array.isArray(cls) ? cls : []).map(cl => ({ ...cl, tareas: map[cl.id] || [] }));
     setChecklists(cls2);
-    // Actualizar item seleccionado si cambió
-    if (itemSeleccionado) {
-      const todas = cls2.flatMap(c => c.tareas);
-      const updated = todas.find(t => t.id === itemSeleccionado.id);
-      if (updated) setItemSeleccionado(updated);
+    if (itemSel) {
+      const updated = cls2.flatMap(c => c.tareas).find(t => t.id === itemSel.id);
+      if (updated) setItemSel(updated);
     }
     setLoading(false);
   }, [proyectoId]);
@@ -208,9 +213,10 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   }
 
   async function seleccionar(tarea) {
-    setItemSeleccionado(tarea);
+    setItemSel(tarea);
     setNuevoMsg("");
     await cargarMensajes(tarea.id);
+    setTimeout(() => inputMsgRef.current?.focus(), 150);
   }
 
   async function crearChecklist(nombre) {
@@ -254,13 +260,9 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     e?.stopPropagation();
     const completada = !tarea.completada;
     await actualizarTarea(tarea.id, {
-      completada,
-      completada_at: completada ? new Date().toISOString() : null,
+      completada, completada_at: completada ? new Date().toISOString() : null,
       completada_por: completada ? (perfil?.nombre || "") : null,
     });
-    if (itemSeleccionado?.id === tarea.id) {
-      setItemSeleccionado(prev => ({ ...prev, completada, completada_por: completada ? perfil?.nombre : null }));
-    }
   }
 
   async function toggleAprobada(tarea, e) {
@@ -268,33 +270,30 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     if (!esAdmin) return;
     const aprobada = !tarea.aprobada;
     await actualizarTarea(tarea.id, {
-      aprobada,
-      aprobada_por: aprobada ? (perfil?.nombre || "Admin") : null,
-      aprobada_at: aprobada ? new Date().toISOString() : null,
-      pendiente_aprobacion: false,
+      aprobada, aprobada_por: aprobada ? (perfil?.nombre || "Admin") : null,
+      aprobada_at: aprobada ? new Date().toISOString() : null, pendiente_aprobacion: false,
     });
   }
 
   async function enviarMensaje() {
-    if (!nuevoMsg.trim() || !itemSeleccionado) return;
-    await api("/tarea_mensajes", { method: "POST", body: JSON.stringify({
-      tarea_id: itemSeleccionado.id, proyecto_id: proyectoId,
-      autor: perfil?.nombre || "Usuario",
-      rol: perfil?.rol || "calculista",
-      mensaje: nuevoMsg.trim(),
-    })});
+    if (!nuevoMsg.trim() || !itemSel) return;
+    const msg = nuevoMsg.trim();
     setNuevoMsg("");
-    await cargarMensajes(itemSeleccionado.id);
+    await api("/tarea_mensajes", { method: "POST", body: JSON.stringify({
+      tarea_id: itemSel.id, proyecto_id: proyectoId,
+      autor: perfil?.nombre || "Usuario", rol: perfil?.rol || "calculista", mensaje: msg,
+    })});
+    await cargarMensajes(itemSel.id);
   }
 
   async function subirArchivo(file) {
-    if (!itemSeleccionado || !file) return;
-    const path = `proyectos/${proyectoId}/tareas/${itemSeleccionado.id}/${Date.now()}_${file.name}`;
+    if (!itemSel || !file) return;
+    const path = `proyectos/${proyectoId}/tareas/${itemSel.id}/${Date.now()}_${file.name}`;
     const { error } = await supabase.storage.from("npl-obras").upload(path, file, { upsert: true });
     if (error) { alert("Error: " + error.message); return; }
     const { data: { publicUrl } } = supabase.storage.from("npl-obras").getPublicUrl(path);
     await api("/tarea_adjuntos", { method: "POST", body: JSON.stringify({
-      tarea_id: itemSeleccionado.id, proyecto_id: proyectoId,
+      tarea_id: itemSel.id, proyecto_id: proyectoId,
       nombre: file.name, url: publicUrl, tipo: file.type, tamanio: file.size,
       subido_por: perfil?.nombre || "",
     })});
@@ -304,17 +303,15 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   async function eliminarChecklist(id, e) {
     e.stopPropagation();
     if (!confirm("¿Eliminar esta sección?")) return;
-    if (itemSeleccionado && checklists.find(c => c.id === id)?.tareas.find(t => t.id === itemSeleccionado?.id)) {
-      setItemSeleccionado(null);
-    }
+    if (checklists.find(c => c.id === id)?.tareas.find(t => t.id === itemSel?.id)) setItemSel(null);
     await api(`/proyecto_checklists?id=eq.${id}`, { method: "DELETE" });
     await cargar();
   }
 
   async function eliminarTarea(id, e) {
     e.stopPropagation();
-    if (!confirm("¿Eliminar esta tarea?")) return;
-    if (itemSeleccionado?.id === id) setItemSeleccionado(null);
+    if (!confirm("¿Eliminar?")) return;
+    if (itemSel?.id === id) setItemSel(null);
     await api(`/proyecto_tareas?id=eq.${id}`, { method: "DELETE" });
     await cargar();
   }
@@ -323,110 +320,143 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const total = todasTareas.filter(t => !t.pendiente_aprobacion).length;
   const completadas = todasTareas.filter(t => t.completada).length;
   const aprobadas = todasTareas.filter(t => t.aprobada).length;
-  const pendientes = todasTareas.filter(t => t.pendiente_aprobacion).length;
+  const pct = total > 0 ? Math.round(aprobadas / total * 100) : 0;
 
-  const CheckIcon = ({ checked, color, onClick, title, disabled }) => (
-    <div onClick={disabled ? undefined : onClick} title={title}
-      style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${checked ? color : "#d0d0d0"}`,
-        background: checked ? color : "#fff", cursor: disabled ? "default" : "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
-      {checked && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1, fontWeight: 800 }}>✓</span>}
-    </div>
-  );
+  // Color días restantes
+  const colorDias = diasRestantes === null ? "#aaa" : diasRestantes < 0 ? "#c0392b" : diasRestantes <= 7 ? "#c0392b" : diasRestantes <= 14 ? "#f59e0b" : "#1a8a5e";
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "#fff", width: "min(1100px, 100%)", height: "92vh", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.35)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+      <div style={{ background: "#fff", width: "min(1080px, 100%)", height: "94vh", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,0.4)" }}>
 
-        {/* Header */}
-        <div style={{ padding: "14px 20px", borderBottom: "1.5px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, background: "#fff" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {/* ── Header ── */}
+        <div style={{ padding: "12px 20px", borderBottom: "1.5px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#111" }}>📋 Tablero</h2>
-              <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{proyecto?.descripcion}</p>
+              <div style={{ fontSize: 11, color: "#aaa", marginBottom: 1 }}>Tablero del proyecto</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#111" }}>{proyecto?.descripcion}</div>
             </div>
-            {total > 0 && (
-              <div style={{ display: "flex", gap: 12, fontSize: 12 }}>
-                <span style={{ color: "#3b82f6" }}>✓ {completadas}/{total}</span>
-                <span style={{ color: "#1a8a5e" }}>✅ {aprobadas} aprobadas</span>
-                {pendientes > 0 && <span style={{ color: "#f59e0b" }}>⏳ {pendientes} pendientes</span>}
+
+            {/* Fecha entrega — muy visual */}
+            {fechaEntrega && (
+              <div style={{ background: diasRestantes !== null && diasRestantes < 0 ? "#fef2f2" : diasRestantes !== null && diasRestantes <= 7 ? "#fffbeb" : "#f0fdf4", borderRadius: 10, padding: "6px 14px", border: `1.5px solid ${colorDias}30`, textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: colorDias, lineHeight: 1, fontFamily: "monospace" }}>
+                  {diasRestantes === null ? "—" : diasRestantes < 0 ? `${Math.abs(diasRestantes)}d` : `${diasRestantes}d`}
+                </div>
+                <div style={{ fontSize: 10, color: colorDias, fontWeight: 700 }}>
+                  {diasRestantes === null ? "sin fecha" : diasRestantes < 0 ? "VENCIDO" : diasRestantes === 0 ? "HOY" : "para entrega"}
+                </div>
+                <div style={{ fontSize: 10, color: "#aaa", marginTop: 1 }}>{fmtFecha(fechaEntrega)}</div>
               </div>
             )}
+
+            {/* Progreso */}
             {total > 0 && (
-              <div style={{ width: 120, height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ width: `${Math.round(aprobadas/total*100)}%`, height: "100%", background: "#1a8a5e", borderRadius: 3 }} />
+              <div style={{ minWidth: 140 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+                  <span style={{ color: "#3b82f6" }}>✓ {completadas} completadas</span>
+                  <span style={{ color: "#1a8a5e", fontWeight: 700 }}>✅ {pct}%</span>
+                </div>
+                <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.round(completadas/total*100)}%`, height: "100%", background: "#3b82f640", borderRadius: 3 }} />
+                </div>
+                <div style={{ height: 3, background: "transparent", borderRadius: 3, overflow: "hidden", marginTop: 2 }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: "#1a8a5e", borderRadius: 3, transition: "width 0.4s" }} />
+                </div>
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#aaa" }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#aaa", padding: 4 }}>✕</button>
         </div>
 
-        {/* Split panel */}
+        {/* ── Body split ── */}
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-          {/* Panel izquierdo — lista de secciones y tareas */}
-          <div style={{ width: 340, flexShrink: 0, borderRight: "1.5px solid #f0f0f0", overflow: "auto", background: "#fafafa" }}>
+          {/* ── Panel izquierdo ── */}
+          <div style={{ width: 320, flexShrink: 0, borderRight: "1.5px solid #f0f0f0", overflow: "auto", background: "#fafafa" }}>
             {loading ? <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Cargando…</p> : (
               <div style={{ padding: "12px 10px" }}>
                 {checklists.map(cl => {
                   const ok = cl.tareas.filter(t => t.aprobada).length;
                   const tot = cl.tareas.filter(t => !t.pendiente_aprobacion).length;
+                  const pctSec = tot > 0 ? Math.round(ok / tot * 100) : 0;
                   return (
-                    <div key={cl.id} style={{ marginBottom: 8 }}>
+                    <div key={cl.id} style={{ marginBottom: 16 }}>
                       {/* Sección header */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", marginBottom: 2 }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: "#555", textTransform: "uppercase", letterSpacing: 0.5 }}>{cl.nombre}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 10, color: ok === tot && tot > 0 ? "#1a8a5e" : "#aaa", fontWeight: 700 }}>{ok}/{tot}</span>
-                          {esAdmin && <button onClick={e => eliminarChecklist(cl.id, e)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 12, padding: 0 }}>✕</button>}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 6px", marginBottom: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: "#333", textTransform: "uppercase", letterSpacing: 0.5 }}>{cl.nombre}</span>
+                            <span style={{ fontSize: 10, color: ok === tot && tot > 0 ? "#1a8a5e" : "#aaa", fontWeight: 700 }}>{ok}/{tot}</span>
+                          </div>
+                          {tot > 0 && (
+                            <div style={{ height: 3, background: "#e8e8e8", borderRadius: 2, overflow: "hidden" }}>
+                              <div style={{ width: `${pctSec}%`, height: "100%", background: pctSec === 100 ? "#1a8a5e" : "#3b82f6", transition: "width 0.3s" }} />
+                            </div>
+                          )}
                         </div>
+                        {esAdmin && <button onClick={e => eliminarChecklist(cl.id, e)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 13, padding: "0 4px", marginLeft: 6 }}>✕</button>}
                       </div>
 
-                      {/* Tareas */}
-                      {cl.tareas.map(t => (
-                        <div key={t.id} onClick={() => seleccionar(t)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
-                            borderRadius: 8, marginBottom: 2, cursor: "pointer",
-                            background: itemSeleccionado?.id === t.id ? "#eff6ff" : "#fff",
-                            border: `1.5px solid ${itemSeleccionado?.id === t.id ? "#3b82f6" : "transparent"}`,
-                            opacity: t.pendiente_aprobacion ? 0.6 : 1,
-                          }}
-                          onMouseEnter={e => { if (itemSeleccionado?.id !== t.id) e.currentTarget.style.background = "#f8f8f8"; }}
-                          onMouseLeave={e => { if (itemSeleccionado?.id !== t.id) e.currentTarget.style.background = "#fff"; }}>
-                          {/* Doble check */}
-                          <CheckIcon checked={t.completada} color="#3b82f6" onClick={e => toggleCompletada(t, e)} title="Completado (calculista)" />
-                          <CheckIcon checked={t.aprobada} color="#1a8a5e" onClick={e => toggleAprobada(t, e)} title={esAdmin ? "Aprobar (admin)" : "Solo admin"} disabled={!esAdmin} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, color: t.aprobada ? "#1a8a5e" : "#111", fontWeight: t.aprobada ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {t.texto}
+                      {/* Items */}
+                      {cl.tareas.map(t => {
+                        const sel = itemSel?.id === t.id;
+                        return (
+                          <div key={t.id} onClick={() => seleccionar(t)}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, marginBottom: 1, cursor: "pointer",
+                              background: sel ? "#eff6ff" : "#fff", border: `1.5px solid ${sel ? "#3b82f6" : "transparent"}`,
+                              transition: "all 0.1s" }}
+                            onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#f4f4f4"; }}
+                            onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "#fff"; }}>
+
+                            {/* Check 1: completada */}
+                            <div onClick={e => toggleCompletada(t, e)} title="Completado"
+                              style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${t.completada ? "#3b82f6" : "#d0d0d0"}`,
+                                background: t.completada ? "#3b82f6" : "transparent", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                              {t.completada && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
                             </div>
-                            {t.fecha_entrega_parcial && <div style={{ fontSize: 10, color: "#aaa" }}>📅 {fmtFecha(t.fecha_entrega_parcial)}</div>}
-                            {t.pendiente_aprobacion && <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700 }}>⏳ Pendiente aprobación</div>}
+                            {/* Check 2: aprobada */}
+                            <div onClick={e => toggleAprobada(t, e)} title={esAdmin ? "Aprobar" : "Solo admin"}
+                              style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${t.aprobada ? "#1a8a5e" : "#d0d0d0"}`,
+                                background: t.aprobada ? "#1a8a5e" : "transparent", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                cursor: esAdmin ? "pointer" : "default", transition: "all 0.15s" }}>
+                              {t.aprobada && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+                            </div>
+
+                            <span style={{ flex: 1, fontSize: 12, color: t.aprobada ? "#1a8a5e" : t.completada ? "#3b82f6" : "#333",
+                              fontWeight: t.aprobada ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              textDecoration: t.aprobada ? "none" : "none" }}>
+                              {t.texto}
+                            </span>
+
+                            {t.pendiente_aprobacion && <span style={{ fontSize: 9, background: "#fef9c3", color: "#c4781a", borderRadius: 3, padding: "1px 4px", fontWeight: 700, flexShrink: 0 }}>⏳</span>}
+                            {t.fecha_entrega_parcial && <span style={{ fontSize: 9, color: "#aaa", flexShrink: 0 }}>📅</span>}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       {/* Nueva tarea */}
-                      <div style={{ display: "flex", gap: 4, padding: "4px 8px" }}>
+                      <div style={{ display: "flex", gap: 4, padding: "4px 6px", marginTop: 2 }}>
                         <input value={nuevaTarea[cl.id] || ""} onChange={e => setNuevaTarea(p => ({ ...p, [cl.id]: e.target.value }))}
                           onKeyDown={e => e.key === "Enter" && crearTarea(cl.id)}
-                          style={{ flex: 1, padding: "5px 8px", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 11, fontFamily: "inherit", background: "#f8f8f8" }}
-                          placeholder={esAdmin ? "+ Tarea…" : "+ Proponer tarea…"} />
-                        <button onClick={() => crearTarea(cl.id)} style={{ padding: "5px 10px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>+</button>
+                          style={{ flex: 1, padding: "4px 8px", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 11, fontFamily: "inherit", background: "#f0f0f0" }}
+                          placeholder={esAdmin ? "+ Nueva tarea…" : "+ Proponer tarea…"} />
+                        <button onClick={() => crearTarea(cl.id)} style={{ width: 26, height: 26, background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
                       </div>
                     </div>
                   );
                 })}
 
                 {/* Agregar sección */}
-                <div style={{ padding: "8px", marginTop: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>+ Sección</div>
+                <div style={{ background: "#fff", borderRadius: 10, padding: "10px", border: "1.5px dashed #e0e0e0", marginTop: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Agregar sección</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
                     {Object.keys(SECCIONES_DEFAULT).filter(n => !checklists.find(c => c.nombre === n)).map(n => (
                       <button key={n} onClick={() => crearChecklist(n)}
-                        style={{ padding: "3px 10px", background: "#f0f0f0", color: "#555", border: "1.5px solid #e0e0e0", borderRadius: 5, fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
-                        {n} ({SECCIONES_DEFAULT[n].length})
+                        style={{ padding: "3px 8px", background: "#f0f0f0", color: "#555", border: "1px solid #e0e0e0", borderRadius: 5, fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
+                        {n} <span style={{ color: "#aaa" }}>({SECCIONES_DEFAULT[n].length})</span>
                       </button>
                     ))}
                   </div>
@@ -434,7 +464,7 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
                     <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && crearChecklist("")}
                       style={{ flex: 1, padding: "5px 8px", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 11, fontFamily: "inherit" }}
-                      placeholder="Nueva sección…" />
+                      placeholder="Nombre personalizado…" />
                     <button onClick={() => crearChecklist("")} disabled={!nuevoNombre.trim() || saving}
                       style={{ padding: "5px 10px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>+</button>
                   </div>
@@ -443,111 +473,143 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
             )}
           </div>
 
-          {/* Panel derecho — detalle del item */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            {!itemSeleccionado ? (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, color: "#ccc" }}>
-                <div style={{ fontSize: 32 }}>←</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Seleccioná una tarea para ver el detalle</div>
+          {/* ── Panel derecho ── */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#fff" }}>
+            {!itemSel ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 36, opacity: 0.2 }}>📋</div>
+                <div style={{ fontSize: 13, color: "#ccc", fontWeight: 600 }}>Seleccioná una tarea</div>
               </div>
             ) : (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-                {/* Header del item */}
-                <div style={{ padding: "16px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
-                    <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
-                      <CheckIcon checked={itemSeleccionado.completada} color="#3b82f6" onClick={e => toggleCompletada(itemSeleccionado, e)} title="Completado" />
-                      <CheckIcon checked={itemSeleccionado.aprobada} color="#1a8a5e" onClick={e => toggleAprobada(itemSeleccionado, e)} title="Aprobado (admin)" disabled={!esAdmin} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: itemSeleccionado.aprobada ? "#1a8a5e" : "#111" }}>{itemSeleccionado.texto}</h3>
-                      <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 11, color: "#aaa", flexWrap: "wrap" }}>
-                        {itemSeleccionado.completada_por && <span>✓ {itemSeleccionado.completada_por}</span>}
-                        {itemSeleccionado.aprobada_por && <span style={{ color: "#1a8a5e" }}>✅ {itemSeleccionado.aprobada_por}</span>}
-                        {itemSeleccionado.pendiente_aprobacion && <span style={{ color: "#f59e0b", fontWeight: 700 }}>⏳ Pendiente aprobación del admin</span>}
+                {/* Item header */}
+                <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                    {/* Checks grandes */}
+                    <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div onClick={e => toggleCompletada(itemSel, e)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: `2.5px solid ${itemSel.completada ? "#3b82f6" : "#d0d0d0"}`,
+                            background: itemSel.completada ? "#3b82f6" : "#fff", cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                          {itemSel.completada && <span style={{ color: "#fff", fontSize: 14, fontWeight: 800 }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize: 9, color: "#aaa", marginTop: 2 }}>Hecho</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div onClick={e => toggleAprobada(itemSel, e)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: `2.5px solid ${itemSel.aprobada ? "#1a8a5e" : "#d0d0d0"}`,
+                            background: itemSel.aprobada ? "#1a8a5e" : "#fff", cursor: esAdmin ? "pointer" : "default",
+                            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
+                            opacity: !esAdmin ? 0.5 : 1 }}>
+                          {itemSel.aprobada && <span style={{ color: "#fff", fontSize: 14, fontWeight: 800 }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize: 9, color: "#aaa", marginTop: 2 }}>Aprobado</div>
                       </div>
                     </div>
-                    {esAdmin && itemSeleccionado.pendiente_aprobacion && (
-                      <button onClick={() => actualizarTarea(itemSeleccionado.id, { pendiente_aprobacion: false })}
-                        style={{ padding: "5px 12px", background: "#1a8a5e", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>
-                        ✓ Aprobar tarea
-                      </button>
-                    )}
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: itemSel.aprobada ? "#1a8a5e" : "#111", lineHeight: 1.3 }}>{itemSel.texto}</h3>
+                      <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#aaa", flexWrap: "wrap" }}>
+                        {itemSel.completada_por && <span style={{ color: "#3b82f6" }}>✓ {itemSel.completada_por}</span>}
+                        {itemSel.aprobada_por && <span style={{ color: "#1a8a5e" }}>✅ {itemSel.aprobada_por}</span>}
+                        {itemSel.pendiente_aprobacion && esAdmin && (
+                          <button onClick={() => actualizarTarea(itemSel.id, { pendiente_aprobacion: false })}
+                            style={{ padding: "2px 10px", background: "#1a8a5e", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
+                            ✓ Aprobar creación
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {esAdmin && <button onClick={e => eliminarTarea(itemSel.id, e)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 16 }}>🗑</button>}
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {/* Fecha + adjuntos */}
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
                     <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>Fecha de entrega parcial</label>
-                      <input type="date" defaultValue={itemSeleccionado.fecha_entrega_parcial || ""}
-                        onBlur={e => actualizarTarea(itemSeleccionado.id, { fecha_entrega_parcial: e.target.value || null })}
-                        style={{ padding: "6px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Fecha parcial</div>
+                      <input type="date" key={itemSel.id + "_fecha"} defaultValue={itemSel.fecha_entrega_parcial || ""}
+                        onBlur={e => actualizarTarea(itemSel.id, { fecha_entrega_parcial: e.target.value || null })}
+                        style={{ padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }} />
                     </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>Adjuntos</label>
-                      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", background: "#f0f0f0", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "#555", border: "1.5px solid #e0e0e0" }}>
-                        📎 Adjuntar archivo
-                        <input type="file" style={{ display: "none" }} onChange={e => e.target.files[0] && subirArchivo(e.target.files[0])} />
-                      </label>
-                    </div>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "#f0f0f0", borderRadius: 7, cursor: "pointer", fontSize: 12, color: "#555", border: "1.5px solid #e0e0e0", marginBottom: 1 }}>
+                      📎 Adjuntar
+                      <input type="file" style={{ display: "none" }} onChange={e => e.target.files[0] && subirArchivo(e.target.files[0])} />
+                    </label>
+                    {itemSel.adjuntos?.map(a => (
+                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 11, padding: "5px 10px", background: "#eff6ff", color: "#3b82f6", borderRadius: 6, textDecoration: "none", border: "1px solid #bfdbfe" }}>
+                        📎 {a.nombre}
+                      </a>
+                    ))}
                   </div>
-
-                  {/* Adjuntos existentes */}
-                  {itemSeleccionado.adjuntos?.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                      {itemSeleccionado.adjuntos.map(a => (
-                        <a key={a.id} href={a.url} target="_blank" rel="noreferrer"
-                          style={{ fontSize: 11, padding: "3px 9px", background: "#eff6ff", color: "#3b82f6", borderRadius: 5, textDecoration: "none", border: "1px solid #bfdbfe" }}>
-                          📎 {a.nombre}
-                        </a>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 {/* Descripción */}
-                <div style={{ padding: "12px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 6 }}>Descripción / detalle</label>
-                  <textarea key={itemSeleccionado.id} defaultValue={itemSeleccionado.descripcion || ""}
-                    onBlur={e => actualizarTarea(itemSeleccionado.id, { descripcion: e.target.value })}
-                    style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e0e0e0", borderRadius: 8, fontSize: 13, resize: "none", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.5 }}
-                    rows={3} placeholder="Descripción, notas técnicas, instrucciones específicas…" />
+                <div style={{ padding: "10px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+                  <textarea key={itemSel.id + "_desc"} defaultValue={itemSel.descripcion || ""}
+                    onBlur={e => actualizarTarea(itemSel.id, { descripcion: e.target.value })}
+                    style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e8e8e8", borderRadius: 8, fontSize: 13, resize: "none", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.5, color: "#333" }}
+                    rows={2} placeholder="📝 Descripción, notas técnicas, instrucciones…" />
                 </div>
 
-                {/* Comentarios */}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                  <div style={{ padding: "10px 20px 6px", flexShrink: 0 }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5 }}>💬 Comentarios</label>
+                {/* ── Comunicación ── */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f8f9ff" }}>
+                  {/* Header comunicación */}
+                  <div style={{ padding: "8px 20px", borderBottom: "1px solid #e8e8e8", flexShrink: 0, display: "flex", alignItems: "center", gap: 8, background: "#fff" }}>
+                    <span style={{ fontSize: 16 }}>💬</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>Comunicación</span>
+                    <span style={{ fontSize: 11, color: "#aaa" }}>— ida y vuelta entre calculista y NPL</span>
+                    {mensajes.length > 0 && <span style={{ marginLeft: "auto", fontSize: 11, color: "#888", background: "#f0f0f0", padding: "2px 8px", borderRadius: 20 }}>{mensajes.length} mensajes</span>}
                   </div>
+
                   {/* Lista mensajes */}
-                  <div style={{ flex: 1, overflow: "auto", padding: "0 20px" }}>
-                    {loadingMsgs ? <p style={{ color: "#aaa", fontSize: 12 }}>Cargando…</p> :
-                      mensajes.length === 0 ? <p style={{ color: "#ccc", fontSize: 12, textAlign: "center", padding: 20 }}>Sin comentarios aún</p> :
-                      mensajes.map(m => (
-                        <div key={m.id} style={{ marginBottom: 10, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: m.rol === "admin" ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                  <div style={{ flex: 1, overflow: "auto", padding: "12px 20px" }}>
+                    {loadingMsgs ? (
+                      <p style={{ color: "#aaa", fontSize: 12, textAlign: "center" }}>Cargando…</p>
+                    ) : mensajes.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: 24 }}>
+                        <div style={{ fontSize: 28, marginBottom: 6, opacity: 0.3 }}>💬</div>
+                        <div style={{ fontSize: 12, color: "#ccc" }}>Sin mensajes aún. Escribí el primero.</div>
+                      </div>
+                    ) : mensajes.map((m, i) => {
+                      const esPropio = m.autor === perfil?.nombre;
+                      const esAdminMsg = m.rol === "admin";
+                      return (
+                        <div key={m.id} style={{ display: "flex", gap: 8, marginBottom: 10, flexDirection: esPropio ? "row-reverse" : "row" }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: esAdminMsg ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
                             {(m.autor || "?")[0].toUpperCase()}
                           </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 3 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: m.rol === "admin" ? "#111" : "#6366f1" }}>{m.autor}</span>
-                              <span style={{ fontSize: 10, color: "#bbb" }}>{new Date(m.created_at).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                          <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: esPropio ? "flex-end" : "flex-start" }}>
+                            <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: esAdminMsg ? "#111" : "#6366f1" }}>{m.autor}</span>
+                              <span style={{ fontSize: 10, color: "#bbb" }}>{new Date(m.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>
                             </div>
-                            <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, background: "#f8f8f8", padding: "7px 11px", borderRadius: "0 8px 8px 8px" }}>{m.mensaje}</div>
+                            <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, padding: "8px 12px", borderRadius: esPropio ? "12px 2px 12px 12px" : "2px 12px 12px 12px", background: esPropio ? (esAdminMsg ? "#0a0a0a" : "#6366f1") : "#fff", color: esPropio ? "#fff" : "#333", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+                              {m.mensaje}
+                            </div>
                           </div>
                         </div>
-                      ))
-                    }
+                      );
+                    })}
                     <div ref={msgEndRef} />
                   </div>
-                  {/* Input mensaje */}
-                  <div style={{ padding: "10px 20px", borderTop: "1px solid #f0f0f0", flexShrink: 0, display: "flex", gap: 8 }}>
-                    <input value={nuevoMsg} onChange={e => setNuevoMsg(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviarMensaje()}
-                      style={{ flex: 1, padding: "8px 12px", border: "1.5px solid #e0e0e0", borderRadius: 8, fontSize: 13, fontFamily: "inherit" }}
-                      placeholder="Escribí un comentario… (Enter para enviar)" />
-                    <button onClick={enviarMensaje} disabled={!nuevoMsg.trim()}
-                      style={{ padding: "8px 16px", background: nuevoMsg.trim() ? "#0a0a0a" : "#f0f0f0", color: nuevoMsg.trim() ? "#fff" : "#aaa", border: "none", borderRadius: 8, fontSize: 13, cursor: nuevoMsg.trim() ? "pointer" : "default", fontWeight: 700, transition: "all 0.15s" }}>→</button>
+
+                  {/* Input mensaje — siempre visible */}
+                  <div style={{ padding: "10px 16px", borderTop: "1.5px solid #e8e8e8", background: "#fff", flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: perfil?.rol === "admin" ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0, marginBottom: 1 }}>
+                        {(perfil?.nombre || "?")[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 10, border: "1.5px solid #e0e0e0", display: "flex", alignItems: "center", gap: 6, padding: "6px 12px" }}>
+                        <input ref={inputMsgRef} value={nuevoMsg} onChange={e => setNuevoMsg(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviarMensaje()}
+                          style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontFamily: "inherit", outline: "none", color: "#333" }}
+                          placeholder="Escribí un mensaje… (Enter para enviar)" />
+                        <button onClick={enviarMensaje} disabled={!nuevoMsg.trim()}
+                          style={{ width: 28, height: 28, borderRadius: 8, background: nuevoMsg.trim() ? "#0a0a0a" : "#e0e0e0", color: nuevoMsg.trim() ? "#fff" : "#aaa", border: "none", cursor: nuevoMsg.trim() ? "pointer" : "default", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", flexShrink: 0 }}>→</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
