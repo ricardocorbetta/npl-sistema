@@ -526,6 +526,10 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
     tipo_obra:          proyecto?.tipo_obra || "",
     superficie:         proyecto?.superficie || "",
     fecha_entrega_plan: proyecto?.fecha_entrega_plan || "",
+    fecha_aprobacion:   proyecto?.fecha_aprobacion || "",
+    monto_anticipo:     proyecto?.monto_anticipo || "",
+    fecha_cobro_saldo:  proyecto?.fecha_cobro_saldo || "",
+    monto_saldo:        proyecto?.monto_saldo || "",
     drive_url:          proyecto?.drive_url || "",
     obs:                proyecto?.obs || "",
     anticipo:           proyecto?.anticipo || false,
@@ -547,7 +551,7 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
       const [clis, calcs, press] = await Promise.all([
         fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json()),
         fetch(`${SUPA_URL}/calculistas?select=id,nombre,nivel,disponible,estado&order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/presupuestos?estado=eq.aprobado&select=id,codigo,descripcion,cliente,comitente_nombre,monto,moneda,forma_pago&order=codigo.desc&limit=300`, { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/presupuestos?estado=eq.aprobado&select=id,codigo,descripcion,obra_nombre,cliente,comitente_nombre,monto,moneda,forma_pago,forma_pago_custom,sistema_constructivo,superficie,fecha_aprobacion&order=codigo.desc&limit=300`, { headers: hdrs(tk) }).then(r => r.json()),
       ]);
       setClientes(Array.isArray(clis) ? clis : []);
       setCalculistas(Array.isArray(calcs) ? calcs.filter(c => c.estado === 'activo') : []);
@@ -560,10 +564,28 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
     if (form.presupuesto_id && presupuestos.length > 0) {
       const pres = presupuestos.find(p => p.id === form.presupuesto_id);
       if (pres) {
+        // Calcular montos según modalidad de pago
+        const monto = parseFloat(pres.monto) || 0;
+        let montoAnticipo = null;
+        let montoSaldo = null;
+        if (pres.forma_pago === "50_50") {
+          montoAnticipo = Math.round(monto * 0.5);
+          montoSaldo = Math.round(monto * 0.5);
+        } else if (pres.forma_pago === "25_50_25") {
+          montoAnticipo = Math.round(monto * 0.25);
+          montoSaldo = Math.round(monto * 0.25);
+        }
+
         setForm(f => ({
           ...f,
-          cliente: pres.comitente_nombre || pres.cliente || f.cliente,
+          cliente: f.cliente || pres.comitente_nombre || pres.cliente || "",
+          descripcion: f.descripcion || pres.obra_nombre || pres.descripcion || "",
           numero_proyecto: f.numero_proyecto || (pres.codigo ? pres.codigo + "-P" : ""),
+          tipo_obra: f.tipo_obra || pres.sistema_constructivo || "",
+          superficie: f.superficie || pres.superficie || "",
+          fecha_aprobacion: f.fecha_aprobacion || pres.fecha_aprobacion || "",
+          monto_anticipo: f.monto_anticipo || montoAnticipo || "",
+          monto_saldo: f.monto_saldo || montoSaldo || "",
         }));
       }
     }
@@ -635,132 +657,163 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
 
         {/* Contenido scrollable */}
         <div style={{ padding: "16px 24px", overflow: "auto", flex: 1 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
-            <div>
-              <span style={S.lbl}>Nro proyecto</span>
-              <input value={form.numero_proyecto} onChange={e => setForm(f => ({ ...f, numero_proyecto: e.target.value }))} style={S.inp} placeholder="1188-P" />
+          {/* INFO GENERAL */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              <span style={{ background: "#f0f0f0", borderRadius: 4, padding: "2px 8px" }}>Info general</span>
             </div>
-            <div>
-              <span style={S.lbl}>Descripción *</span>
-              <input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} style={S.inp} />
-            </div>
-
-            {/* Presupuesto */}
-            <div style={{ gridColumn: "1 / -1" }}>
-              <span style={S.lbl}>Presupuesto aprobado vinculado</span>
-              <Combobox
-                options={[
-                  ...(form.presupuesto_id && presSeleccionado ? [{ value: presSeleccionado.id, label: `${presSeleccionado.codigo || ""} — ${presSeleccionado.descripcion || presSeleccionado.cliente || ""}` }] : []),
-                  ...presupuestos.filter(p => p.id !== form.presupuesto_id).map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}` }))
-                ]}
-                value={form.presupuesto_id}
-                onChange={val => setForm(f => ({ ...f, presupuesto_id: val }))}
-                placeholder="Buscar presupuesto aprobado…"
-                emptyLabel="Sin vincular"
-              />
-              {/* Info del presupuesto + cuotas */}
-              {presSeleccionado && (
-                <div style={{ marginTop: 6, background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: cuotas.length > 0 ? 8 : 0 }}>
-                    <span>👤 {presSeleccionado.comitente_nombre || presSeleccionado.cliente}</span>
-                    {presSeleccionado.monto && <span>💰 {monedaPres}{parseFloat(presSeleccionado.monto).toLocaleString("es-AR")}</span>}
-                  </div>
-                  {cuotas.length > 0 && (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {cuotas.map((c, i) => (
-                        <div key={i} style={{ background: "#fff", borderRadius: 6, padding: "4px 10px", textAlign: "center" }}>
-                          <div style={{ fontWeight: 800, color: "#1a8a5e", fontFamily: "monospace" }}>{monedaPres}{c.monto.toLocaleString("es-AR")}</div>
-                          <div style={{ fontSize: 10, color: "#888" }}>{c.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Cliente */}
-            <div>
-              <span style={S.lbl}>Cliente / Comitente</span>
-              <Combobox
-                options={[
-                  ...(form.cliente_id && form.cliente ? [{ value: form.cliente_id, label: form.cliente }] : []),
-                  ...clientes.filter(c => c.id !== form.cliente_id).map(c => ({ value: c.id, label: c.empresa }))
-                ]}
-                value={form.cliente_id}
-                onChange={(val, label) => setForm(f => ({ ...f, cliente_id: val, cliente: label || f.cliente }))}
-                placeholder="Buscar cliente…"
-                emptyLabel="Sin vincular"
-              />
-              <input value={form.cliente} onChange={e => setForm(f => ({ ...f, cliente: e.target.value }))} style={{ ...S.inp, marginTop: 5, fontSize: 12 }} placeholder="O escribí el nombre…" />
-            </div>
-
-            {/* Calculista + botón nuevo */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                <span style={S.lbl}>Calculista encargado</span>
-                <button onClick={() => setShowNuevoCalc(v => !v)} style={{ ...S.btnSm, fontSize: 10, padding: "2px 8px" }}>+ Nuevo</button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
+              <div>
+                <span style={S.lbl}>Nro proyecto</span>
+                <input value={form.numero_proyecto} onChange={e => setForm(f => ({ ...f, numero_proyecto: e.target.value }))} style={S.inp} placeholder="1188-P" />
               </div>
-              <select value={form.encargado} onChange={e => setForm(f => ({ ...f, encargado: e.target.value }))} style={S.inp}>
-                <option value="">Sin asignar</option>
-                {calculistas.filter(c => c.disponible).map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""} ✓</option>)}
-                {calculistas.filter(c => !c.disponible).length > 0 && <option disabled>── No disponibles ──</option>}
-                {calculistas.filter(c => !c.disponible).map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""}</option>)}
-              </select>
-              {showNuevoCalc && (
-                <FormNuevoCalculista
-                  onCreado={nuevo => {
-                    setCalculistas(prev => [...prev, nuevo]);
-                    setForm(f => ({ ...f, encargado: nuevo.nombre }));
-                    setShowNuevoCalc(false);
-                  }}
-                  onCancelar={() => setShowNuevoCalc(false)}
-                />
-              )}
+              <div>
+                <span style={S.lbl}>Descripción *</span>
+                <input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} style={S.inp} />
+              </div>
             </div>
+          </div>
 
-            <div>
-              <span style={S.lbl}>Tipo de obra</span>
-              <select value={form.tipo_obra} onChange={e => setForm(f => ({ ...f, tipo_obra: e.target.value }))} style={S.inp}>
-                <option value="">Seleccionar…</option>
-                {TIPOS_OBRA.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+          {/* PRESUPUESTO VINCULADO */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              <span style={{ background: "#f0f0f0", borderRadius: 4, padding: "2px 8px" }}>Presupuesto vinculado</span>
             </div>
-            <div>
-              <span style={S.lbl}>Superficie m²</span>
-              <input type="number" value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} style={S.inp} />
+            <Combobox
+              options={[
+                ...(form.presupuesto_id && presSeleccionado ? [{ value: presSeleccionado.id, label: `${presSeleccionado.codigo || ""} — ${presSeleccionado.descripcion || presSeleccionado.cliente || ""}` }] : []),
+                ...presupuestos.filter(p => p.id !== form.presupuesto_id).map(p => ({ value: p.id, label: `${p.codigo || ""} — ${p.descripcion || p.cliente || ""}` }))
+              ]}
+              value={form.presupuesto_id}
+              onChange={val => setForm(f => ({ ...f, presupuesto_id: val }))}
+              placeholder="Buscar presupuesto aprobado…"
+              emptyLabel="Sin vincular"
+            />
+            {presSeleccionado && (
+              <div style={{ marginTop: 6, background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: cuotas.length > 0 ? 8 : 0 }}>
+                  <span>👤 {presSeleccionado.comitente_nombre || presSeleccionado.cliente}</span>
+                  {presSeleccionado.monto && <span>💰 {monedaPres}{parseFloat(presSeleccionado.monto).toLocaleString("es-AR")}</span>}
+                </div>
+                {cuotas.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {cuotas.map((c, i) => (
+                      <div key={i} style={{ background: "#fff", borderRadius: 6, padding: "4px 10px", textAlign: "center" }}>
+                        <div style={{ fontWeight: 800, color: "#1a8a5e", fontFamily: "monospace" }}>{monedaPres}{c.monto.toLocaleString("es-AR")}</div>
+                        <div style={{ fontSize: 10, color: "#888" }}>{c.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* CLIENTE Y OBRA */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              <span style={{ background: "#f0f0f0", borderRadius: 4, padding: "2px 8px" }}>Cliente y obra</span>
             </div>
-            <div>
-              <span style={S.lbl}>Fecha entrega estimada</span>
-              <input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={S.inp} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <span style={S.lbl}>Cliente / Comitente</span>
+                <Combobox
+                  options={[
+                    ...(form.cliente_id && form.cliente ? [{ value: form.cliente_id, label: form.cliente }] : []),
+                    ...clientes.filter(c => c.id !== form.cliente_id).map(c => ({ value: c.id, label: c.empresa }))
+                  ]}
+                  value={form.cliente_id}
+                  onChange={(val, label) => setForm(f => ({ ...f, cliente_id: val, cliente: label || f.cliente }))}
+                  placeholder="Buscar cliente…"
+                  emptyLabel="Sin vincular"
+                />
+                <input value={form.cliente} onChange={e => setForm(f => ({ ...f, cliente: e.target.value }))} style={{ ...S.inp, marginTop: 5, fontSize: 12 }} placeholder="O escribí el nombre…" />
+              </div>
+              <div>
+                <span style={S.lbl}>Tipo de obra</span>
+                <select value={form.tipo_obra} onChange={e => setForm(f => ({ ...f, tipo_obra: e.target.value }))} style={S.inp}>
+                  <option value="">Seleccionar…</option>
+                  {TIPOS_OBRA.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
+          </div>
+
+          {/* FECHAS Y COBROS */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#1a8a5e", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              <span style={{ background: "#f0fdf4", borderRadius: 4, padding: "2px 8px", border: "1px solid #1a8a5e30" }}>Fechas y cobros</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
+              <div>
+                <span style={S.lbl}>Fecha aprobación</span>
+                <input type="date" value={form.fecha_aprobacion} onChange={e => setForm(f => ({ ...f, fecha_aprobacion: e.target.value }))} style={S.inp} />
+              </div>
+              <div>
+                <span style={S.lbl}>Monto anticipo $</span>
+                <input type="number" value={form.monto_anticipo} onChange={e => setForm(f => ({ ...f, monto_anticipo: e.target.value }))} style={S.inp} placeholder="0" />
+              </div>
+              <div>
+                <span style={S.lbl}>Fecha cobro saldo</span>
+                <input type="date" value={form.fecha_cobro_saldo} onChange={e => setForm(f => ({ ...f, fecha_cobro_saldo: e.target.value }))} style={S.inp} />
+              </div>
+              <div>
+                <span style={S.lbl}>Monto saldo $</span>
+                <input type="number" value={form.monto_saldo} onChange={e => setForm(f => ({ ...f, monto_saldo: e.target.value }))} style={S.inp} placeholder="0" />
+              </div>
+              <div style={{ gridColumn: "1 / 3" }}>
+                <span style={S.lbl}>Fecha entrega estimada</span>
+                <input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={S.inp} />
+              </div>
+              <div style={{ gridColumn: "3 / -1" }}>
+                <span style={S.lbl}>Superficie m²</span>
+                <input type="number" value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} style={S.inp} />
+              </div>
+            </div>
+          </div>
+
+          {/* CALCULISTA ASOCIADO */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              <span style={{ background: "#f0f0f0", borderRadius: 4, padding: "2px 8px" }}>Calculista asociado</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <span style={{ fontSize: 11, color: "#aaa" }}>Solo calculistas activos</span>
+              <button onClick={() => setShowNuevoCalc(v => !v)} style={{ ...S.btnSm, fontSize: 10, padding: "2px 8px" }}>+ Nuevo</button>
+            </div>
+            <select value={form.encargado} onChange={e => setForm(f => ({ ...f, encargado: e.target.value }))} style={S.inp}>
+              <option value="">Sin asignar</option>
+              {calculistas.filter(c => c.disponible).map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""} ✓</option>)}
+              {calculistas.filter(c => !c.disponible).length > 0 && <option disabled>── No disponibles ──</option>}
+              {calculistas.filter(c => !c.disponible).map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""}</option>)}
+            </select>
+            {showNuevoCalc && (
+              <FormNuevoCalculista
+                onCreado={nuevo => {
+                  setCalculistas(prev => [...prev, nuevo]);
+                  setForm(f => ({ ...f, encargado: nuevo.nombre }));
+                  setShowNuevoCalc(false);
+                }}
+                onCancelar={() => setShowNuevoCalc(false)}
+              />
+            )}
+          </div>
+
+          {/* Drive y observaciones */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
               <span style={S.lbl}>Link Drive</span>
               <input value={form.drive_url} onChange={e => setForm(f => ({ ...f, drive_url: e.target.value }))} style={S.inp} placeholder="https://drive.google.com/…" />
             </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <span style={S.lbl}>Observaciones</span>
-              <textarea value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} style={{ ...S.inp, resize: "none" }} rows={2} />
+            <div>
+              <span style={S.lbl}>Observaciones internas</span>
+              <input value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} style={S.inp} placeholder="Notas solo para el admin" />
             </div>
           </div>
 
-          {/* Checkboxes */}
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14, paddingTop: 14, borderTop: "1px solid #f0f0f0" }}>
-            {[
-              { key: "anticipo", label: "💰 Anticipo cobrado" },
-              { key: "check_diagnostico", label: "🔍 Diagnóstico OK" },
-              { key: "proyecto_ok", label: "✅ Proyecto OK" },
-              { key: "cobrado", label: "✓ Cobrado" },
-            ].map(({ key, label }) => (
-              <label key={key} style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 12, cursor: "pointer" }}>
-                <input type="checkbox" checked={form[key] || false} onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))} style={{ accentColor: "#111" }} />
-                {label}
-              </label>
-            ))}
-          </div>
-
           {error && <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginTop: 10, fontSize: 12, fontWeight: 600 }}>❌ {error}</div>}
+        </div>
         </div>
 
         {/* Footer fijo */}
