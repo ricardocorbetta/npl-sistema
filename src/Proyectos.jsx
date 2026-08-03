@@ -155,13 +155,20 @@ function CardProyecto({ p, presupuesto, onClick }) {
   );
 }
 
-/* ─── Panel de checklists ─── */
-function PanelChecklist({ proyectoId, onClose, perfil }) {
+/* ─── Panel de tablero (Checklist estilo Trello) ─── */
+function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
+  const esAdmin = perfil?.rol === "admin";
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevaTarea, setNuevaTarea] = useState({});
+  const [itemAbierto, setItemAbierto] = useState(null); // id de tarea expandida
+  const [mensajes, setMensajes] = useState({}); // { tarea_id: [msgs] }
+  const [nuevoMsg, setNuevoMsg] = useState({});
   const [saving, setSaving] = useState(false);
+  const fileInputRef = React.useRef({});
+
+  const SECCIONES_DEFAULT = ["Diagnóstico", "Anteproyecto", "Legajo"];
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -180,6 +187,17 @@ function PanelChecklist({ proyectoId, onClose, perfil }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  async function cargarMensajes(tareaId) {
+    const msgs = await api(`/tarea_mensajes?tarea_id=eq.${tareaId}&order=created_at.asc`).catch(() => []);
+    setMensajes(prev => ({ ...prev, [tareaId]: Array.isArray(msgs) ? msgs : [] }));
+  }
+
+  async function abrirItem(tareaId) {
+    if (itemAbierto === tareaId) { setItemAbierto(null); return; }
+    setItemAbierto(tareaId);
+    await cargarMensajes(tareaId);
+  }
+
   async function crearChecklist(nombre) {
     const n = nombre || nuevoNombre.trim();
     if (!n) return;
@@ -195,18 +213,71 @@ function PanelChecklist({ proyectoId, onClose, perfil }) {
     if (!texto) return;
     const cl = checklists.find(c => c.id === checklistId);
     setSaving(true);
-    await api("/proyecto_tareas", { method: "POST", body: JSON.stringify({ checklist_id: checklistId, proyecto_id: proyectoId, texto, orden: cl?.tareas?.length || 0 }) });
+    await api("/proyecto_tareas", { method: "POST", body: JSON.stringify({
+      checklist_id: checklistId, proyecto_id: proyectoId, texto,
+      orden: cl?.tareas?.length || 0,
+      pendiente_aprobacion: !esAdmin, // calculista crea pendiente
+    })});
     setNuevaTarea(p => ({ ...p, [checklistId]: "" }));
     await cargar();
     setSaving(false);
   }
 
-  async function toggleTarea(tarea) {
+  async function actualizarTarea(tareaId, campos) {
+    await api(`/proyecto_tareas?id=eq.${tareaId}`, { method: "PATCH", body: JSON.stringify(campos) });
+    await cargar();
+  }
+
+  async function toggleCompletada(tarea) {
     const completada = !tarea.completada;
-    await api(`/proyecto_tareas?id=eq.${tarea.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ completada, completada_at: completada ? new Date().toISOString() : null, completada_por: completada ? (perfil?.nombre || "") : null })
+    await actualizarTarea(tarea.id, {
+      completada,
+      completada_at: completada ? new Date().toISOString() : null,
+      completada_por: completada ? (perfil?.nombre || "") : null,
     });
+  }
+
+  async function toggleAprobada(tarea) {
+    if (!esAdmin) return;
+    const aprobada = !tarea.aprobada;
+    await actualizarTarea(tarea.id, {
+      aprobada,
+      aprobada_por: aprobada ? (perfil?.nombre || "Admin") : null,
+      aprobada_at: aprobada ? new Date().toISOString() : null,
+      pendiente_aprobacion: false,
+    });
+  }
+
+  async function aprobarCreacion(tarea) {
+    if (!esAdmin) return;
+    await actualizarTarea(tarea.id, { pendiente_aprobacion: false });
+  }
+
+  async function enviarMensaje(tareaId) {
+    const msg = nuevoMsg[tareaId]?.trim();
+    if (!msg) return;
+    await api("/tarea_mensajes", { method: "POST", body: JSON.stringify({
+      tarea_id: tareaId, proyecto_id: proyectoId,
+      autor: perfil?.nombre || "Usuario",
+      rol: perfil?.rol || "calculista",
+      mensaje: msg,
+    })});
+    setNuevoMsg(prev => ({ ...prev, [tareaId]: "" }));
+    await cargarMensajes(tareaId);
+  }
+
+  async function subirArchivo(tareaId, file) {
+    const tk = await getToken();
+    const path = `proyectos/${proyectoId}/tareas/${tareaId}/${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from("npl-obras").upload(path, file, { upsert: true });
+    if (error) { alert("Error al subir: " + error.message); return; }
+    const { data: { publicUrl } } = supabase.storage.from("npl-obras").getPublicUrl(path);
+    await api("/tarea_adjuntos", { method: "POST", body: JSON.stringify({
+      tarea_id: tareaId, proyecto_id: proyectoId,
+      nombre: file.name, url: publicUrl,
+      tipo: file.type, tamanio: file.size,
+      subido_por: perfil?.nombre || "",
+    })});
     await cargar();
   }
 
@@ -217,75 +288,252 @@ function PanelChecklist({ proyectoId, onClose, perfil }) {
   }
 
   async function eliminarTarea(id) {
+    if (!confirm("¿Eliminar esta tarea?")) return;
     await api(`/proyecto_tareas?id=eq.${id}`, { method: "DELETE" });
     await cargar();
   }
 
-  const total = checklists.reduce((s, cl) => s + cl.tareas.length, 0);
-  const ok = checklists.reduce((s, cl) => s + cl.tareas.filter(t => t.completada).length, 0);
-  const pct = total > 0 ? Math.round(ok / total * 100) : 0;
+  const total = checklists.reduce((s, cl) => s + cl.tareas.filter(t => !t.pendiente_aprobacion).length, 0);
+  const completadas = checklists.reduce((s, cl) => s + cl.tareas.filter(t => t.completada).length, 0);
+  const aprobadas = checklists.reduce((s, cl) => s + cl.tareas.filter(t => t.aprobada).length, 0);
+  const pendientes = checklists.reduce((s, cl) => s + cl.tareas.filter(t => t.pendiente_aprobacion).length, 0);
+  const pct = total > 0 ? Math.round(completadas / total * 100) : 0;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }}>
-      <div style={{ background: "#fff", width: "min(500px, 100vw)", height: "100vh", overflow: "auto", padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Tareas del proyecto</h2>
-            {total > 0 && <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{ok}/{total} · {pct}%</div>}
+      <div style={{ background: "#f8f8f8", width: "min(620px, 100vw)", height: "100vh", overflow: "auto", display: "flex", flexDirection: "column" }}>
+
+        {/* Header */}
+        <div style={{ background: "#fff", padding: "16px 20px", borderBottom: "1px solid #e8e8e8", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Tablero de tareas</h2>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{proyecto?.descripcion || ""}</p>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>✕</button>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>✕</button>
-        </div>
 
-        {total > 0 && <div style={{ height: 5, background: "#f0f0f0", borderRadius: 3, overflow: "hidden", marginBottom: 20 }}><div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#1a8a5e" : "#3b82f6", transition: "width 0.3s" }} /></div>}
-
-        {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
-          <>
-            {checklists.map(cl => (
-              <div key={cl.id} style={{ marginBottom: 20, background: "#fafafa", borderRadius: 10, padding: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#333", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {cl.nombre}
-                    <span style={{ fontSize: 11, color: "#aaa", fontWeight: 400, textTransform: "none", marginLeft: 8 }}>{cl.tareas.filter(t => t.completada).length}/{cl.tareas.length}</span>
-                  </div>
-                  <button onClick={() => eliminarChecklist(cl.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 14 }}>🗑</button>
-                </div>
-
-                {cl.tareas.map(t => (
-                  <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
-                    <input type="checkbox" checked={t.completada} onChange={() => toggleTarea(t)} style={{ marginTop: 2, accentColor: "#1a8a5e", cursor: "pointer", flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, color: t.completada ? "#bbb" : "#111", textDecoration: t.completada ? "line-through" : "none" }}>{t.texto}</span>
-                      {t.completada && t.completada_por && <div style={{ fontSize: 10, color: "#ccc" }}>✓ {t.completada_por}</div>}
-                    </div>
-                    <button onClick={() => eliminarTarea(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 12, flexShrink: 0 }}>✕</button>
-                  </div>
-                ))}
-
-                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                  <input value={nuevaTarea[cl.id] || ""} onChange={e => setNuevaTarea(p => ({ ...p, [cl.id]: e.target.value }))}
-                    onKeyDown={e => e.key === "Enter" && crearTarea(cl.id)}
-                    style={{ ...S.inp, fontSize: 12, padding: "6px 10px" }} placeholder="+ Nueva tarea…" />
-                  <button onClick={() => crearTarea(cl.id)} style={S.btnSm}>+</button>
-                </div>
+          {/* Progreso */}
+          {total > 0 && (
+            <div>
+              <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#888", marginBottom: 6 }}>
+                <span>📋 {total} tareas</span>
+                <span>✓ {completadas} completadas</span>
+                <span style={{ color: "#1a8a5e" }}>✅ {aprobadas} aprobadas</span>
+                {pendientes > 0 && <span style={{ color: "#f59e0b" }}>⏳ {pendientes} pendientes aprobación</span>}
               </div>
-            ))}
-
-            <div style={{ borderTop: "1.5px dashed #e0e0e0", paddingTop: 16 }}>
-              <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Agregar sección</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                {CHECKLIST_DEFAULTS.filter(n => !checklists.find(c => c.nombre === n)).map(n => (
-                  <button key={n} onClick={() => crearChecklist(n)} style={{ ...S.btnSm, fontSize: 11 }}>{n}</button>
-                ))}
+              <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${Math.round(aprobadas/total*100)}%`, height: "100%", background: "#1a8a5e", borderRadius: 3, transition: "width 0.3s" }} />
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && crearChecklist("")}
-                  style={{ ...S.inp, fontSize: 12, padding: "7px 10px" }} placeholder="Nombre personalizado…" />
-                <button onClick={() => crearChecklist("")} disabled={saving || !nuevoNombre.trim()} style={{ ...S.btn, padding: "7px 14px", fontSize: 12 }}>+ Crear</button>
+              <div style={{ height: 6, background: "transparent", borderRadius: 3, overflow: "hidden", marginTop: 2 }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: "#3b82f640", borderRadius: 3 }} />
               </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
+
+        {/* Contenido */}
+        <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+          {loading ? <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Cargando…</p> : (
+            <>
+              {checklists.map(cl => (
+                <div key={cl.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 12, overflow: "hidden", border: "1.5px solid #e8e8e8" }}>
+                  {/* Header sección */}
+                  <div style={{ padding: "10px 14px", background: "#f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#333" }}>{cl.nombre}</span>
+                      <span style={{ fontSize: 11, color: "#aaa" }}>
+                        {cl.tareas.filter(t => t.aprobada).length}/{cl.tareas.filter(t => !t.pendiente_aprobacion).length}
+                      </span>
+                    </div>
+                    {esAdmin && <button onClick={() => eliminarChecklist(cl.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 13 }}>🗑</button>}
+                  </div>
+
+                  {/* Tareas */}
+                  <div style={{ padding: "8px 0" }}>
+                    {cl.tareas.map(t => (
+                      <div key={t.id} style={{
+                        borderBottom: "1px solid #f5f5f5",
+                        opacity: t.pendiente_aprobacion ? 0.7 : 1,
+                        background: t.pendiente_aprobacion ? "#fffbeb" : "#fff",
+                      }}>
+                        {/* Fila principal */}
+                        <div style={{ padding: "8px 14px", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                          {/* Double check */}
+                          <div style={{ display: "flex", gap: 4, flexShrink: 0, marginTop: 1 }}>
+                            {/* Check 1: calculista completa */}
+                            <div onClick={() => toggleCompletada(t)} title="Marcar como completado"
+                              style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.completada ? "#3b82f6" : "#d0d0d0"}`,
+                                background: t.completada ? "#3b82f6" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {t.completada && <span style={{ color: "#fff", fontSize: 11, lineHeight: 1 }}>✓</span>}
+                            </div>
+                            {/* Check 2: admin aprueba */}
+                            <div onClick={() => toggleAprobada(t)} title={esAdmin ? "Aprobar (admin)" : "Solo el admin puede aprobar"}
+                              style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.aprobada ? "#1a8a5e" : "#d0d0d0"}`,
+                                background: t.aprobada ? "#1a8a5e" : "#fff", cursor: esAdmin ? "pointer" : "default",
+                                display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {t.aprobada && <span style={{ color: "#fff", fontSize: 11, lineHeight: 1 }}>✓</span>}
+                            </div>
+                          </div>
+
+                          {/* Texto */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 13, color: t.aprobada ? "#1a8a5e" : t.completada ? "#3b82f6" : "#111",
+                                textDecoration: t.aprobada ? "none" : "none", fontWeight: t.aprobada ? 600 : 400 }}>
+                                {t.texto}
+                              </span>
+                              {t.pendiente_aprobacion && (
+                                <span style={{ fontSize: 10, background: "#fef9c3", color: "#c4781a", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>
+                                  ⏳ Pendiente aprobación
+                                </span>
+                              )}
+                              {t.aprobada && <span style={{ fontSize: 10, color: "#1a8a5e", fontWeight: 700 }}>✅ Aprobado</span>}
+                            </div>
+                            {t.fecha_entrega_parcial && (
+                              <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>📅 {fmtFecha(t.fecha_entrega_parcial)}</div>
+                            )}
+                            {t.completada_por && (
+                              <div style={{ fontSize: 10, color: "#bbb", marginTop: 1 }}>✓ {t.completada_por}</div>
+                            )}
+                          </div>
+
+                          {/* Acciones */}
+                          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                            {t.pendiente_aprobacion && esAdmin && (
+                              <button onClick={() => aprobarCreacion(t)} style={{ fontSize: 10, padding: "2px 7px", background: "#f0fdf4", color: "#1a8a5e", border: "1px solid #1a8a5e", borderRadius: 4, cursor: "pointer", fontWeight: 700 }}>
+                                Aprobar
+                              </button>
+                            )}
+                            <button onClick={() => abrirItem(t.id)} style={{ fontSize: 11, padding: "2px 8px", background: itemAbierto === t.id ? "#111" : "#f0f0f0", color: itemAbierto === t.id ? "#fff" : "#555", border: "none", borderRadius: 4, cursor: "pointer" }}>
+                              {itemAbierto === t.id ? "▲" : "▼"}
+                            </button>
+                            {esAdmin && <button onClick={() => eliminarTarea(t.id)} style={{ fontSize: 11, padding: "2px 6px", background: "none", border: "none", cursor: "pointer", color: "#ddd" }}>✕</button>}
+                          </div>
+                        </div>
+
+                        {/* Panel expandido */}
+                        {itemAbierto === t.id && (
+                          <div style={{ padding: "0 14px 12px", background: "#fafafa", borderTop: "1px solid #f0f0f0" }}>
+
+                            {/* Descripción editable */}
+                            <div style={{ marginBottom: 10, marginTop: 10 }}>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>Descripción / detalle</label>
+                              <textarea defaultValue={t.descripcion || ""}
+                                onBlur={e => actualizarTarea(t.id, { descripcion: e.target.value })}
+                                style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, resize: "none", boxSizing: "border-box", fontFamily: "inherit" }}
+                                rows={3} placeholder="Descripción detallada de la tarea…" />
+                            </div>
+
+                            {/* Fecha de entrega parcial */}
+                            <div style={{ marginBottom: 10 }}>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>Fecha de entrega parcial</label>
+                              <input type="date" defaultValue={t.fecha_entrega_parcial || ""}
+                                onBlur={e => actualizarTarea(t.id, { fecha_entrega_parcial: e.target.value || null })}
+                                style={{ padding: "6px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }} />
+                            </div>
+
+                            {/* Adjuntos */}
+                            <div style={{ marginBottom: 10 }}>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 6 }}>Adjuntos</label>
+                              {t.adjuntos?.length > 0 && (
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                                  {t.adjuntos.map(a => (
+                                    <a key={a.id} href={a.url} target="_blank" rel="noreferrer"
+                                      style={{ fontSize: 11, padding: "3px 9px", background: "#eff6ff", color: "#3b82f6", borderRadius: 5, textDecoration: "none", border: "1px solid #bfdbfe" }}>
+                                      📎 {a.nombre}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", background: "#f0f0f0", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "#555", border: "1.5px solid #e0e0e0" }}>
+                                📎 Adjuntar archivo
+                                <input type="file" style={{ display: "none" }} onChange={e => e.target.files[0] && subirArchivo(t.id, e.target.files[0])} />
+                              </label>
+                            </div>
+
+                            {/* Mensajes / comunicación */}
+                            <div>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 6 }}>Comentarios</label>
+                              <div style={{ background: "#fff", borderRadius: 8, border: "1.5px solid #e0e0e0", overflow: "hidden" }}>
+                                {/* Lista mensajes */}
+                                <div style={{ maxHeight: 200, overflow: "auto", padding: "8px" }}>
+                                  {(mensajes[t.id] || []).length === 0
+                                    ? <p style={{ fontSize: 12, color: "#ccc", textAlign: "center", margin: "8px 0" }}>Sin comentarios aún</p>
+                                    : (mensajes[t.id] || []).map(m => (
+                                      <div key={m.id} style={{
+                                        marginBottom: 8, padding: "6px 10px", borderRadius: 7,
+                                        background: m.rol === "admin" ? "#eff6ff" : "#f8f8f8",
+                                        border: `1px solid ${m.rol === "admin" ? "#bfdbfe" : "#e8e8e8"}`,
+                                      }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                                          <span style={{ fontSize: 11, fontWeight: 700, color: m.rol === "admin" ? "#3b82f6" : "#555" }}>
+                                            {m.rol === "admin" ? "🔑 " : "📐 "}{m.autor}
+                                          </span>
+                                          <span style={{ fontSize: 10, color: "#bbb" }}>
+                                            {new Date(m.created_at).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                          </span>
+                                        </div>
+                                        <div style={{ fontSize: 13, color: "#333", lineHeight: 1.4 }}>{m.mensaje}</div>
+                                      </div>
+                                    ))
+                                  }
+                                </div>
+                                {/* Input mensaje */}
+                                <div style={{ borderTop: "1px solid #f0f0f0", padding: "8px", display: "flex", gap: 6 }}>
+                                  <input value={nuevoMsg[t.id] || ""} onChange={e => setNuevoMsg(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviarMensaje(t.id)}
+                                    style={{ flex: 1, padding: "6px 10px", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 12, fontFamily: "inherit" }}
+                                    placeholder="Escribí un comentario… (Enter para enviar)" />
+                                  <button onClick={() => enviarMensaje(t.id)} style={{ padding: "6px 12px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}>→</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Nueva tarea en sección */}
+                  <div style={{ padding: "8px 14px", borderTop: "1px solid #f5f5f5" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input value={nuevaTarea[cl.id] || ""} onChange={e => setNuevaTarea(p => ({ ...p, [cl.id]: e.target.value }))}
+                        onKeyDown={e => e.key === "Enter" && crearTarea(cl.id)}
+                        style={{ flex: 1, padding: "6px 10px", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 12, fontFamily: "inherit", background: "#f8f8f8" }}
+                        placeholder={esAdmin ? "+ Nueva tarea…" : "+ Proponer tarea (requiere aprobación)"} />
+                      <button onClick={() => crearTarea(cl.id)} style={{ padding: "6px 12px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}>+</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Agregar nueva sección */}
+              <div style={{ background: "#fff", borderRadius: 12, padding: 14, border: "1.5px dashed #e0e0e0" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Agregar sección</div>
+                {/* Secciones default no creadas aún */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {SECCIONES_DEFAULT.filter(n => !checklists.find(c => c.nombre === n)).map(n => (
+                    <button key={n} onClick={() => crearChecklist(n)}
+                      style={{ padding: "4px 12px", background: "#f0f0f0", color: "#555", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && crearChecklist("")}
+                    style={{ flex: 1, padding: "7px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }}
+                    placeholder="Nombre de la sección…" />
+                  <button onClick={() => crearChecklist("")} disabled={saving || !nuevoNombre.trim()}
+                    style={{ padding: "7px 14px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 7, fontSize: 12, cursor: "pointer", fontWeight: 700 }}>
+                    + Crear
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1480,7 +1728,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
         />
       )}
       {panelChecklist && (
-        <PanelChecklist proyectoId={panelChecklist.id} perfil={perfil} onClose={() => { setPanelChecklist(null); cargar(); }} />
+        <PanelChecklist proyectoId={panelChecklist.id} proyecto={panelChecklist} perfil={perfil} onClose={() => { setPanelChecklist(null); cargar(); }} />
       )}
       {panelCobros && (
         <PanelCobros
