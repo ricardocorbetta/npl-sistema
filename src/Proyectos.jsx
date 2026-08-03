@@ -22,11 +22,9 @@ async function api(path, options = {}) {
 }
 
 const ESTADOS = [
-  { v: "onboarding",  label: "Onboarding",   color: "#f59e0b", bg: "#fffbeb" },
-  { v: "activo",      label: "Activo",        color: "#3b82f6", bg: "#eff6ff" },
-  { v: "revision",    label: "Revisión",      color: "#6366f1", bg: "#ede9fe" },
-  { v: "para_cobrar", label: "Para cobrar",   color: "#1a8a5e", bg: "#f0fdf4" },
-  { v: "terminado",   label: "Terminado",     color: "#888",    bg: "#f8f8f8" },
+  { v: "onboarding", label: "Onboarding", color: "#f59e0b", bg: "#fffbeb", border: "#fde68a" },
+  { v: "activo",     label: "Activo",     color: "#3b82f6", bg: "#eff6ff", border: "#bfdbfe" },
+  { v: "revision",   label: "Revisión",   color: "#6366f1", bg: "#ede9fe", border: "#c4b5fd" },
 ];
 
 const TIPOS_OBRA = ["Steel Frame", "Wood Frame", "Hormigón", "Panel SIP", "Metálica", "Mixta"];
@@ -1166,7 +1164,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-  const [tab, setTab] = useState("activos");
+  const [tab, setTab] = useState("todos");
   const [busq, setBusq] = useState("");
   const [modal, setModal] = useState(null);
   const [panelChecklist, setPanelChecklist] = useState(null);
@@ -1220,12 +1218,10 @@ export default function Proyectos({ deepLinkId, perfil }) {
   }
 
   const TABS = [
-    { id: "onboarding",  label: "Onboarding",  filter: p => p.estado === "onboarding" && !p.archivado },
-    { id: "activos",     label: "Activos",      filter: p => p.estado === "activo" && !p.archivado },
-    { id: "revision",    label: "Revisión",     filter: p => p.estado === "revision" && !p.archivado },
-    { id: "para_cobrar", label: "Para cobrar",  filter: p => p.estado === "para_cobrar" && !p.archivado },
-    { id: "terminado",   label: "Terminados",   filter: p => p.estado === "terminado" && !p.archivado },
-    { id: "todos",       label: "Todos",        filter: p => !p.archivado },
+    { id: "onboarding", label: "Onboarding", filter: p => p.estado === "onboarding" && !p.archivado },
+    { id: "activos",    label: "Activos",    filter: p => p.estado === "activo" && !p.archivado },
+    { id: "revision",   label: "Revisión",   filter: p => p.estado === "revision" && !p.archivado },
+    { id: "todos",      label: "Todos",      filter: p => !p.archivado },
   ];
 
   const tabActual = TABS.find(t => t.id === tab) || TABS[1];
@@ -1237,10 +1233,10 @@ export default function Proyectos({ deepLinkId, perfil }) {
   });
 
   const kpis = {
-    onboarding:  proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
-    activos:     proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
-    para_cobrar: proyectos.filter(p => p.estado === "para_cobrar" && !p.archivado).length,
-    total:       proyectos.filter(p => !p.archivado).length,
+    onboarding: proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
+    activos:    proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
+    revision:   proyectos.filter(p => p.estado === "revision" && !p.archivado).length,
+    total:      proyectos.filter(p => !p.archivado).length,
   };
 
   return (
@@ -1256,10 +1252,10 @@ export default function Proyectos({ deepLinkId, perfil }) {
       {/* KPIs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {[
-          { label: "Onboarding",  value: kpis.onboarding,  color: "#f59e0b" },
-          { label: "Activos",     value: kpis.activos,     color: "#3b82f6" },
-          { label: "Para cobrar", value: kpis.para_cobrar, color: "#1a8a5e" },
-          { label: "Total",       value: kpis.total,       color: "#888" },
+          { label: "Onboarding", value: kpis.onboarding, color: "#f59e0b" },
+          { label: "Activos",    value: kpis.activos,    color: "#3b82f6" },
+          { label: "Revisión",   value: kpis.revision,   color: "#6366f1" },
+          { label: "Total",      value: kpis.total,      color: "#888" },
         ].map(k => (
           <div key={k.label} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 10, padding: "8px 14px", minWidth: 80 }}>
             <div style={{ fontSize: 20, fontWeight: 900, color: k.color, fontFamily: "monospace" }}>{k.value}</div>
@@ -1364,7 +1360,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
                       {(() => {
                         const idx = ESTADOS.findIndex(e => e.v === p.estado);
                         const siguiente = ESTADOS[idx + 1];
-                        if (!siguiente || p.estado === "terminado") return null;
+                        if (!siguiente) return null;
                         return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
                       })()}
                     </div>
