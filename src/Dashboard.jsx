@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "./supabase.js";
-import { COLORS, shared, SectionHeader, KpiGrid, Badge, ProgressBar, FilterBar, EmptyState } from "./uiKit.jsx";
 
 const SUPA_URL = "https://imkmosifqxzbtqgzssst.supabase.co/rest/v1";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss";
@@ -13,307 +12,415 @@ function hdrs(tk) {
   return { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json" };
 }
 
-const ALCANCE_LABEL = {
-  fundacion: "Fundación", steel_frame_obra_gris: "SF Obra Gris",
-  fundacion_steel_frame: "Fund. + SF", estructura: "Estructura",
-  obra_completa: "Obra completa", llave_en_mano: "Llave en mano",
-};
-const ESTADO_PRES = { borrador: COLORS.textMuted, enviado: COLORS.info, negociacion: COLORS.warning, aprobado: COLORS.success, rechazado: COLORS.danger };
-
-/* ─── Selector de período ─── */
-function SelectorPeriodo({ valor, onChange }) {
-  const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-  const hoy = new Date();
-  const opciones = [{ v: "todo", label: "Todo el tiempo" }];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
-    const v = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    opciones.push({ v, label: `${meses[d.getMonth()]} ${d.getFullYear()}` });
-  }
-  return (
-    <select value={valor} onChange={e => onChange(e.target.value)} style={{ ...shared.inp, width: 180 }}>
-      {opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-    </select>
-  );
+function fmtMonto(v) {
+  if (!v) return "—";
+  const n = parseFloat(v);
+  if (n >= 1000000) return `$${(n/1000000).toFixed(1)}M`;
+  if (n >= 1000) return `$${(n/1000).toFixed(0)}k`;
+  return `$${n.toLocaleString("es-AR")}`;
+}
+function fmtFecha(d) {
+  if (!d) return "—";
+  return new Date(d + "T12:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+}
+function tiempoRelativo(d) {
+  const diff = Math.floor((new Date() - new Date(d)) / 60000);
+  if (diff < 60) return `${diff}m`;
+  if (diff < 1440) return `${Math.floor(diff/60)}h`;
+  return `${Math.floor(diff/1440)}d`;
 }
 
-export default function Dashboard() {
-  const [resumen, setResumen] = useState(null);
-  const [obras, setObras] = useState([]);
+const ESTADO_COLOR = {
+  onboarding: "#f59e0b", activo: "#3b82f6", revision: "#6366f1",
+  aprobado: "#1a8a5e", enviado: "#3b82f6", negociacion: "#f59e0b",
+  rechazado: "#c0392b", borrador: "#aaa",
+};
+
+export default function Dashboard({ onNav }) {
+  const [perfil, setPerfil] = useState(null);
   const [presupuestos, setPresupuestos] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [calculistas, setCalculistas] = useState([]);
-  const [avancesObra, setAvancesObra] = useState({});
+  const [cobros, setCobros] = useState([]);
+  const [inbox, setInbox] = useState([]);
+  const [inboxAbierto, setInboxAbierto] = useState(null);
+  const [inboxMensajes, setInboxMensajes] = useState([]);
+  const [inboxReply, setInboxReply] = useState("");
+  const [loadingInbox, setLoadingInbox] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [periodo, setPeriodo] = useState("todo");
-  const [tab, setTab] = useState("obras");
+  const [tc, setTc] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase.from("perfiles").select("*").eq("id", session.user.id).single();
+        setPerfil(data);
+      }
+    })();
+    fetch("https://dolarapi.com/v1/dolares/bolsa").then(r => r.json()).then(d => setTc(d.venta)).catch(() => {});
+  }, []);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     const tk = await getToken();
-
-    let filtroFecha = "";
-    if (periodo !== "todo") {
-      const [y, m] = periodo.split("-");
-      const desde = `${y}-${m}-01`;
-      const hasta = new Date(parseInt(y), parseInt(m), 0).toISOString().slice(0,10);
-      filtroFecha = `&created_at=gte.${desde}&created_at=lte.${hasta}`;
-    }
-
-    const [resR, obrasR, presR, proyR, calcR, avR] = await Promise.all([
-      fetch(`${SUPA_URL}/dashboard_resumen`, { headers: hdrs(tk) }).then(r => r.json()),
-      fetch(`${SUPA_URL}/dashboard_obras?order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
-      fetch(`${SUPA_URL}/presupuestos?order=created_at.desc&limit=50${filtroFecha}`, { headers: hdrs(tk) }).then(r => r.json()),
-      fetch(`${SUPA_URL}/proyectos?order=created_at.desc&limit=50${filtroFecha}`, { headers: hdrs(tk) }).then(r => r.json()),
+    const [presR, proyR, calcR, cobrosR, msgsR] = await Promise.all([
+      fetch(`${SUPA_URL}/presupuestos?archivado=is.false&order=created_at.desc&limit=200`, { headers: hdrs(tk) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/proyectos?archivado=is.false&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
       fetch(`${SUPA_URL}/calculistas?order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-      fetch(`${SUPA_URL}/vista_avance_obra`, { headers: hdrs(tk) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/proyecto_cobros?order=fecha_cobro.desc&limit=100`, { headers: hdrs(tk) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/tarea_mensajes?order=created_at.desc&limit=200`, { headers: hdrs(tk) }).then(r => r.json()),
     ]);
-
-    setResumen(Array.isArray(resR) ? resR[0] : null);
-    setObras(Array.isArray(obrasR) ? obrasR : []);
     setPresupuestos(Array.isArray(presR) ? presR : []);
     setProyectos(Array.isArray(proyR) ? proyR : []);
     setCalculistas(Array.isArray(calcR) ? calcR : []);
+    setCobros(Array.isArray(cobrosR) ? cobrosR : []);
 
-    const avMap = {};
-    (Array.isArray(avR) ? avR : []).forEach(a => { avMap[a.obra_id] = a; });
-    setAvancesObra(avMap);
-
+    // Armar inbox agrupado por proyecto
+    const msgs = Array.isArray(msgsR) ? msgsR : [];
+    const proyMap = {};
+    msgs.forEach(m => {
+      if (!proyMap[m.proyecto_id]) proyMap[m.proyecto_id] = { proyecto_id: m.proyecto_id, mensajes: [], ultimo: m };
+      proyMap[m.proyecto_id].mensajes.push(m);
+    });
+    const proyIds = Object.keys(proyMap);
+    if (proyIds.length > 0) {
+      const pi = await fetch(`${SUPA_URL}/proyectos?id=in.(${proyIds.join(",")})&select=id,descripcion,codigo,numero_proyecto,encargado,estado`, { headers: hdrs(tk) }).then(r => r.json());
+      (Array.isArray(pi) ? pi : []).forEach(p => { if (proyMap[p.id]) proyMap[p.id].proyecto = p; });
+    }
+    setInbox(Object.values(proyMap).sort((a, b) => new Date(b.ultimo.created_at) - new Date(a.ultimo.created_at)));
     setLoading(false);
-  }, [periodo]);
+  }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const presAprobados  = presupuestos.filter(p => p.estado === "aprobado");
-  const presPendientes = presupuestos.filter(p => p.estado === "enviado");
-  const montoAprobado  = presAprobados.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const montoPendiente = presPendientes.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  async function cargarMensajesProyecto(proyId) {
+    setLoadingInbox(true);
+    const tk = await getToken();
+    const msgs = await fetch(`${SUPA_URL}/tarea_mensajes?proyecto_id=eq.${proyId}&order=created_at.asc`, { headers: hdrs(tk) }).then(r => r.json());
+    setInboxMensajes(Array.isArray(msgs) ? msgs : []);
+    setLoadingInbox(false);
+  }
 
-  const proyActivos    = proyectos.filter(p => p.estado === "activo");
-  const proyEntregados = proyectos.filter(p => p.entregado);
-  const proyCobrados   = proyectos.filter(p => p.cobrado);
+  async function responderInbox() {
+    if (!inboxReply.trim() || !inboxAbierto || !perfil) return;
+    const tk = await getToken();
+    const item = inbox.find(i => i.proyecto_id === inboxAbierto);
+    await fetch(`${SUPA_URL}/tarea_mensajes`, {
+      method: "POST", headers: hdrs(tk),
+      body: JSON.stringify({ proyecto_id: inboxAbierto, tarea_id: item?.ultimo?.tarea_id, autor: perfil.nombre, rol: perfil.rol, mensaje: inboxReply.trim() })
+    });
+    setInboxReply("");
+    await cargarMensajesProyecto(inboxAbierto);
+    cargar();
+  }
 
-  const calcDisp = calculistas.filter(c => c.disponible);
-  const calcSenior = calculistas.filter(c => c.nivel === "Senior");
+  // ── Métricas ──
+  const mesActual = new Date().toISOString().slice(0, 7);
+  const hoy = new Date().toISOString().slice(0, 10);
 
-  const porTipoServicio = {};
-  presupuestos.forEach(p => {
-    const t = p.tipo_servicio || "Sin categoría";
-    if (!porTipoServicio[t]) porTipoServicio[t] = { count: 0, monto: 0 };
-    porTipoServicio[t].count++;
-    porTipoServicio[t].monto += parseFloat(p.monto) || 0;
+  const presAprobados = presupuestos.filter(p => p.estado === "aprobado");
+  const presAprobadosMes = presAprobados.filter(p => (p.fecha_aprobacion || p.fecha_emision || "").slice(0, 7) === mesActual);
+  const presEnviados = presupuestos.filter(p => ["enviado", "negociacion"].includes(p.estado));
+  const montoAprobadoMes = presAprobadosMes.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const montoAprobadoMesUSD = tc ? Math.round(montoAprobadoMes / tc) : null;
+  const tasaConversion = presupuestos.filter(p => p.estado !== "borrador" && !p.archivado && (p.fecha_emision || "").slice(0, 7) === mesActual).length;
+  const tasaPct = tasaConversion > 0 ? Math.round(presAprobadosMes.length / tasaConversion * 100) : null;
+
+  const proyOnboarding = proyectos.filter(p => p.estado === "onboarding");
+  const proyActivos = proyectos.filter(p => p.estado === "activo");
+  const proyRevision = proyectos.filter(p => p.estado === "revision");
+
+  const totalCobrado = cobros.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+  const cobradoMes = cobros.filter(c => (c.fecha_cobro || "").slice(0, 7) === mesActual).reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+
+  const calcActivos = calculistas.filter(c => c.estado === "activo");
+  const calcDisponibles = calculistas.filter(c => c.disponible);
+  const calcPostulantes = calculistas.filter(c => c.estado === "postulante");
+
+  // Alertas
+  const alertas = [];
+  // Presupuestos para recontactar
+  const recontactar = presEnviados.filter(p => {
+    const ref = p.fecha_ultimo_contacto || p.fecha_emision;
+    if (!ref) return false;
+    return Math.floor((new Date() - new Date(ref + "T12:00")) / 86400000) >= 7;
   });
+  if (recontactar.length > 0) alertas.push({ tipo: "warning", msg: `${recontactar.length} presupuesto${recontactar.length > 1 ? "s" : ""} para recontactar`, modulo: "presupuestos" });
+
+  // Proyectos vencidos
+  const proyVencidos = proyectos.filter(p => p.fecha_entrega_plan && p.fecha_entrega_plan < hoy && p.estado !== "revision" && !p.archivado);
+  if (proyVencidos.length > 0) alertas.push({ tipo: "danger", msg: `${proyVencidos.length} proyecto${proyVencidos.length > 1 ? "s" : ""} con fecha vencida`, modulo: "proyectos" });
+
+  // Calculistas postulantes sin revisar
+  if (calcPostulantes.length > 0) alertas.push({ tipo: "info", msg: `${calcPostulantes.length} postulante${calcPostulantes.length > 1 ? "s" : ""} sin revisar`, modulo: "calculistas" });
+
+  // Mensajes sin responder (del calculista, sin respuesta admin posterior)
+  const sinResponder = inbox.filter(i => i.ultimo?.rol !== "admin");
+  if (sinResponder.length > 0) alertas.push({ tipo: "purple", msg: `${sinResponder.length} conversación${sinResponder.length > 1 ? "es" : ""} sin respuesta`, modulo: null });
 
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", fontFamily: shared.page.fontFamily, color: COLORS.textFaint }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", fontFamily: "system-ui", color: "#aaa", fontSize: 14 }}>
       Cargando dashboard…
     </div>
   );
 
+  const S = {
+    card: { background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, padding: "14px 16px" },
+    lbl: { fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 },
+  };
+
   return (
-    <div style={{ ...shared.page, maxWidth: 1200, background: COLORS.bgApp, minHeight: "100vh" }}>
+    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
 
-      <SectionHeader
-        icon="📊" title="Dashboard NPL"
-        subtitle={new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-      />
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, gap: 10 }}>
-        <SelectorPeriodo valor={periodo} onChange={setPeriodo} />
-        <button onClick={cargar} style={shared.btnSm}>↺</button>
-      </div>
-
-      {resumen && (
-        <KpiGrid columns={3} items={[
-          { label: "Obras activas",        value: resumen.obras_activas, color: COLORS.accent, icon: "🏗️" },
-          { label: "Proyectos activos",    value: resumen.proyectos_activos, color: COLORS.info, icon: "📋", sub: `${proyEntregados.length} entregados · ${proyCobrados.length} cobrados` },
-          { label: "Clientes",             value: resumen.total_clientes, color: COLORS.success, icon: "👥" },
-          { label: "Presupuestos aprobados", value: resumen.presupuestos_aprobados, color: COLORS.success, icon: "✅", sub: `$${montoAprobado.toLocaleString("es-AR")}` },
-          { label: "Monto pendiente",      value: `$${montoPendiente.toLocaleString("es-AR")}`, color: COLORS.warning, icon: "💰", sub: `${presPendientes.length} presup. enviados` },
-          { label: "Partes hoy",           value: resumen.partes_hoy || 0, color: resumen.partes_hoy > 0 ? COLORS.success : COLORS.danger, icon: "📝", sub: "reportes de obras" },
-        ]} />
-      )}
-
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, background: COLORS.bgCard, borderRadius: 12, padding: 4, width: "fit-content", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
-        {[["obras","🏗️ Obras"],["presupuestos","💰 Presupuestos"],["proyectos","📋 Proyectos"],["equipo","👷 Equipo"]].map(([id,label]) => (
-          <button key={id} onClick={() => setTab(id)} style={{
-            padding: "8px 16px", background: tab === id ? COLORS.text : "none", color: tab === id ? "#fff" : "#666",
-            border: "none", borderRadius: 9, fontSize: 13, fontWeight: tab === id ? 700 : 400, cursor: "pointer", transition: "all .15s"
-          }}>{label}</button>
-        ))}
-      </div>
-
-      {/* ════════ TAB OBRAS ════════ */}
-      {tab === "obras" && (
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 14, marginBottom: 20 }}>
-            {obras.map(o => {
-              const av = avancesObra[o.id];
-              const sColor = COLORS.semaforo[av?.semaforo] || COLORS.border;
-              return (
-                <div key={o.id} style={{ ...shared.card, borderLeft: `4px solid ${sColor}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <div>
-                      {o.codigo && <div style={{ fontSize: 10, color: COLORS.textFaint, fontWeight: 700, letterSpacing: 1 }}>{o.codigo}</div>}
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{o.nombre}</div>
-                      <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>
-                        {o.sistema_constructivo} · {ALCANCE_LABEL[o.alcance] || o.alcance}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: sColor }}>{av?.avance_real_pct || o.avance_pct || 0}%</div>
-                      <div style={{ fontSize: 10, color: COLORS.textFaint }}>avance real</div>
-                    </div>
-                  </div>
+          <p style={{ margin: 0, fontSize: 11, color: "#aaa" }}>NPL Ingeniería Civil</p>
+          <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 900, color: "#111" }}>
+            Buenos días{perfil?.nombre ? `, ${perfil.nombre.split(" ")[0]}` : ""} 👋
+          </h1>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#888" }}>
+            {new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+            {tc && <span style={{ marginLeft: 10, background: "#f8f8f8", borderRadius: 5, padding: "1px 8px", fontSize: 11, color: "#888" }}>💵 MEP ${tc.toLocaleString("es-AR")}</span>}
+          </p>
+        </div>
+        <button onClick={cargar} style={{ padding: "7px 14px", background: "#f0f0f0", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#555", fontWeight: 600 }}>↺ Actualizar</button>
+      </div>
 
-                  <ProgressBar valor={av?.avance_real_pct || o.avance_pct || 0} max={100} color={sColor} label="Real" />
-                  {av?.avance_teorico_pct != null && <ProgressBar valor={av.avance_teorico_pct} max={100} color={COLORS.accent} label="Teórico" />}
-
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    {av?.desvio_pct != null && <Badge color={av.desvio_pct >= 0 ? COLORS.success : COLORS.danger} label={`${av.desvio_pct >= 0 ? "+" : ""}${av.desvio_pct}% desvío`} />}
-                    {av?.tareas_atrasadas > 0 && <Badge color={COLORS.danger} label={`${av.tareas_atrasadas} atrasadas`} icon="⏰" />}
-                    {o.jefe_nombre && <Badge color={COLORS.textMuted} label={o.jefe_nombre} icon="👷" />}
-                    {o.partes_count > 0 && <Badge color={COLORS.textMuted} label={`${o.partes_count} partes`} icon="📝" />}
-                  </div>
-
-                  {o.fecha_inicio_plan && o.fecha_fin_plan && (
-                    <div style={{ fontSize: 11, color: COLORS.textFaint, marginTop: 8 }}>
-                      📅 {new Date(o.fecha_inicio_plan+"T12:00").toLocaleDateString("es-AR")} → {new Date(o.fecha_fin_plan+"T12:00").toLocaleDateString("es-AR")}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {obras.length === 0 && <EmptyState message="Sin obras activas." />}
+      {/* ── Alertas ── */}
+      {alertas.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+          {alertas.map((a, i) => {
+            const colores = {
+              warning: { bg: "#fffbeb", border: "#f59e0b", color: "#c4781a", icon: "⚠️" },
+              danger: { bg: "#fef2f2", border: "#c0392b", color: "#c0392b", icon: "🔴" },
+              info: { bg: "#eff6ff", border: "#3b82f6", color: "#3b82f6", icon: "ℹ️" },
+              purple: { bg: "#ede9fe", border: "#6366f1", color: "#6366f1", icon: "💬" },
+            };
+            const c = colores[a.tipo] || colores.info;
+            return (
+              <div key={i} onClick={() => a.modulo && onNav && onNav(a.modulo)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: c.bg, border: `1.5px solid ${c.border}30`, borderRadius: 9, cursor: a.modulo ? "pointer" : "default" }}>
+                <span>{c.icon}</span>
+                <span style={{ fontSize: 13, color: c.color, fontWeight: 600 }}>{a.msg}</span>
+                {a.modulo && <span style={{ marginLeft: "auto", fontSize: 11, color: c.color }}>Ver →</span>}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* ════════ TAB PRESUPUESTOS ════════ */}
-      {tab === "presupuestos" && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
-            {Object.entries(presupuestos.reduce((acc, p) => { acc[p.estado] = (acc[p.estado] || 0) + 1; return acc; }, {})).map(([estado, count]) => (
-              <div key={estado} style={{ ...shared.card, padding: "14px 16px", borderLeft: `4px solid ${ESTADO_PRES[estado] || COLORS.textMuted}` }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: ESTADO_PRES[estado] || COLORS.textMuted }}>{count}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSoft, marginTop: 2, textTransform: "capitalize" }}>{estado}</div>
-              </div>
-            ))}
+      {/* ── KPIs principales ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+        {[
+          { label: "Aprobado este mes", value: fmtMonto(montoAprobadoMes), sub: montoAprobadoMesUSD ? `U$S ${montoAprobadoMesUSD.toLocaleString("es-AR")}` : null, color: "#1a8a5e", icon: "✅" },
+          { label: "Conversión mes", value: tasaPct !== null ? `${tasaPct}%` : "—", sub: `${presAprobadosMes.length} aprobados`, color: tasaPct >= 50 ? "#1a8a5e" : tasaPct >= 30 ? "#f59e0b" : "#c0392b", icon: "📈" },
+          { label: "Proyectos activos", value: proyActivos.length, sub: `${proyOnboarding.length} onboarding · ${proyRevision.length} revisión`, color: "#3b82f6", icon: "📐" },
+          { label: "Cobrado total", value: fmtMonto(totalCobrado), sub: cobradoMes > 0 ? `${fmtMonto(cobradoMes)} este mes` : null, color: "#1a8a5e", icon: "💰" },
+          { label: "En seguimiento", value: presEnviados.length, sub: `${recontactar.length} para recontactar`, color: recontactar.length > 0 ? "#f59e0b" : "#888", icon: "📨" },
+          { label: "Calculistas", value: calcActivos.length, sub: `${calcDisponibles.length} disponibles · ${calcPostulantes.length} postulantes`, color: "#6366f1", icon: "👷" },
+        ].map(k => (
+          <div key={k.label} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ fontSize: 18, marginBottom: 2 }}>{k.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
+            <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>{k.label}</div>
+            {k.sub && <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{k.sub}</div>}
           </div>
+        ))}
+      </div>
 
-          {Object.keys(porTipoServicio).length > 0 && (
-            <div style={{ ...shared.card, marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Por tipo de servicio</div>
-              {Object.entries(porTipoServicio).sort((a, b) => b[1].count - a[1].count).map(([tipo, data]) => {
-                const maxCount = Math.max(...Object.values(porTipoServicio).map(d => d.count));
+      {/* ── Grid principal ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+
+        {/* Proyectos activos */}
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>📐 Proyectos en curso</span>
+            <button onClick={() => onNav && onNav("proyectos")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver todos →</button>
+          </div>
+          {proyectos.filter(p => ["onboarding","activo","revision"].includes(p.estado)).slice(0, 6).map(p => {
+            const color = ESTADO_COLOR[p.estado] || "#888";
+            const diasEntrega = p.fecha_entrega_plan ? Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000) : null;
+            return (
+              <div key={p.id} onClick={() => onNav && onNav("proyectos", p.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f5f5f5", cursor: "pointer" }}>
+                <div style={{ width: 4, height: 32, borderRadius: 2, background: color, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion}</div>
+                  <div style={{ fontSize: 11, color: "#aaa" }}>
+                    {p.encargado || "Sin asignar"}
+                    {p.cliente && ` · ${p.cliente}`}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: `${color}15`, color }}>{p.estado}</div>
+                  {diasEntrega !== null && <div style={{ fontSize: 10, color: diasEntrega < 0 ? "#c0392b" : diasEntrega <= 7 ? "#f59e0b" : "#aaa", marginTop: 2 }}>{diasEntrega < 0 ? "Vencido" : `${diasEntrega}d`}</div>}
+                </div>
+              </div>
+            );
+          })}
+          {proyectos.filter(p => ["onboarding","activo","revision"].includes(p.estado)).length === 0 && (
+            <p style={{ color: "#ccc", fontSize: 13, textAlign: "center", padding: 20 }}>Sin proyectos activos</p>
+          )}
+        </div>
+
+        {/* Presupuestos recientes */}
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>💰 Presupuestos recientes</span>
+            <button onClick={() => onNav && onNav("presupuestos")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver todos →</button>
+          </div>
+          {presupuestos.slice(0, 7).map(p => {
+            const color = ESTADO_COLOR[p.estado] || "#888";
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f5f5f5" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || p.cliente || "—"}</div>
+                  <div style={{ fontSize: 10, color: "#aaa" }}>{p.cliente} · {fmtFecha(p.fecha_emision)}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  {p.monto && <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace" }}>{fmtMonto(p.monto)}</div>}
+                  <div style={{ fontSize: 10, color, fontWeight: 600 }}>{p.estado}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Calculistas top ── */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>👷 Equipo de calculistas</span>
+          <button onClick={() => onNav && onNav("calculistas")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver todos →</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+          {calcActivos.map(c => {
+            const proyAsignados = proyectos.filter(p => p.encargado === c.nombre && ["onboarding","activo","revision"].includes(p.estado)).length;
+            return (
+              <div key={c.id} style={{ background: "#f8f8f8", borderRadius: 9, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: c.disponible ? "#1a8a5e" : "#e0e0e0", color: c.disponible ? "#fff" : "#aaa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>
+                  {(c.nombre || "?")[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
+                  <div style={{ fontSize: 10, color: "#aaa" }}>
+                    {proyAsignados > 0 ? `${proyAsignados} proyecto${proyAsignados > 1 ? "s" : ""}` : "Sin proyectos"}
+                    {c.nivel && ` · ${c.nivel}`}
+                  </div>
+                </div>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.disponible ? "#1a8a5e" : "#e0e0e0", flexShrink: 0 }} />
+              </div>
+            );
+          })}
+          {calcActivos.length === 0 && <p style={{ color: "#ccc", fontSize: 12, gridColumn: "1/-1", textAlign: "center", padding: 12 }}>Sin calculistas activos</p>}
+        </div>
+        {calcPostulantes.length > 0 && (
+          <div style={{ marginTop: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#3b82f6", fontWeight: 600 }}>📋 {calcPostulantes.length} postulante{calcPostulantes.length > 1 ? "s" : ""} esperando revisión</span>
+            <button onClick={() => onNav && onNav("calculistas")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>Revisar →</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Inbox ── */}
+      <div style={S.card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 16 }}>💬</span>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#111" }}>Comunicaciones</h2>
+          {sinResponder.length > 0 && (
+            <span style={{ fontSize: 11, background: "#6366f1", color: "#fff", borderRadius: 20, padding: "2px 9px", fontWeight: 700 }}>
+              {sinResponder.length} sin responder
+            </span>
+          )}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{inbox.length} proyectos con mensajes</span>
+        </div>
+
+        {inbox.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 32, color: "#ccc" }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>💬</div>
+            <div style={{ fontSize: 13 }}>Sin mensajes aún</div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: inboxAbierto ? "300px 1fr" : "1fr", gap: 12 }}>
+
+            {/* Lista */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {inbox.map(item => {
+                const p = item.proyecto;
+                const sel = inboxAbierto === item.proyecto_id;
+                const sinResp = item.ultimo?.rol !== "admin";
                 return (
-                  <div key={tipo} style={{ marginBottom: 12 }}>
-                    <ProgressBar valor={data.count} max={maxCount} color={COLORS.accent} label={`${tipo} — ${data.count} · $${data.monto.toLocaleString("es-AR")}`} showValue={false} height={8} />
+                  <div key={item.proyecto_id} onClick={async () => {
+                    if (sel) { setInboxAbierto(null); return; }
+                    setInboxAbierto(item.proyecto_id);
+                    await cargarMensajesProyecto(item.proyecto_id);
+                  }} style={{ padding: "9px 12px", borderRadius: 9, cursor: "pointer", border: `1.5px solid ${sel ? "#6366f1" : sinResp ? "#c4b5fd" : "#e8e8e8"}`, background: sel ? "#ede9fe" : sinResp ? "#faf5ff" : "#fff", transition: "all 0.1s" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 3 }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
+                        {p?.descripcion || "Proyecto"}
+                      </div>
+                      <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+                        {sinResp && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6366f1", display: "inline-block" }} />}
+                        <span style={{ fontSize: 10, color: "#bbb" }}>{tiempoRelativo(item.ultimo.created_at)}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ color: item.ultimo.rol === "admin" ? "#555" : "#6366f1", fontWeight: 600 }}>{item.ultimo.autor.split(" ")[0]}: </span>
+                      {item.ultimo.mensaje}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
 
-          <div style={shared.card}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Últimos presupuestos {periodo !== "todo" ? `— ${periodo}` : ""}</div>
-            {presupuestos.length === 0 ? <EmptyState message="Sin presupuestos en este período." /> : presupuestos.slice(0, 20).map(p => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: ESTADO_PRES[p.estado] || COLORS.textMuted, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || p.cliente || "Sin descripción"}</div>
-                  <div style={{ fontSize: 11, color: COLORS.textFaint }}>{p.tipo_servicio || "—"} · {p.cliente || "—"} · {p.fecha_emision ? new Date(p.fecha_emision+"T12:00").toLocaleDateString("es-AR") : "—"}</div>
+            {/* Panel conversación */}
+            {inboxAbierto && (
+              <div style={{ border: "1.5px solid #e8e8e8", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", height: 400 }}>
+                <div style={{ padding: "10px 14px", borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{inbox.find(i => i.proyecto_id === inboxAbierto)?.proyecto?.descripcion}</div>
+                    <div style={{ fontSize: 10, color: "#aaa" }}>{inboxMensajes.length} mensajes</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => onNav && onNav("proyectos", inboxAbierto)} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver proyecto →</button>
+                    <button onClick={() => setInboxAbierto(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 16 }}>✕</button>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  {p.monto && <div style={{ fontSize: 13, fontWeight: 700 }}>${parseFloat(p.monto).toLocaleString("es-AR")}</div>}
-                  <Badge color={ESTADO_PRES[p.estado] || COLORS.textMuted} label={p.estado} />
+                <div style={{ flex: 1, overflow: "auto", padding: "10px 14px" }}>
+                  {loadingInbox ? <p style={{ color: "#aaa", fontSize: 12, textAlign: "center" }}>Cargando…</p> :
+                    inboxMensajes.map(m => {
+                      const esAdmin = m.rol === "admin";
+                      return (
+                        <div key={m.id} style={{ display: "flex", gap: 7, marginBottom: 8, flexDirection: esAdmin ? "row-reverse" : "row" }}>
+                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: esAdmin ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>
+                            {(m.autor || "?")[0].toUpperCase()}
+                          </div>
+                          <div style={{ maxWidth: "70%", display: "flex", flexDirection: "column", alignItems: esAdmin ? "flex-end" : "flex-start" }}>
+                            <div style={{ fontSize: 9, color: "#bbb", marginBottom: 2 }}>{m.autor} · {tiempoRelativo(m.created_at)}</div>
+                            <div style={{ fontSize: 12, padding: "6px 10px", borderRadius: esAdmin ? "10px 2px 10px 10px" : "2px 10px 10px 10px", background: esAdmin ? "#0a0a0a" : "#ede9fe", color: esAdmin ? "#fff" : "#333", lineHeight: 1.4 }}>
+                              {m.mensaje}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+                <div style={{ padding: "8px 10px", borderTop: "1px solid #f0f0f0", display: "flex", gap: 6, flexShrink: 0 }}>
+                  <input value={inboxReply} onChange={e => setInboxReply(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && responderInbox()}
+                    style={{ flex: 1, padding: "6px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }}
+                    placeholder="Responder… (Enter)" />
+                  <button onClick={responderInbox} disabled={!inboxReply.trim()}
+                    style={{ padding: "6px 14px", background: inboxReply.trim() ? "#0a0a0a" : "#f0f0f0", color: inboxReply.trim() ? "#fff" : "#aaa", border: "none", borderRadius: 7, fontSize: 12, cursor: inboxReply.trim() ? "pointer" : "default", fontWeight: 700 }}>→</button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
-
-      {/* ════════ TAB PROYECTOS ════════ */}
-      {tab === "proyectos" && (
-        <div>
-          <KpiGrid items={[
-            { label: "En curso",   value: proyActivos.length,    color: COLORS.accent },
-            { label: "Entregados", value: proyEntregados.length, color: COLORS.success },
-            { label: "Cobrados",   value: proyCobrados.length,   color: COLORS.success },
-            { label: "Total",      value: proyectos.length,      color: COLORS.textMuted },
-          ]} />
-
-          <div style={shared.card}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Proyectos {periodo !== "todo" ? `— ${periodo}` : ""}</div>
-            {proyectos.length === 0 ? <EmptyState message="Sin proyectos en este período." /> : proyectos.slice(0, 20).map(p => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {p.numero_proyecto && <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.textFaint, background: "#f0f0f0", borderRadius: 4, padding: "1px 6px" }}>{p.numero_proyecto}</span>}
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{p.descripcion || "Sin descripción"}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: COLORS.textFaint, marginTop: 2 }}>{p.cliente || "—"} · {p.categoria || "—"} · {p.encargado || "—"}</div>
-                  {p.proxima_tarea && <div style={{ fontSize: 11, color: COLORS.accent, marginTop: 2 }}>→ {p.proxima_tarea}</div>}
-                </div>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {p.entregado  && <Badge color={COLORS.success} label="Entregado" icon="✓" />}
-                  {p.cobrado    && <Badge color={COLORS.success} label="Cobrado" icon="✓" />}
-                  {!p.entregado && <Badge color={COLORS.accent} label="En curso" />}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ════════ TAB EQUIPO ════════ */}
-      {tab === "equipo" && (
-        <div>
-          <KpiGrid items={[
-            { label: "Total",       value: calculistas.length, color: COLORS.accent },
-            { label: "Disponibles", value: calcDisp.length,    color: COLORS.success },
-            { label: "Seniors",     value: calcSenior.length,  color: COLORS.warning },
-            { label: "Externos",    value: calculistas.filter(c => c.tipo === "externo").length, color: COLORS.info },
-          ]} />
-
-          <div style={{ ...shared.card, marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Por nivel</div>
-            {["Senior","Semi","Junior"].map(nivel => {
-              const arr = calculistas.filter(c => c.nivel === nivel);
-              const color = { Senior: COLORS.accent, Semi: COLORS.warning, Junior: COLORS.success }[nivel];
-              return (
-                <div key={nivel} style={{ marginBottom: 12 }}>
-                  <ProgressBar valor={arr.length} max={calculistas.length} color={color} label={`${nivel} — ${arr.length} · ${arr.filter(c => c.disponible).length} disponibles`} showValue={false} height={8} />
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={shared.card}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Equipo completo</div>
-            {calculistas.map(c => {
-              const color = { Senior: COLORS.accent, Semi: COLORS.warning, Junior: COLORS.success }[c.nivel] || COLORS.textMuted;
-              return (
-                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                    {c.nombre?.charAt(0)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{c.nombre}</div>
-                    <div style={{ fontSize: 11, color: COLORS.textFaint }}>{c.nivel} · {c.tipo} · {c.ciudad || "—"}</div>
-                    {c.sistemas && <div style={{ fontSize: 11, color: COLORS.textSoft, marginTop: 1 }}>💻 {c.sistemas}</div>}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0, flexDirection: "column", alignItems: "flex-end" }}>
-                    <Badge color={c.disponible ? COLORS.success : COLORS.danger} label={c.disponible ? "Disponible" : "Ocupado"} />
-                    {c.puntaje > 0 && <span style={{ fontSize: 10, color: COLORS.warning }}>{"★".repeat(Math.round(c.puntaje/2))} {c.puntaje}/10</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
