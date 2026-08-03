@@ -548,11 +548,11 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
       const tk = await getToken();
       const [clis, calcs, press] = await Promise.all([
         fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/calculistas?select=id,nombre,nivel,disponible&estado=eq.activo&order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/calculistas?select=id,nombre,nivel,disponible,estado&order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
         fetch(`${SUPA_URL}/presupuestos?estado=eq.aprobado&select=id,codigo,descripcion,cliente,comitente_nombre,monto,moneda,forma_pago&order=codigo.desc&limit=300`, { headers: hdrs(tk) }).then(r => r.json()),
       ]);
       setClientes(Array.isArray(clis) ? clis : []);
-      setCalculistas(Array.isArray(calcs) ? calcs : []);
+      setCalculistas(Array.isArray(calcs) ? calcs.filter(c => c.estado === 'activo') : []);
       setPresupuestos(Array.isArray(press) ? press : []);
     })();
   }, []);
