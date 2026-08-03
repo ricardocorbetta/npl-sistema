@@ -168,7 +168,23 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const [saving, setSaving] = useState(false);
   const fileInputRef = React.useRef({});
 
-  const SECCIONES_DEFAULT = ["Diagnóstico", "Anteproyecto", "Legajo"];
+  const SECCIONES_DEFAULT = {
+    "Diagnóstico": [
+      "Formulario enviado al arquitecto/ingeniero",
+      "Formulario recibido completo",
+    ],
+    "Anteproyecto": [
+      "Modelo CYPECAD",
+      "Anteproyecto en AutoCAD",
+      "Anteproyecto en SketchUp",
+    ],
+    "Legajo": [
+      "Legajo en AutoCAD",
+      "Proyecto en SketchUp",
+      "Resumen de materiales",
+      "Entrega final completa en carpeta",
+    ],
+  };
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -202,7 +218,18 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     const n = nombre || nuevoNombre.trim();
     if (!n) return;
     setSaving(true);
-    await api("/proyecto_checklists", { method: "POST", body: JSON.stringify({ proyecto_id: proyectoId, nombre: n, orden: checklists.length }) });
+    const res = await api("/proyecto_checklists", { method: "POST", body: JSON.stringify({ proyecto_id: proyectoId, nombre: n, orden: checklists.length }) });
+    const nuevoId = Array.isArray(res) ? res[0]?.id : res?.id;
+    // Crear items predefinidos si la sección los tiene
+    const itemsPredefinidos = SECCIONES_DEFAULT[n] || [];
+    if (nuevoId && itemsPredefinidos.length > 0) {
+      for (let i = 0; i < itemsPredefinidos.length; i++) {
+        await api("/proyecto_tareas", { method: "POST", body: JSON.stringify({
+          checklist_id: nuevoId, proyecto_id: proyectoId,
+          texto: itemsPredefinidos[i], orden: i,
+        }) });
+      }
+    }
     setNuevoNombre("");
     await cargar();
     setSaving(false);
@@ -300,8 +327,8 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const pct = total > 0 ? Math.round(completadas / total * 100) : 0;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }}>
-      <div style={{ background: "#f8f8f8", width: "min(620px, 100vw)", height: "100vh", overflow: "auto", display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: "#f8f8f8", width: "min(900px, 100%)", height: "90vh", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
 
         {/* Header */}
         <div style={{ background: "#fff", padding: "16px 20px", borderBottom: "1px solid #e8e8e8", flexShrink: 0 }}>
@@ -336,6 +363,7 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {loading ? <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Cargando…</p> : (
             <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {checklists.map(cl => (
                 <div key={cl.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 12, overflow: "hidden", border: "1.5px solid #e8e8e8" }}>
                   {/* Header sección */}
@@ -508,15 +536,17 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
                 </div>
               ))}
 
+              </div>{/* fin grid columnas */}
+
               {/* Agregar nueva sección */}
               <div style={{ background: "#fff", borderRadius: 12, padding: 14, border: "1.5px dashed #e0e0e0" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Agregar sección</div>
                 {/* Secciones default no creadas aún */}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  {SECCIONES_DEFAULT.filter(n => !checklists.find(c => c.nombre === n)).map(n => (
+                  {Object.keys(SECCIONES_DEFAULT).filter(n => !checklists.find(c => c.nombre === n)).map(n => (
                     <button key={n} onClick={() => crearChecklist(n)}
                       style={{ padding: "4px 12px", background: "#f0f0f0", color: "#555", border: "1.5px solid #e0e0e0", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
-                      {n}
+                      {n} <span style={{ color: "#aaa", fontWeight: 400 }}>({SECCIONES_DEFAULT[n].length})</span>
                     </button>
                   ))}
                 </div>
@@ -862,8 +892,20 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
         // Crear checklists default para proyecto nuevo
         const nuevoId = Array.isArray(res) ? res[0]?.id : res?.id;
         if (nuevoId) {
-          for (let i = 0; i < CHECKLIST_DEFAULTS.length; i++) {
-            await api("/proyecto_checklists", { method: "POST", body: JSON.stringify({ proyecto_id: nuevoId, nombre: CHECKLIST_DEFAULTS[i], orden: i }) }).catch(() => {});
+          const DEFAULTS = {
+            "Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
+            "Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
+            "Legajo": ["Legajo en AutoCAD", "Proyecto en SketchUp", "Resumen de materiales", "Entrega final completa en carpeta"],
+          };
+          let orden = 0;
+          for (const [seccion, items] of Object.entries(DEFAULTS)) {
+            const cl = await api("/proyecto_checklists", { method: "POST", body: JSON.stringify({ proyecto_id: nuevoId, nombre: seccion, orden: orden++ }) }).catch(() => null);
+            const clId = Array.isArray(cl) ? cl[0]?.id : cl?.id;
+            if (clId) {
+              for (let i = 0; i < items.length; i++) {
+                await api("/proyecto_tareas", { method: "POST", body: JSON.stringify({ checklist_id: clId, proyecto_id: nuevoId, texto: items[i], orden: i }) }).catch(() => {});
+              }
+            }
           }
         }
       }
