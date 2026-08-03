@@ -814,7 +814,6 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
 
           {error && <div style={{ background: "#fef2f2", color: "#c0392b", borderRadius: 8, padding: "8px 12px", marginTop: 10, fontSize: 12, fontWeight: 600 }}>❌ {error}</div>}
         </div>
-        </div>
 
         {/* Footer fijo */}
         <div style={{ padding: "12px 24px", borderTop: "1px solid #f0f0f0", display: "flex", gap: 8, flexShrink: 0 }}>
