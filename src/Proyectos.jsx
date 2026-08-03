@@ -548,7 +548,7 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
       const tk = await getToken();
       const [clis, calcs, press] = await Promise.all([
         fetch(`${SUPA_URL}/clientes?select=id,empresa&order=empresa.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-        fetch(`${SUPA_URL}/calculistas?select=id,nombre,nivel&order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
+        fetch(`${SUPA_URL}/calculistas?select=id,nombre,nivel,disponible&estado=eq.activo&order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
         fetch(`${SUPA_URL}/presupuestos?estado=eq.aprobado&select=id,codigo,descripcion,cliente,comitente_nombre,monto,moneda,forma_pago&order=codigo.desc&limit=300`, { headers: hdrs(tk) }).then(r => r.json()),
       ]);
       setClientes(Array.isArray(clis) ? clis : []);
@@ -706,7 +706,9 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
               </div>
               <select value={form.encargado} onChange={e => setForm(f => ({ ...f, encargado: e.target.value }))} style={S.inp}>
                 <option value="">Sin asignar</option>
-                {calculistas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""}</option>)}
+                {calculistas.filter(c => c.disponible).map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""} ✓</option>)}
+                {calculistas.filter(c => !c.disponible).length > 0 && <option disabled>── No disponibles ──</option>}
+                {calculistas.filter(c => !c.disponible).map(c => <option key={c.id} value={c.nombre}>{c.nombre}{c.nivel ? ` · ${c.nivel}` : ""}</option>)}
               </select>
               {showNuevoCalc && (
                 <FormNuevoCalculista
@@ -1269,22 +1271,24 @@ export default function Proyectos({ deepLinkId, perfil }) {
       {/* Flujo de caja — solo admin */}
       {esAdmin && <FlujoCaja proyectos={proyectos} presupuestosMap={presupuestosMap} />}
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Tabs + filtro integrado */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center", background: "#fff", borderRadius: 10, padding: "8px 12px", border: "1.5px solid #e8e8e8" }}>
         {TABS.map(t => {
           const count = proyectos.filter(t.filter).length;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
-              background: tab === t.id ? "#111" : "#f0f0f0", color: tab === t.id ? "#fff" : "#555",
+              background: tab === t.id ? "#111" : "transparent", color: tab === t.id ? "#fff" : "#888",
               border: "none", cursor: "pointer",
             }}>
               {t.label}{count > 0 ? ` (${count})` : ""}
             </button>
           );
         })}
-        <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="🔍 Buscar…"
-          style={{ ...S.inp, width: "auto", maxWidth: 220, marginLeft: "auto", fontSize: 12, padding: "5px 10px" }} />
+        <div style={{ width: 1, height: 16, background: "#e0e0e0", margin: "0 4px" }} />
+        <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Filtrar lista…"
+          style={{ border: "none", outline: "none", fontSize: 12, color: "#555", background: "transparent", width: 160 }} />
+        {busq && <button onClick={() => setBusq("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 14 }}>✕</button>}
       </div>
 
       {msg && <div style={{ background: "#f0fdf4", color: "#1a8a5e", borderRadius: 8, padding: "7px 12px", marginBottom: 10, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
