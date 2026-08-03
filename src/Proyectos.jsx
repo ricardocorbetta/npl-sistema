@@ -929,13 +929,15 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
       const estadoAnterior = proyecto?.estado;
       const body = {
         ...form,
-        cliente_id: form.cliente_id || null,
-        presupuesto_id: form.presupuesto_id || null,
-        superficie: form.superficie ? parseFloat(form.superficie) : null,
+        cliente_id:         form.cliente_id || null,
+        presupuesto_id:     form.presupuesto_id || null,
+        superficie:         form.superficie ? parseFloat(form.superficie) : null,
         fecha_entrega_plan: form.fecha_entrega_plan || null,
-        // Fechas automáticas por cambio de estado
+        fecha_aprobacion:   form.fecha_aprobacion || null,
+        fecha_cobro_saldo:  form.fecha_cobro_saldo || null,
+        monto_anticipo:     form.monto_anticipo ? parseFloat(form.monto_anticipo) : null,
+        monto_saldo:        form.monto_saldo ? parseFloat(form.monto_saldo) : null,
         ...(form.estado === "activo" && estadoAnterior !== "activo" ? { fecha_inicio_real: hoy } : {}),
-        ...(["para_cobrar", "terminado"].includes(form.estado) && !["para_cobrar", "terminado"].includes(estadoAnterior) ? { fecha_entrega_real: hoy } : {}),
       };
       if (proyecto?.id) {
         await api(`/proyectos?id=eq.${proyecto.id}`, { method: "PATCH", body: JSON.stringify(body) });
