@@ -207,7 +207,7 @@ function ModalCalculista({ calc, onClose, onGuardar }) {
               <span style={S.lbl}>Nivel</span>
               <select value={form.nivel} onChange={e => setForm(p => ({ ...p, nivel: e.target.value }))} style={S.inp}>
                 <option value="">Seleccionar</option>
-                {["Junior", "Semi-senior", "Senior"].map(n => <option key={n}>{n}</option>)}
+                {["Ingeniero Calculista", "Arquitecto", "Proyecto Manager", "Director"].map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
           </div>
