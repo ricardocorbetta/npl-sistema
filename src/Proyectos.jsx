@@ -171,9 +171,15 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const inputMsgRef = React.useRef(null);
 
   const SECCIONES_DEFAULT = {
-    "Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
-    "Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
-    "Legajo": ["Legajo en AutoCAD", "Proyecto en SketchUp", "Resumen de materiales", "Entrega final completa en carpeta"],
+    "01 - Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
+    "02 - Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
+    "03 - Proyecto": ["Modelo estructural CYPECAD", "Memoria de cálculo", "Planillas de armadura"],
+    "04 - Legajo final": [
+      "05-A Proyecto en AutoCAD",
+      "05-B Proyecto en 3D (SketchUp)",
+      "05-C Resumen de materiales",
+      "05-D Carpeta completa en PDF",
+    ],
   };
 
   // Fecha entrega del proyecto
@@ -733,7 +739,7 @@ function PanelHonorarios({ proyecto, presupuesto, onClose, perfil, onActualizar 
               </div>
               <div>
                 <span style={S.lbl}>% Honorario (máx 30%)</span>
-                <input type="number" min="0" max="30" value={form.porcentaje || 30} onChange={e => setForm(p => ({ ...p, porcentaje: Math.min(30, parseFloat(e.target.value) || 0) }))} style={S.inp} />
+                <input type="number" min="0" max="100" value={form.porcentaje || 30} onChange={e => setForm(p => ({ ...p, porcentaje: Math.min(100, parseFloat(e.target.value) || 0) }))} style={S.inp} />
               </div>
               <div>
                 <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -807,7 +813,7 @@ function PanelHonorarios({ proyecto, presupuesto, onClose, perfil, onActualizar 
 
 /* ─── Formulario nuevo calculista inline ─── */
 function FormNuevoCalculista({ onCreado, onCancelar }) {
-  const [form, setForm] = useState({ nombre: "", mail: "", nivel: "Junior", disponible: true });
+  const [form, setForm] = useState({ nombre: "", mail: "", nivel: "Ingeniero Calculista", disponible: true });
   const [saving, setSaving] = useState(false);
 
   async function crear() {
@@ -829,7 +835,7 @@ function FormNuevoCalculista({ onCreado, onCancelar }) {
         <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} style={{ ...S.inp, fontSize: 12 }} placeholder="Nombre *" />
         <input value={form.mail} onChange={e => setForm(p => ({ ...p, mail: e.target.value }))} style={{ ...S.inp, fontSize: 12 }} placeholder="Email *" />
         <select value={form.nivel} onChange={e => setForm(p => ({ ...p, nivel: e.target.value }))} style={{ ...S.inp, fontSize: 12 }}>
-          {["Junior", "Semi-senior", "Senior"].map(n => <option key={n}>{n}</option>)}
+          {["Ingeniero Calculista", "Arquitecto", "Proyecto Manager", "Director"].map(n => <option key={n}>{n}</option>)}
         </select>
       </div>
       <div style={{ display: "flex", gap: 6 }}>
@@ -947,9 +953,10 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
         const nuevoId = Array.isArray(res) ? res[0]?.id : res?.id;
         if (nuevoId) {
           const DEFAULTS = {
-            "Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
-            "Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
-            "Legajo": ["Legajo en AutoCAD", "Proyecto en SketchUp", "Resumen de materiales", "Entrega final completa en carpeta"],
+            "01 - Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
+            "02 - Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
+            "03 - Proyecto": ["Modelo estructural CYPECAD", "Memoria de cálculo", "Planillas de armadura"],
+            "04 - Legajo final": ["05-A Proyecto en AutoCAD", "05-B Proyecto en 3D (SketchUp)", "05-C Resumen de materiales", "05-D Carpeta completa en PDF"],
           };
           let orden = 0;
           for (const [seccion, items] of Object.entries(DEFAULTS)) {
