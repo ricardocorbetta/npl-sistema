@@ -10,6 +10,7 @@ import Biblioteca from './Biblioteca.jsx'
 import Configuracion from './Configuracion.jsx'
 import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
 import Postulacion from './Postulacion.jsx'
+import Planificacion from './Planificacion.jsx'
 
 const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
 const EDGE_LIST_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
@@ -19,6 +20,7 @@ const APPS_ADMIN = [
   { id: 'presupuestos', label: 'Presupuestos', icon: '📋', desc: 'Pipeline y seguimiento' },
   { id: 'proyectos', label: 'Proyectos', icon: '🗂️', desc: 'Kanban de proyectos' },
   { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
+  { id: 'planificacion', label: 'Planificación', icon: '📅', desc: 'Gantt y carga de trabajo' },
   { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
   { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
   { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
@@ -127,6 +129,7 @@ export default function Root() {
 
   if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
   if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
+  if (current === 'planificacion') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Planificacion perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
   if (current === 'perfil') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} /></Layout></ThemeContext.Provider>
   if (current === 'legajos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={true}><Proyectos deepLinkId={deepLinkId} perfil={perfil} /></Layout></ThemeContext.Provider>
   if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
@@ -243,6 +246,7 @@ function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette
     return <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>{children}</div>
   }
   const esCalculista = perfil?.rol === 'calculista';
+  const esPM = perfil?.rol === 'proyecto_manager';
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>
       <div style={{ background: palette.bgInverse, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12, height: 48, overflowX: 'auto' }}>
@@ -434,9 +438,17 @@ function Usuarios({ session, palette }) {
   }
 
   const ROLES = [
-    { value: 'admin', label: '🔑 Admin', desc: 'Acceso completo' },
-    { value: 'calculista', label: '📐 Calculista', desc: 'Ve sus proyectos asignados' },
-    { value: 'jefe_obra', label: '🏗 Jefe de Obra', desc: 'Ve sus obras asignadas' },
+    { value: 'admin',            label: '🔑 Admin',               desc: 'Acceso completo al sistema' },
+    { value: 'proyecto_manager', label: '📋 Proyecto Manager',    desc: 'Gestión sin números financieros' },
+    { value: 'calculista',       label: '📐 Calculista',          desc: 'Ve sus proyectos asignados' },
+    { value: 'jefe_obra',        label: '🏗 Jefe de Obra',        desc: 'Ve sus obras asignadas' },
+  ]
+
+  const ROLES_PROYECTO = [
+    { value: 'director',             label: '🎯 Director' },
+    { value: 'proyecto_manager',     label: '📋 Proyecto Manager' },
+    { value: 'ingeniero_calculista', label: '📐 Ingeniero Calculista' },
+    { value: 'arquitecto',           label: '🏛 Arquitecto' },
   ]
 
   return (
