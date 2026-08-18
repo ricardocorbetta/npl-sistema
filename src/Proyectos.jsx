@@ -1226,30 +1226,54 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
               {showAddMiembro ? (
                 <div style={{ background: "#f8f8f8", borderRadius: 8, padding: 10, border: "1.5px solid #e0e0e0" }}>
                   <div style={{ marginBottom: 8 }}>
-                    <span style={S.lbl}>Usuario del sistema</span>
-                    <select value={nuevoMiembro.nombre} onChange={e => {
-                      const u = usuarios.find(u => u.nombre === e.target.value);
-                      setNuevoMiembro(p => ({ ...p, nombre: e.target.value, mail: u?.mail || "" }));
-                    }} style={S.inp}>
-                      <option value="">Seleccionar usuario…</option>
-                      {usuarios.filter(u => !equipo.find(m => m.mail === u.mail)).map(u => (
-                        <option key={u.id} value={u.nombre}>{u.nombre} · {u.rol}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
                     <span style={S.lbl}>Rol en el proyecto</span>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {ROLES_EQUIPO.map(r => (
-                        <button key={r.value} onClick={() => setNuevoMiembro(p => ({ ...p, rol: r.value }))}
+                        <button key={r.value} onClick={() => setNuevoMiembro(p => ({ ...p, rol: r.value, nombre: "", mail: "" }))}
                           style={{ padding: "4px 10px", borderRadius: 6, border: `1.5px solid ${nuevoMiembro.rol === r.value ? "#0a0a0a" : "#e0e0e0"}`, background: nuevoMiembro.rol === r.value ? "#0a0a0a" : "#fff", color: nuevoMiembro.rol === r.value ? "#fff" : "#555", fontSize: 11, cursor: "pointer", fontWeight: nuevoMiembro.rol === r.value ? 700 : 400 }}>
                           {r.label}
                         </button>
                       ))}
                     </div>
                   </div>
+                  {nuevoMiembro.rol && (
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={S.lbl}>Usuario</span>
+                      {(() => {
+                        // Mapear rol del proyecto al rol del sistema
+                        const rolSistema = {
+                          "director":             "admin",
+                          "project_manager":      "proyecto_manager",
+                          "ingeniero_calculista": "calculista",
+                          "arquitecto":           "arquitecto",
+                        }[nuevoMiembro.rol];
+                        const disponibles = usuarios.filter(u =>
+                          u.rol === rolSistema &&
+                          !equipo.find(m => m.mail === u.mail)
+                        );
+                        return disponibles.length === 0 ? (
+                          <p style={{ fontSize: 12, color: "#aaa", margin: "4px 0" }}>
+                            No hay usuarios con ese rol. Creá uno en <strong>Usuarios</strong> primero.
+                          </p>
+                        ) : (
+                          <select value={nuevoMiembro.nombre} onChange={e => {
+                            const u = disponibles.find(u => u.nombre === e.target.value);
+                            setNuevoMiembro(p => ({ ...p, nombre: e.target.value, mail: u?.mail || "" }));
+                          }} style={S.inp}>
+                            <option value="">Seleccionar…</option>
+                            {disponibles.map(u => (
+                              <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={agregarMiembro} disabled={!nuevoMiembro.nombre} style={{ padding: "6px 14px", background: nuevoMiembro.nombre ? "#0a0a0a" : "#ccc", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: nuevoMiembro.nombre ? "pointer" : "default", fontWeight: 700 }}>Agregar</button>
+                    <button onClick={agregarMiembro} disabled={!nuevoMiembro.nombre}
+                      style={{ padding: "6px 14px", background: nuevoMiembro.nombre ? "#0a0a0a" : "#ccc", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: nuevoMiembro.nombre ? "pointer" : "default", fontWeight: 700 }}>
+                      Agregar
+                    </button>
                     <button onClick={() => setShowAddMiembro(false)} style={{ padding: "6px 10px", background: "#f0f0f0", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>Cancelar</button>
                   </div>
                 </div>
