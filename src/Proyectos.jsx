@@ -1734,6 +1734,15 @@ export default function Proyectos({ deepLinkId, perfil }) {
       const rows = await api(`/proyectos?order=created_at.desc${filtro}`).catch(() => []);
       setProyectos(Array.isArray(rows) ? rows : []);
 
+      // Cargar equipo de todos los proyectos
+      const equipoR = await api(`/proyecto_equipo?select=proyecto_id,nombre,rol,mail&order=created_at.asc`).catch(() => []);
+      const eMap = {};
+      (Array.isArray(equipoR) ? equipoR : []).forEach(m => {
+        if (!eMap[m.proyecto_id]) eMap[m.proyecto_id] = [];
+        eMap[m.proyecto_id].push(m);
+      });
+      setEquipoMap(eMap);
+
       // Cargar presupuestos vinculados
       const ids = [...new Set(rows.filter(p => p.presupuesto_id).map(p => p.presupuesto_id))];
       if (ids.length > 0) {
