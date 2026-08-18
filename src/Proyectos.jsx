@@ -880,6 +880,9 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
   const [showNuevoCalc, setShowNuevoCalc] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [equipo, setEquipo] = useState([]);
+  const [nuevoMiembro, setNuevoMiembro] = useState({ nombre: "", mail: "", rol: "ingeniero_calculista" });
+  const [showAddMiembro, setShowAddMiembro] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -1150,6 +1153,74 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
               />
             )}
           </div>
+
+          {/* EQUIPO DEL PROYECTO */}
+          {proyecto?.id && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                <span style={{ background: "#f0f0f0", borderRadius: 4, padding: "2px 8px" }}>Equipo del proyecto</span>
+              </div>
+
+              {/* Lista miembros */}
+              {equipo.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 8 }}>
+                  {equipo.map(m => {
+                    const rolInfo = ROLES_EQUIPO.find(r => r.value === m.rol);
+                    return (
+                      <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#f8f8f8", borderRadius: 8, border: "1px solid #e8e8e8" }}>
+                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#0a0a0a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                          {m.nombre[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{m.nombre}</div>
+                          <div style={{ fontSize: 10, color: "#888" }}>{rolInfo?.label || m.rol}{m.mail ? ` · ${m.mail}` : ""}</div>
+                        </div>
+                        <button onClick={() => eliminarMiembro(m.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 14, padding: 2 }}>✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Agregar miembro */}
+              {showAddMiembro ? (
+                <div style={{ background: "#f8f8f8", borderRadius: 8, padding: 10, border: "1.5px solid #e0e0e0" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <span style={S.lbl}>Nombre</span>
+                      <input value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro(p => ({ ...p, nombre: e.target.value }))}
+                        style={S.inp} placeholder="Nombre completo" />
+                    </div>
+                    <div>
+                      <span style={S.lbl}>Email</span>
+                      <input value={nuevoMiembro.mail} onChange={e => setNuevoMiembro(p => ({ ...p, mail: e.target.value }))}
+                        style={S.inp} placeholder="opcional" />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={S.lbl}>Rol en el proyecto</span>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {ROLES_EQUIPO.map(r => (
+                        <button key={r.value} onClick={() => setNuevoMiembro(p => ({ ...p, rol: r.value }))}
+                          style={{ padding: "4px 10px", borderRadius: 6, border: `1.5px solid ${nuevoMiembro.rol === r.value ? "#0a0a0a" : "#e0e0e0"}`, background: nuevoMiembro.rol === r.value ? "#0a0a0a" : "#fff", color: nuevoMiembro.rol === r.value ? "#fff" : "#555", fontSize: 11, cursor: "pointer", fontWeight: nuevoMiembro.rol === r.value ? 700 : 400 }}>
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={agregarMiembro} style={{ padding: "6px 14px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}>Agregar</button>
+                    <button onClick={() => setShowAddMiembro(false)} style={{ padding: "6px 10px", background: "#f0f0f0", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowAddMiembro(true)}
+                  style={{ padding: "6px 14px", background: "#f0f0f0", border: "1.5px dashed #e0e0e0", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#555", fontWeight: 600, width: "100%" }}>
+                  + Agregar miembro al equipo
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Drive y observaciones */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
@@ -1712,8 +1783,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
                         <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || "Sin descripción"}</div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                           {p.cliente && <span style={{ fontSize: 12, color: "#888" }}>{p.cliente}</span>}
-                          {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}
-                          {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
+                          {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}                          {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
                           {p.superficie && <span style={{ fontSize: 11, color: "#aaa" }}>{p.superficie}m²</span>}
                         </div>
                         {p.checklist_total > 0 && (() => {
