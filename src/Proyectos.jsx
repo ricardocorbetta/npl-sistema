@@ -1701,7 +1701,7 @@ function FlujoCaja({ proyectos, presupuestosMap }) {
 }
 
 /* ─── Componente principal ─── */
-export default function Proyectos({ deepLinkId, perfil }) {
+export default function Proyectos({ deepLinkId, perfil, onNav }) {
   const [proyectos, setProyectos] = useState([]);
   const [presupuestosMap, setPresupuestosMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -1834,7 +1834,12 @@ export default function Proyectos({ deepLinkId, perfil }) {
           <p style={{ margin: 0, fontSize: 11, color: "#aaa" }}>NPL · Proyectos</p>
           <h1 style={{ margin: "2px 0 0", fontSize: 20, fontWeight: 800, color: "#111" }}>📐 Proyectos</h1>
         </div>
-        {esAdmin && <button onClick={() => setModal("nuevo")} style={S.btn}>+ Nuevo proyecto</button>}
+        {esAdmin && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => onNav && onNav("planificacion")} style={{ ...S.btnSm, color: "#6366f1", borderColor: "#6366f1" }}>📅 Planificación</button>
+            <button onClick={() => setModal("nuevo")} style={S.btn}>+ Nuevo proyecto</button>
+          </div>
+        )}
       </div>
 
       {/* KPIs */}
