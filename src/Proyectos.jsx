@@ -1708,6 +1708,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
   const [panelChecklist, setPanelChecklist] = useState(null);
   const [panelHonorarios, setPanelHonorarios] = useState(null);
   const [panelCobros, setPanelCobros] = useState(null);
+  const [equipoMap, setEquipoMap] = useState({});
   const esAdmin = perfil?.rol === "admin";
 
   useEffect(() => { cargar(); }, []);
@@ -1847,7 +1848,16 @@ export default function Proyectos({ deepLinkId, perfil }) {
                         <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || "Sin descripción"}</div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                           {p.cliente && <span style={{ fontSize: 12, color: "#888" }}>{p.cliente}</span>}
-                          {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}                          {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
+                          {p.encargado && <span style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>👤 {p.encargado}</span>}
+                          {(equipoMap[p.id] || []).map(m => {
+                            const rolLabels = { director: "🎯", project_manager: "📋", ingeniero_calculista: "📐", arquitecto: "🏛" };
+                            return (
+                              <span key={m.nombre} style={{ fontSize: 11, background: "#f0f0f0", borderRadius: 4, padding: "1px 7px" }}>
+                                {rolLabels[m.rol] || "👤"} {m.nombre.split(" ")[0]}
+                              </span>
+                            );
+                          })}
+                          {p.tipo_obra && <span style={{ fontSize: 11, background: "#eff6ff", borderRadius: 4, padding: "1px 7px", color: "#3b82f6" }}>{p.tipo_obra}</span>}
                           {p.superficie && <span style={{ fontSize: 11, color: "#aaa" }}>{p.superficie}m²</span>}
                         </div>
                         {p.checklist_total > 0 && (() => {
