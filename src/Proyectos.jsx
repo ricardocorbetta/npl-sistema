@@ -937,6 +937,20 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
     }
   }, [form.presupuesto_id, presupuestos]);
 
+  const [usuarios, setUsuarios] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const tk = await getToken();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios', {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      const json = await res.json();
+      setUsuarios(Array.isArray(json.data) ? json.data : []);
+    })();
+  }, []);
+
   async function agregarMiembro() {
     if (!nuevoMiembro.nombre.trim()) return;
     await api("/proyecto_equipo", { method: "POST", body: JSON.stringify({
@@ -1211,17 +1225,17 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
               {/* Agregar miembro */}
               {showAddMiembro ? (
                 <div style={{ background: "#f8f8f8", borderRadius: 8, padding: 10, border: "1.5px solid #e0e0e0" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <span style={S.lbl}>Nombre</span>
-                      <input value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro(p => ({ ...p, nombre: e.target.value }))}
-                        style={S.inp} placeholder="Nombre completo" />
-                    </div>
-                    <div>
-                      <span style={S.lbl}>Email</span>
-                      <input value={nuevoMiembro.mail} onChange={e => setNuevoMiembro(p => ({ ...p, mail: e.target.value }))}
-                        style={S.inp} placeholder="opcional" />
-                    </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={S.lbl}>Usuario del sistema</span>
+                    <select value={nuevoMiembro.nombre} onChange={e => {
+                      const u = usuarios.find(u => u.nombre === e.target.value);
+                      setNuevoMiembro(p => ({ ...p, nombre: e.target.value, mail: u?.mail || "" }));
+                    }} style={S.inp}>
+                      <option value="">Seleccionar usuario…</option>
+                      {usuarios.filter(u => !equipo.find(m => m.mail === u.mail)).map(u => (
+                        <option key={u.id} value={u.nombre}>{u.nombre} · {u.rol}</option>
+                      ))}
+                    </select>
                   </div>
                   <div style={{ marginBottom: 8 }}>
                     <span style={S.lbl}>Rol en el proyecto</span>
@@ -1235,7 +1249,7 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={agregarMiembro} style={{ padding: "6px 14px", background: "#0a0a0a", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}>Agregar</button>
+                    <button onClick={agregarMiembro} disabled={!nuevoMiembro.nombre} style={{ padding: "6px 14px", background: nuevoMiembro.nombre ? "#0a0a0a" : "#ccc", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, cursor: nuevoMiembro.nombre ? "pointer" : "default", fontWeight: 700 }}>Agregar</button>
                     <button onClick={() => setShowAddMiembro(false)} style={{ padding: "6px 10px", background: "#f0f0f0", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>Cancelar</button>
                   </div>
                 </div>
