@@ -937,6 +937,25 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
     }
   }, [form.presupuesto_id, presupuestos]);
 
+  async function agregarMiembro() {
+    if (!nuevoMiembro.nombre.trim()) return;
+    await api("/proyecto_equipo", { method: "POST", body: JSON.stringify({
+      proyecto_id: proyecto?.id,
+      nombre: nuevoMiembro.nombre.trim(),
+      mail: nuevoMiembro.mail.trim() || null,
+      rol: nuevoMiembro.rol,
+    })});
+    setNuevoMiembro({ nombre: "", mail: "", rol: "ingeniero_calculista" });
+    setShowAddMiembro(false);
+    const r = await api(`/proyecto_equipo?proyecto_id=eq.${proyecto?.id}&order=created_at.asc`);
+    setEquipo(Array.isArray(r) ? r : []);
+  }
+
+  async function eliminarMiembro(id) {
+    await api(`/proyecto_equipo?id=eq.${id}`, { method: "DELETE" });
+    setEquipo(prev => prev.filter(m => m.id !== id));
+  }
+
   async function guardar() {
     if (!form.descripcion) return setError("La descripción es requerida");
     setSaving(true); setError("");
