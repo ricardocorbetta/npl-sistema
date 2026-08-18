@@ -414,8 +414,14 @@ function Usuarios({ session, palette }) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
         body: JSON.stringify({ nombre: form.nombre, email: form.email, rol: form.rol, invite: true }),
       })
-      const data = await res.json()
-      if (data.error) { setMsg('❌ ' + data.error); setSaving(false); return }
+      const text = await res.text()
+      let data = {}
+      try { data = JSON.parse(text) } catch(e) {}
+      if (!res.ok || data.error) {
+        setMsg('❌ ' + (data.error || `Error ${res.status}: ${text || 'Error desconocido'}`))
+        setSaving(false)
+        return
+      }
 
       // Si es calculista, vincular con tabla calculistas por email
       if (form.rol === 'calculista' && data.id) {
