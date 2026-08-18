@@ -374,6 +374,8 @@ function Usuarios({ session, palette }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [form, setForm] = useState({ nombre: '', email: '', rol: 'calculista' })
+  const [editando, setEditando] = useState(null) // usuario que se está editando
+  const [editForm, setEditForm] = useState({ nombre: '', rol: '' })
   const shared = makeShared(palette);
 
   useEffect(() => { cargar() }, [])
@@ -400,6 +402,45 @@ function Usuarios({ session, palette }) {
   const actualizar = async (id, campo, valor) => {
     await supabase.from('perfiles').update({ [campo]: valor }).eq('id', id)
     setUsers(prev => prev.map(u => u.id === id ? { ...u, [campo]: valor } : u))
+  }
+
+  const guardarEdicion = async () => {
+    if (!editando) return
+    setSaving(true)
+    // Actualizar nombre y rol en perfiles
+    await supabase.from('perfiles').update({ nombre: editForm.nombre, rol: editForm.rol }).eq('id', editando.id)
+    // Si cambió el email, actualizar en Auth también
+    if (editForm.mail && editForm.mail !== editando.mail) {
+      const { data: { session: s } } = await supabase.auth.getSession()
+      const res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
+        body: JSON.stringify({ accion: 'editarEmail', userId: editando.id, nuevoEmail: editForm.mail }),
+      })
+      const data = await res.json()
+      if (data.error) { setMsg('❌ ' + data.error); setSaving(false); return }
+    }
+    setUsers(prev => prev.map(u => u.id === editando.id ? { ...u, nombre: editForm.nombre, rol: editForm.rol, mail: editForm.mail } : u))
+    setEditando(null)
+    setMsg('✓ Usuario actualizado')
+    setTimeout(() => setMsg(''), 2500)
+    setSaving(false)
+  }
+
+  const eliminarUsuario = async (u) => {
+    if (!confirm(`¿Eliminar al usuario ${u.nombre}? Esta acción no se puede deshacer.`)) return
+    const { data: { session: s } } = await supabase.auth.getSession()
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
+      body: JSON.stringify({ accion: 'eliminar', userId: u.id }),
+    })
+    const data = await res.json()
+    if (data.error) { setMsg('❌ ' + data.error); return }
+    setUsers(prev => prev.filter(x => x.id !== u.id))
+    setEditando(null)
+    setMsg('✓ Usuario eliminado')
+    setTimeout(() => setMsg(''), 2500)
   }
 
   const invitarUsuario = async () => {
@@ -526,10 +567,10 @@ function Usuarios({ session, palette }) {
               <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{u.mail}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select value={u.rol} onChange={e => actualizar(u.id, 'rol', e.target.value)}
-                style={{ fontSize: 12, padding: '5px 8px', border: `1px solid ${palette.border}`, borderRadius: 8, background: palette.bgSoft, cursor: 'pointer', color: palette.text }}>
-                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <button onClick={() => { setEditando(u); setEditForm({ nombre: u.nombre || '', rol: u.rol || 'calculista', mail: u.mail || '' }) }}
+                style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.bgSoft, cursor: 'pointer', color: palette.text }}>
+                ✏️ Editar
+              </button>
               <button onClick={() => actualizar(u.id, 'activo', !u.activo)}
                 style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: u.activo ? '#1a8a5e1a' : palette.bgSoft, color: u.activo ? '#1a8a5e' : palette.textMuted, fontWeight: 700 }}>
                 {u.activo ? '✓ Activo' : 'Inactivo'}
@@ -538,6 +579,55 @@ function Usuarios({ session, palette }) {
           </div>
         ))}
       </div>
+
+      {/* Modal de edición */}
+      {editando && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: palette.bgCard, borderRadius: 14, padding: 24, width: 'min(440px, 100%)', border: `1.5px solid ${palette.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: palette.text }}>Editar usuario</h3>
+              <button onClick={() => setEditando(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: palette.textMuted }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={shared.lbl}>Nombre completo</label>
+                <input style={shared.inp} value={editForm.nombre} onChange={e => setEditForm(p => ({ ...p, nombre: e.target.value }))} />
+              </div>
+              <div>
+                <label style={shared.lbl}>Email</label>
+                <input style={shared.inp} value={editForm.mail} onChange={e => setEditForm(p => ({ ...p, mail: e.target.value }))} placeholder="nuevo@email.com" />
+                {editForm.mail !== editando.mail && <p style={{ fontSize: 11, color: '#f59e0b', margin: '3px 0 0' }}>⚠ Cambiar el email desconectará la sesión actual del usuario</p>}
+              </div>
+              <div>
+                <label style={shared.lbl}>Rol</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {ROLES.map(r => (
+                    <label key={r.value} onClick={() => setEditForm(p => ({ ...p, rol: r.value }))} style={{
+                      display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                      border: `2px solid ${editForm.rol === r.value ? '#0a0a0a' : palette.border}`,
+                      background: editForm.rol === r.value ? '#0a0a0a' : palette.bgCard,
+                      color: editForm.rol === r.value ? '#fff' : palette.text,
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>{r.label}</span>
+                      <span style={{ fontSize: 10, opacity: 0.7 }}>{r.desc}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={guardarEdicion} disabled={saving} style={shared.btn}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+                <button onClick={() => setEditando(null)} style={shared.btnSm}>Cancelar</button>
+              </div>
+              <button onClick={() => eliminarUsuario(editando)} style={{ padding: '6px 12px', background: '#fef2f2', color: '#c0392b', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+                🗑 Eliminar usuario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+
 }
