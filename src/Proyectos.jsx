@@ -902,6 +902,11 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
       setClientes(Array.isArray(clis) ? clis : []);
       setCalculistas(Array.isArray(calcs) ? calcs.filter(c => c.estado === 'activo') : []);
       setPresupuestos(Array.isArray(press) ? press : []);
+      // Cargar equipo si el proyecto ya existe
+      if (proyecto?.id) {
+        const equipoR = await api(`/proyecto_equipo?proyecto_id=eq.${proyecto.id}&order=created_at.asc`).catch(() => []);
+        setEquipo(Array.isArray(equipoR) ? equipoR : []);
+      }
     })();
   }, []);
 
