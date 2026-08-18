@@ -835,7 +835,7 @@ function FormNuevoCalculista({ onCreado, onCancelar }) {
         <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} style={{ ...S.inp, fontSize: 12 }} placeholder="Nombre *" />
         <input value={form.mail} onChange={e => setForm(p => ({ ...p, mail: e.target.value }))} style={{ ...S.inp, fontSize: 12 }} placeholder="Email *" />
         <select value={form.nivel} onChange={e => setForm(p => ({ ...p, nivel: e.target.value }))} style={{ ...S.inp, fontSize: 12 }}>
-          {["Ingeniero Calculista", "Arquitecto", "Proyecto Manager", "Director"].map(n => <option key={n}>{n}</option>)}
+          {["Ingeniero Calculista", "Arquitecto", "Project Manager", "Director"].map(n => <option key={n}>{n}</option>)}
         </select>
       </div>
       <div style={{ display: "flex", gap: 6 }}>
