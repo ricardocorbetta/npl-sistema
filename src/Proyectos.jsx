@@ -1704,6 +1704,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
   const [msg, setMsg] = useState("");
   const [tab, setTab] = useState("todos");
   const [busq, setBusq] = useState("");
+  const [filtroPersona, setFiltroPersona] = useState("");
   const [modal, setModal] = useState(null);
   const [panelChecklist, setPanelChecklist] = useState(null);
   const [panelHonorarios, setPanelHonorarios] = useState(null);
@@ -1768,7 +1769,11 @@ export default function Proyectos({ deepLinkId, perfil }) {
     const okTab = tabActual.filter(p);
     const q = busq.toLowerCase();
     const okBusq = !q || [p.descripcion, p.cliente, p.encargado, p.numero_proyecto, p.codigo].some(v => v?.toLowerCase().includes(q));
-    return okTab && okBusq;
+    const equipoProy = equipoMap[p.id] || [];
+    const okPersona = !filtroPersona ||
+      (p.encargado || "").toLowerCase().includes(filtroPersona.toLowerCase()) ||
+      equipoProy.some(m => m.nombre.toLowerCase().includes(filtroPersona.toLowerCase()));
+    return okTab && okBusq && okPersona;
   });
 
   const kpis = {
@@ -1824,6 +1829,19 @@ export default function Proyectos({ deepLinkId, perfil }) {
         <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Filtrar lista…"
           style={{ border: "none", outline: "none", fontSize: 12, color: "#555", background: "transparent", width: 160 }} />
         {busq && <button onClick={() => setBusq("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 14 }}>✕</button>}
+        <div style={{ width: 1, height: 16, background: "#e0e0e0", margin: "0 4px" }} />
+        <span style={{ fontSize: 11, color: "#aaa", flexShrink: 0 }}>👤</span>
+        <select value={filtroPersona} onChange={e => setFiltroPersona(e.target.value)}
+          style={{ border: "none", outline: "none", fontSize: 12, color: filtroPersona ? "#111" : "#aaa", background: "transparent", cursor: "pointer", maxWidth: 140 }}>
+          <option value="">Todas las personas</option>
+          {[...new Set([
+            ...proyectos.map(p => p.encargado).filter(Boolean),
+            ...Object.values(equipoMap).flat().map(m => m.nombre).filter(Boolean),
+          ])].sort().map(nombre => (
+            <option key={nombre} value={nombre}>{nombre}</option>
+          ))}
+        </select>
+        {filtroPersona && <button onClick={() => setFiltroPersona("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 14 }}>✕</button>}
       </div>
 
       {msg && <div style={{ background: "#f0fdf4", color: "#1a8a5e", borderRadius: 8, padding: "7px 12px", marginBottom: 10, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
