@@ -245,7 +245,7 @@ function Layout({ current, onNav, apps, onLogout, perfil, theme, toggle, palette
   if (perfil?.rol === 'jefe_obra') {
     return <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>{children}</div>
   }
-  const esCalculista = perfil?.rol === 'calculista';
+  const esCalculista = perfil?.rol === 'calculista' || perfil?.rol === 'arquitecto';
   const esPM = perfil?.rol === 'proyecto_manager';
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: palette.bgApp }}>
@@ -439,14 +439,15 @@ function Usuarios({ session, palette }) {
 
   const ROLES = [
     { value: 'admin',            label: '🔑 Admin',               desc: 'Acceso completo al sistema' },
-    { value: 'proyecto_manager', label: '📋 Proyecto Manager',    desc: 'Gestión sin números financieros' },
-    { value: 'calculista',       label: '📐 Calculista',          desc: 'Ve sus proyectos asignados' },
+    { value: 'proyecto_manager', label: '📋 Project Manager',    desc: 'Gestión sin números financieros' },
+    { value: 'calculista',       label: '📐 Ingeniero Calculista', desc: 'Ve sus proyectos asignados' },
+    { value: 'arquitecto',       label: '🏛 Arquitecto',          desc: 'Ve sus proyectos asignados' },
     { value: 'jefe_obra',        label: '🏗 Jefe de Obra',        desc: 'Ve sus obras asignadas' },
   ]
 
   const ROLES_PROYECTO = [
     { value: 'director',             label: '🎯 Director' },
-    { value: 'proyecto_manager',     label: '📋 Proyecto Manager' },
+    { value: 'proyecto_manager',     label: '📋 Project Manager' },
     { value: 'ingeniero_calculista', label: '📐 Ingeniero Calculista' },
     { value: 'arquitecto',           label: '🏛 Arquitecto' },
   ]
