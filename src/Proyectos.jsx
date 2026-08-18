@@ -849,6 +849,13 @@ function FormNuevoCalculista({ onCreado, onCancelar }) {
 }
 
 /* ─── Modal editar proyecto ─── */
+const ROLES_EQUIPO = [
+  { value: "director",             label: "🎯 Director" },
+  { value: "project_manager",      label: "📋 Project Manager" },
+  { value: "ingeniero_calculista", label: "📐 Ingeniero Calculista" },
+  { value: "arquitecto",           label: "🏛 Arquitecto" },
+];
+
 function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
   const esNuevo = !proyecto?.id;
   const esAdmin = perfil?.rol === "admin";
