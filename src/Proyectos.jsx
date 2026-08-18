@@ -1711,6 +1711,8 @@ export default function Proyectos({ deepLinkId, perfil }) {
   const [busq, setBusq] = useState("");
   const [filtroPersona, setFiltroPersona] = useState("");
   const [modal, setModal] = useState(null);
+  const [dragging, setDragging] = useState(null);
+  const [dragOver, setDragOver] = useState(null);
   const [panelChecklist, setPanelChecklist] = useState(null);
   const [panelHonorarios, setPanelHonorarios] = useState(null);
   const [panelCobros, setPanelCobros] = useState(null);
@@ -1760,6 +1762,34 @@ export default function Proyectos({ deepLinkId, perfil }) {
     setLoading(false);
   }
 
+  async function reordenar(fromId, toId) {
+    if (fromId === toId) return;
+    const lista = [...filtrados];
+    const fromIdx = lista.findIndex(p => p.id === fromId);
+    const toIdx = lista.findIndex(p => p.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    // Mover elemento
+    const [item] = lista.splice(fromIdx, 1);
+    lista.splice(toIdx, 0, item);
+    // Actualizar orden local inmediatamente
+    setProyectos(prev => {
+      const nuevo = [...prev];
+      lista.forEach((p, i) => {
+        const idx = nuevo.findIndex(x => x.id === p.id);
+        if (idx >= 0) nuevo[idx] = { ...nuevo[idx], orden: i };
+      });
+      return nuevo;
+    });
+    // Persistir en BD
+    const tk = await getToken();
+    await Promise.all(lista.map((p, i) =>
+      fetch(`${SUPA_URL}/proyectos?id=eq.${p.id}`, {
+        method: "PATCH", headers: hdrs(tk),
+        body: JSON.stringify({ orden: i })
+      })
+    ));
+  }
+
   async function cambiarEstado(p, nuevoEstado) {
     const hoy = new Date().toISOString().slice(0, 10);
     const patch = { estado: nuevoEstado };
@@ -1788,7 +1818,7 @@ export default function Proyectos({ deepLinkId, perfil }) {
       (p.encargado || "").toLowerCase().includes(filtroPersona.toLowerCase()) ||
       equipoProy.some(m => m.nombre.toLowerCase().includes(filtroPersona.toLowerCase()));
     return okTab && okBusq && okPersona;
-  });
+  }).sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999));
 
   const kpis = {
     onboarding: proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
@@ -1866,8 +1896,19 @@ export default function Proyectos({ deepLinkId, perfil }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {filtrados.map(p => {
             const pres = presupuestosMap[p.presupuesto_id];
+            const isDragging = dragging === p.id;
+            const isOver = dragOver === p.id;
             return (
-              <div key={p.id} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, overflow: "hidden" }}>
+              <div key={p.id}
+                draggable
+                onDragStart={() => setDragging(p.id)}
+                onDragEnd={() => { setDragging(null); setDragOver(null); }}
+                onDragOver={e => { e.preventDefault(); setDragOver(p.id); }}
+                onDrop={() => { reordenar(dragging, p.id); setDragging(null); setDragOver(null); }}
+                style={{ background: "#fff", border: `1.5px solid ${isOver ? "#3b82f6" : "#e8e8e8"}`, borderRadius: 12, overflow: "hidden",
+                  opacity: isDragging ? 0.4 : 1, transition: "all 0.15s",
+                  boxShadow: isOver ? "0 0 0 2px #3b82f620" : "none",
+                  cursor: "grab" }}>
                 {esAdmin ? (
                   /* ── Vista ADMIN ── */
                   <>
