@@ -25,6 +25,7 @@ const ESTADOS = [
   { v: "onboarding", label: "Onboarding", color: "#f59e0b", bg: "#fffbeb", border: "#fde68a" },
   { v: "activo",     label: "Activo",     color: "#3b82f6", bg: "#eff6ff", border: "#bfdbfe" },
   { v: "revision",   label: "Revisión",   color: "#6366f1", bg: "#ede9fe", border: "#c4b5fd" },
+  { v: "entregado",  label: "Entregado",  color: "#1a8a5e", bg: "#f0fdf4", border: "#6ee7b7" },
 ];
 
 const TIPOS_OBRA = ["Steel Frame", "Wood Frame", "Hormigón", "Panel SIP", "Metálica", "Mixta"];
@@ -1931,6 +1932,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     const hoy = new Date().toISOString().slice(0, 10);
     const patch = { estado: nuevoEstado };
     if (nuevoEstado === "activo" && p.estado !== "activo") patch.fecha_inicio_real = hoy;
+    if (nuevoEstado === "entregado") patch.fecha_entrega_real = hoy;
     if (["para_cobrar", "terminado"].includes(nuevoEstado) && !["para_cobrar", "terminado"].includes(p.estado)) patch.fecha_entrega_real = hoy;
     await api(`/proyectos?id=eq.${p.id}`, { method: "PATCH", body: JSON.stringify(patch) });
     setMsg(`✓ Estado actualizado a "${ESTADOS.find(e => e.v === nuevoEstado)?.label}"`);
@@ -1942,6 +1944,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     { id: "onboarding", label: "Onboarding", filter: p => p.estado === "onboarding" && !p.archivado },
     { id: "activos",    label: "Activos",    filter: p => p.estado === "activo" && !p.archivado },
     { id: "revision",   label: "Revisión",   filter: p => p.estado === "revision" && !p.archivado },
+    { id: "entregado",  label: "Entregado",  filter: p => p.estado === "entregado" && !p.archivado },
     { id: "todos",      label: "Todos",      filter: p => !p.archivado },
   ];
 
@@ -1961,6 +1964,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     onboarding: proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
     activos:    proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
     revision:   proyectos.filter(p => p.estado === "revision" && !p.archivado).length,
+    entregado:  proyectos.filter(p => p.estado === "entregado" && !p.archivado).length,
     total:      proyectos.filter(p => !p.archivado).length,
   };
 
@@ -1985,6 +1989,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
           { label: "Onboarding", value: kpis.onboarding, color: "#f59e0b" },
           { label: "Activos",    value: kpis.activos,    color: "#3b82f6" },
           { label: "Revisión",   value: kpis.revision,   color: "#6366f1" },
+          { label: "Entregado",  value: kpis.entregado,  color: "#1a8a5e" },
           { label: "Total",      value: kpis.total,      color: "#888" },
         ].map(k => (
           <div key={k.label} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 10, padding: "8px 14px", minWidth: 80 }}>
@@ -2088,7 +2093,12 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                         })()}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                        <EstadoChip estado={p.estado} />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
+                      <EstadoChip estado={p.estado} />
+                      {p.estado === "entregado" && p.fecha_entrega_real && (
+                        <span style={{ fontSize: 10, color: "#1a8a5e", fontWeight: 700 }}>✅ {fmtFecha(p.fecha_entrega_real)}</span>
+                      )}
+                    </div>
                         <div style={{ display: "flex", gap: 4 }}>
                           {p.anticipo && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>💰</span>}
                           {p.proyecto_ok && <span style={{ fontSize: 9, color: "#1a8a5e", fontWeight: 700 }}>✅</span>}
