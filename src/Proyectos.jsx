@@ -168,6 +168,8 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const [nuevaTarea, setNuevaTarea] = useState({});
   const [nuevaSubtarea, setNuevaSubtarea] = useState({});
   const [expandidos, setExpandidos] = useState({}); // tareaId -> bool
+  const [draggingCl, setDraggingCl] = useState(null);
+  const [dragOverCl, setDragOverCl] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [equipo, setEquipo] = useState([]);
@@ -180,6 +182,7 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     "02 - Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
     "03 - Proyecto": ["Modelo estructural CYPECAD", "Memoria de cálculo", "Planillas de armadura"],
     "04 - Legajo final": ["05-A Proyecto en AutoCAD", "05-B Proyecto en 3D (SketchUp)", "05-C Resumen de materiales", "05-D Carpeta completa en PDF"],
+    "05 - Entregado": ["Entrega final al cliente", "Conformidad del cliente"],
   };
 
   const fechaEntrega = proyecto?.fecha_entrega_plan;
@@ -238,6 +241,19 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     setNuevoMsg("");
     await cargarMensajes(item.id, tipo);
     setTimeout(() => inputMsgRef.current?.focus(), 150);
+  }
+
+  async function reordenarChecklists(fromId, toId) {
+    if (fromId === toId) return;
+    const lista = [...checklists];
+    const fromIdx = lista.findIndex(c => c.id === fromId);
+    const toIdx = lista.findIndex(c => c.id === toId);
+    const [item] = lista.splice(fromIdx, 1);
+    lista.splice(toIdx, 0, item);
+    setChecklists(lista.map((c, i) => ({ ...c, orden: i })));
+    await Promise.all(lista.map((c, i) =>
+      api(`/proyecto_checklists?id=eq.${c.id}`, { method: "PATCH", body: JSON.stringify({ orden: i }) })
+    ));
   }
 
   async function crearChecklist(nombre) {
@@ -573,6 +589,19 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
                 <div style={{ fontSize: 10, color: "#aaa" }}>{fmtFecha(fechaEntrega)}</div>
               </div>
             )}
+            {/* Fecha de entrega real — si hay sección Entregado completada */}
+            {(() => {
+              const secEntregado = checklists.find(c => c.nombre.toLowerCase().includes("entregado"));
+              const todasOk = secEntregado?.tareas.length > 0 && secEntregado.tareas.every(t => t.aprobada);
+              if (!secEntregado) return null;
+              return (
+                <div style={{ background: todasOk ? "#f0fdf4" : "#f8f8f8", borderRadius: 10, padding: "6px 14px", border: `1.5px solid ${todasOk ? "#1a8a5e" : "#e0e0e0"}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: todasOk ? "#1a8a5e" : "#aaa", lineHeight: 1 }}>{todasOk ? "✅" : "📦"}</div>
+                  <div style={{ fontSize: 10, color: todasOk ? "#1a8a5e" : "#aaa", fontWeight: 700 }}>{todasOk ? "ENTREGADO" : "pendiente entrega"}</div>
+                  {proyecto?.fecha_entrega_real && <div style={{ fontSize: 10, color: "#aaa" }}>{fmtFecha(proyecto.fecha_entrega_real)}</div>}
+                </div>
+              );
+            })()}
             {total > 0 && (
               <div style={{ minWidth: 140 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
@@ -604,9 +633,19 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
                   const pctSec = tot > 0 ? Math.round(ok / tot * 100) : 0;
                   return (
                     <div key={cl.id} style={{ marginBottom: 16 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 6px", marginBottom: 6 }}>
+                      <div
+                        draggable
+                        onDragStart={() => setDraggingCl(cl.id)}
+                        onDragEnd={() => { setDraggingCl(null); setDragOverCl(null); }}
+                        onDragOver={e => { e.preventDefault(); setDragOverCl(cl.id); }}
+                        onDrop={() => { reordenarChecklists(draggingCl, cl.id); setDraggingCl(null); setDragOverCl(null); }}
+                        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 6px", marginBottom: 6,
+                          cursor: "grab", borderRadius: 6, background: dragOverCl === cl.id ? "#eff6ff" : "transparent",
+                          border: `1.5px solid ${dragOverCl === cl.id ? "#3b82f6" : "transparent"}`,
+                          opacity: draggingCl === cl.id ? 0.4 : 1, transition: "all 0.1s" }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 9, color: "#ccc" }}>⠿</span>
                             <span style={{ fontSize: 11, fontWeight: 800, color: "#333", textTransform: "uppercase", letterSpacing: 0.5 }}>{cl.nombre}</span>
                             <span style={{ fontSize: 10, color: ok === tot && tot > 0 ? "#1a8a5e" : "#aaa", fontWeight: 700 }}>{ok}/{tot}</span>
                           </div>
