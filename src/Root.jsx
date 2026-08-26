@@ -99,7 +99,7 @@ export default function Root() {
     setCurrent(modulo || null);
     setDeepLinkId(deepId || null);
     if (modulo) {
-      window.location.hash = hashValue;
+      window.location.href = `${window.location.pathname}#${hashValue}`;
     } else {
       window.history.pushState(null, '', window.location.pathname);
     }
