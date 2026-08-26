@@ -47,23 +47,18 @@ export default function Root() {
   const [session, setSession] = useState(null)
   const [perfil, setPerfil] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [current, setCurrent] = useState(() => {
-    const hash = window.location.hash.replace("#", "");
-    return hash.split(":")[0] || null;
-  })
-  const [deepLinkId, setDeepLinkId] = useState(() => {
-    const hash = window.location.hash.replace("#", "");
-    return hash.split(":")[1] || null;
-  })
+  const [, forceUpdate] = useState(0);
   const { theme, toggle, palette } = useTheme();
 
+  const getHash = () => {
+    const hash = window.location.hash.replace("#", "");
+    return { current: hash.split(":")[0] || null, deepLinkId: hash.split(":")[1] || null };
+  };
+  const current = getHash().current;
+  const deepLinkId = getHash().deepLinkId;
+
   useEffect(() => {
-    const onHashChange = () => {
-      const hash = window.location.hash.replace("#", "");
-      const [mod, id] = hash.split(":");
-      setCurrent(mod || null);
-      setDeepLinkId(id || null);
-    };
+    const onHashChange = () => forceUpdate(n => n + 1);
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
@@ -89,19 +84,21 @@ export default function Root() {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
     console.log('Perfil cargado:', data?.mail, data?.rol, 'uid:', uid)
     setPerfil(data)
-    if (data?.rol === 'jefe_obra') { console.log('Redirigiendo a obras'); navTo('obras'); }
-    if (data?.rol === 'calculista' || data?.rol === 'arquitecto') { console.log('Redirigiendo a legajos'); navTo('legajos'); }
+    const hashActual = window.location.hash.replace('#', '').split(':')[0];
+    if (!hashActual || hashActual === '') {
+      if (data?.rol === 'jefe_obra') window.location.hash = 'obras';
+      else if (data?.rol === 'calculista' || data?.rol === 'arquitecto') window.location.hash = 'legajos';
+    }
     setLoading(false)
   }
 
   const navTo = (modulo, deepId) => {
     const hashValue = deepId ? `${modulo}:${deepId}` : (modulo || '');
-    setCurrent(modulo || null);
-    setDeepLinkId(deepId || null);
     if (modulo) {
-      history.pushState(null, '', `#${hashValue}`);
+      window.location.hash = hashValue;
     } else {
       history.pushState(null, '', window.location.pathname);
+      forceUpdate(n => n + 1);
     }
   }
 
