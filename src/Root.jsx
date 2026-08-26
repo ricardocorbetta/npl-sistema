@@ -94,13 +94,13 @@ export default function Root() {
   }
 
   const navTo = (modulo, deepId) => {
-    const hashValue = deepId ? `${modulo}:${deepId}` : modulo;
-    setCurrent(modulo)
-    setDeepLinkId(deepId || null)
+    const hashValue = deepId ? `${modulo}:${deepId}` : (modulo || '');
     if (modulo) {
-      window.location.hash = hashValue
+      window.location.hash = hashValue;
     } else {
-      window.history.pushState(null, '', window.location.pathname)
+      window.location.hash = '';
+      setCurrent(null);
+      setDeepLinkId(null);
     }
   }
 
