@@ -21,7 +21,6 @@ const APPS_ADMIN = [
   { id: 'proyectos', label: 'Proyectos', icon: '🗂️', desc: 'Kanban de proyectos' },
   { id: 'planificacion', label: 'Planificación', icon: '📅', desc: 'Gantt y carga de trabajo' },
   { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
-  { id: 'planificacion', label: 'Planificación', icon: '📅', desc: 'Gantt y carga de trabajo' },
   { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
   { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
   { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
