@@ -95,13 +95,13 @@ export default function Root() {
   }
 
   const navTo = (modulo, deepId) => {
-    const hashValue = deepId ? `${modulo}:${deepId}` : modulo;
+    const hashValue = deepId ? `${modulo}:${deepId}` : (modulo || '');
     setCurrent(modulo || null);
     setDeepLinkId(deepId || null);
     if (modulo) {
-      window.location.href = `${window.location.pathname}#${hashValue}`;
+      history.pushState(null, '', `#${hashValue}`);
     } else {
-      window.history.pushState(null, '', window.location.pathname);
+      history.pushState(null, '', window.location.pathname);
     }
   }
 
@@ -127,8 +127,7 @@ export default function Root() {
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
   const themeCtx = { theme, palette };
-  // Leer current directo del hash para evitar bugs de estado
-  const currentModule = window.location.hash.replace('#', '').split(':')[0] || current;
+  const currentModule = current;
   console.log('currentModule:', currentModule, 'current state:', current, 'perfil.rol:', perfil?.rol);
 
   if (currentModule === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
