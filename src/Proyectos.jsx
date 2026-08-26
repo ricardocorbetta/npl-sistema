@@ -160,13 +160,18 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const esAdmin = perfil?.rol === "admin";
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [itemSel, setItemSel] = useState(null);
+  const [itemSel, setItemSel] = useState(null); // tarea o subtarea seleccionada
+  const [itemTipo, setItemTipo] = useState("tarea"); // "tarea" | "subtarea"
   const [mensajes, setMensajes] = useState([]);
   const [nuevoMsg, setNuevoMsg] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevaTarea, setNuevaTarea] = useState({});
+  const [nuevaSubtarea, setNuevaSubtarea] = useState({});
+  const [expandidos, setExpandidos] = useState({}); // tareaId -> bool
   const [saving, setSaving] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [equipo, setEquipo] = useState([]);
+  const [showMention, setShowMention] = useState(false);
   const msgEndRef = React.useRef(null);
   const inputMsgRef = React.useRef(null);
 
@@ -174,54 +179,64 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     "01 - Diagnóstico": ["Formulario enviado al arquitecto/ingeniero", "Formulario recibido completo"],
     "02 - Anteproyecto": ["Modelo CYPECAD", "Anteproyecto en AutoCAD", "Anteproyecto en SketchUp"],
     "03 - Proyecto": ["Modelo estructural CYPECAD", "Memoria de cálculo", "Planillas de armadura"],
-    "04 - Legajo final": [
-      "05-A Proyecto en AutoCAD",
-      "05-B Proyecto en 3D (SketchUp)",
-      "05-C Resumen de materiales",
-      "05-D Carpeta completa en PDF",
-    ],
+    "04 - Legajo final": ["05-A Proyecto en AutoCAD", "05-B Proyecto en 3D (SketchUp)", "05-C Resumen de materiales", "05-D Carpeta completa en PDF"],
   };
 
-  // Fecha entrega del proyecto
   const fechaEntrega = proyecto?.fecha_entrega_plan;
-  const diasRestantes = fechaEntrega
-    ? Math.ceil((new Date(fechaEntrega + "T12:00") - new Date()) / 86400000)
-    : null;
+  const diasRestantes = fechaEntrega ? Math.ceil((new Date(fechaEntrega + "T12:00") - new Date()) / 86400000) : null;
+  const colorDias = diasRestantes === null ? "#aaa" : diasRestantes < 0 ? "#c0392b" : diasRestantes <= 7 ? "#c0392b" : diasRestantes <= 14 ? "#f59e0b" : "#1a8a5e";
 
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [cls, tareas] = await Promise.all([
+    const [cls, tareas, subs, equipoR] = await Promise.all([
       api(`/proyecto_checklists?proyecto_id=eq.${proyectoId}&order=orden.asc`),
       api(`/proyecto_tareas?proyecto_id=eq.${proyectoId}&order=orden.asc`),
+      api(`/proyecto_subtareas?proyecto_id=eq.${proyectoId}&order=orden.asc`),
+      api(`/proyecto_equipo?proyecto_id=eq.${proyectoId}&order=created_at.asc`),
     ]);
+    const subsMap = {};
+    (Array.isArray(subs) ? subs : []).forEach(s => {
+      if (!subsMap[s.tarea_id]) subsMap[s.tarea_id] = [];
+      subsMap[s.tarea_id].push(s);
+    });
     const map = {};
     (Array.isArray(tareas) ? tareas : []).forEach(t => {
       if (!map[t.checklist_id]) map[t.checklist_id] = [];
-      map[t.checklist_id].push(t);
+      map[t.checklist_id].push({ ...t, subtareas: subsMap[t.id] || [] });
     });
-    const cls2 = (Array.isArray(cls) ? cls : []).map(cl => ({ ...cl, tareas: map[cl.id] || [] }));
-    setChecklists(cls2);
+    setChecklists((Array.isArray(cls) ? cls : []).map(cl => ({ ...cl, tareas: map[cl.id] || [] })));
+    setEquipo(Array.isArray(equipoR) ? equipoR : []);
+    // Actualizar item seleccionado
     if (itemSel) {
-      const updated = cls2.flatMap(c => c.tareas).find(t => t.id === itemSel.id);
-      if (updated) setItemSel(updated);
+      const todas = (Array.isArray(cls) ? cls : []).flatMap(c => map[c.id] || []);
+      if (itemTipo === "tarea") {
+        const updated = todas.find(t => t.id === itemSel.id);
+        if (updated) setItemSel(updated);
+      } else {
+        const allSubs = todas.flatMap(t => t.subtareas || []);
+        const updated = allSubs.find(s => s.id === itemSel.id);
+        if (updated) setItemSel(updated);
+      }
     }
     setLoading(false);
   }, [proyectoId]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  async function cargarMensajes(tareaId) {
+  async function cargarMensajes(id, tipo) {
     setLoadingMsgs(true);
-    const msgs = await api(`/tarea_mensajes?tarea_id=eq.${tareaId}&order=created_at.asc`).catch(() => []);
+    const field = tipo === "subtarea" ? "subtarea_id" : "tarea_id";
+    const msgs = await api(`/tarea_mensajes?${field}=eq.${id}&order=created_at.asc`).catch(() => []);
     setMensajes(Array.isArray(msgs) ? msgs : []);
     setLoadingMsgs(false);
     setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   }
 
-  async function seleccionar(tarea) {
-    setItemSel(tarea);
+  async function seleccionar(item, tipo) {
+    setItemSel(item);
+    setItemTipo(tipo);
     setNuevoMsg("");
-    await cargarMensajes(tarea.id);
+    await cargarMensajes(item.id, tipo);
     setTimeout(() => inputMsgRef.current?.focus(), 150);
   }
 
@@ -249,59 +264,97 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
     setSaving(true);
     await api("/proyecto_tareas", { method: "POST", body: JSON.stringify({
       checklist_id: checklistId, proyecto_id: proyectoId, texto,
-      orden: cl?.tareas?.length || 0,
-      pendiente_aprobacion: !esAdmin,
+      orden: cl?.tareas?.length || 0, pendiente_aprobacion: !esAdmin,
     })});
     setNuevaTarea(p => ({ ...p, [checklistId]: "" }));
     await cargar();
     setSaving(false);
   }
 
-  async function actualizarTarea(tareaId, campos) {
-    await api(`/proyecto_tareas?id=eq.${tareaId}`, { method: "PATCH", body: JSON.stringify(campos) });
+  async function crearSubtarea(tareaId, checklistId) {
+    const texto = nuevaSubtarea[tareaId]?.texto?.trim();
+    if (!texto) return;
+    const responsable = nuevaSubtarea[tareaId]?.responsable || null;
+    const responsableMail = equipo.find(m => m.nombre === responsable)?.mail || null;
+    setSaving(true);
+    await api("/proyecto_subtareas", { method: "POST", body: JSON.stringify({
+      tarea_id: tareaId, proyecto_id: proyectoId, checklist_id: checklistId,
+      texto, responsable, responsable_mail: responsableMail,
+      orden: 0, pendiente_aprobacion: !esAdmin,
+    })});
+    // Notificar por email si hay responsable
+    if (responsableMail) {
+      await fetch("https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/enviar-email", {
+        method: "POST",
+        headers: { apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss", "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "nueva_subtarea", datos: { nombre: responsable, mail: responsableMail, subtarea: texto, proyecto: proyecto?.descripcion } }),
+      }).catch(() => {});
+    }
+    setNuevaSubtarea(p => ({ ...p, [tareaId]: { texto: "", responsable: "" } }));
+    await cargar();
+    setSaving(false);
+  }
+
+  async function actualizarItem(id, campos, tipo = "tarea") {
+    const endpoint = tipo === "subtarea" ? "/proyecto_subtareas" : "/proyecto_tareas";
+    await api(`${endpoint}?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(campos) });
     await cargar();
   }
 
-  async function toggleCompletada(tarea, e) {
+  async function toggleCompletada(item, tipo, e) {
     e?.stopPropagation();
-    const completada = !tarea.completada;
-    await actualizarTarea(tarea.id, {
+    const completada = !item.completada;
+    await actualizarItem(item.id, {
       completada, completada_at: completada ? new Date().toISOString() : null,
       completada_por: completada ? (perfil?.nombre || "") : null,
-    });
+    }, tipo);
   }
 
-  async function toggleAprobada(tarea, e) {
+  async function toggleAprobada(item, tipo, e) {
     e?.stopPropagation();
     if (!esAdmin) return;
-    const aprobada = !tarea.aprobada;
-    await actualizarTarea(tarea.id, {
+    const aprobada = !item.aprobada;
+    await actualizarItem(item.id, {
       aprobada, aprobada_por: aprobada ? (perfil?.nombre || "Admin") : null,
       aprobada_at: aprobada ? new Date().toISOString() : null, pendiente_aprobacion: false,
-    });
+    }, tipo);
   }
 
   async function enviarMensaje() {
     if (!nuevoMsg.trim() || !itemSel) return;
     const msg = nuevoMsg.trim();
     setNuevoMsg("");
+    const campo = itemTipo === "subtarea" ? { subtarea_id: itemSel.id, tarea_id: null } : { tarea_id: itemSel.id };
     await api("/tarea_mensajes", { method: "POST", body: JSON.stringify({
-      tarea_id: itemSel.id, proyecto_id: proyectoId,
+      proyecto_id: proyectoId, ...campo,
       autor: perfil?.nombre || "Usuario", rol: perfil?.rol || "calculista", mensaje: msg,
     })});
-    await cargarMensajes(itemSel.id);
+    // Notificar si hay @mención
+    const menciones = msg.match(/@([^\s]+)/g) || [];
+    for (const mencion of menciones) {
+      const nombre = mencion.slice(1);
+      const miembro = equipo.find(m => m.nombre.toLowerCase().includes(nombre.toLowerCase()));
+      if (miembro?.mail) {
+        await fetch("https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/enviar-email", {
+          method: "POST",
+          headers: { apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlta21vc2lmcXh6YnRxZ3pzc3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODk4NTUsImV4cCI6MjA5NDc2NTg1NX0.5gtCs8Yv3vDSrKxAmXSr3zjWJ5HjimCKejfO-XrHPss", "Content-Type": "application/json" },
+          body: JSON.stringify({ tipo: "mencion", datos: { nombre: miembro.nombre, mail: miembro.mail, mensaje: msg, autor: perfil?.nombre, proyecto: proyecto?.descripcion } }),
+        }).catch(() => {});
+      }
+    }
+    await cargarMensajes(itemSel.id, itemTipo);
   }
 
-  async function subirArchivo(file) {
+  async function subirArchivo(file, tipo) {
     if (!itemSel || !file) return;
-    const path = `proyectos/${proyectoId}/tareas/${itemSel.id}/${Date.now()}_${file.name}`;
+    const path = `proyectos/${proyectoId}/${tipo}/${itemSel.id}/${Date.now()}_${file.name}`;
     const { error } = await supabase.storage.from("npl-obras").upload(path, file, { upsert: true });
     if (error) { alert("Error: " + error.message); return; }
     const { data: { publicUrl } } = supabase.storage.from("npl-obras").getPublicUrl(path);
+    const campo = tipo === "subtarea" ? { subtarea_id: itemSel.id, tarea_id: null } : { tarea_id: itemSel.id };
     await api("/tarea_adjuntos", { method: "POST", body: JSON.stringify({
-      tarea_id: itemSel.id, proyecto_id: proyectoId,
-      nombre: file.name, url: publicUrl, tipo: file.type, tamanio: file.size,
-      subido_por: perfil?.nombre || "",
+      proyecto_id: proyectoId, ...campo,
+      nombre: file.name, url: publicUrl, tipo: file.type, subido_por: perfil?.nombre || "",
     })});
     await cargar();
   }
@@ -309,16 +362,24 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   async function eliminarChecklist(id, e) {
     e.stopPropagation();
     if (!confirm("¿Eliminar esta sección?")) return;
-    if (checklists.find(c => c.id === id)?.tareas.find(t => t.id === itemSel?.id)) setItemSel(null);
     await api(`/proyecto_checklists?id=eq.${id}`, { method: "DELETE" });
+    if (itemSel && checklists.find(c => c.id === id)?.tareas.find(t => t.id === itemSel?.id)) setItemSel(null);
     await cargar();
   }
 
   async function eliminarTarea(id, e) {
     e.stopPropagation();
-    if (!confirm("¿Eliminar?")) return;
+    if (!confirm("¿Eliminar esta tarea?")) return;
     if (itemSel?.id === id) setItemSel(null);
     await api(`/proyecto_tareas?id=eq.${id}`, { method: "DELETE" });
+    await cargar();
+  }
+
+  async function eliminarSubtarea(id, e) {
+    e.stopPropagation();
+    if (!confirm("¿Eliminar esta subtarea?")) return;
+    if (itemSel?.id === id) setItemSel(null);
+    await api(`/proyecto_subtareas?id=eq.${id}`, { method: "DELETE" });
     await cargar();
   }
 
@@ -326,60 +387,215 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
   const total = todasTareas.filter(t => !t.pendiente_aprobacion).length;
   const completadas = todasTareas.filter(t => t.completada).length;
   const aprobadas = todasTareas.filter(t => t.aprobada).length;
-  const pct = total > 0 ? Math.round(aprobadas / total * 100) : 0;
 
-  // Color días restantes
-  const colorDias = diasRestantes === null ? "#aaa" : diasRestantes < 0 ? "#c0392b" : diasRestantes <= 7 ? "#c0392b" : diasRestantes <= 14 ? "#f59e0b" : "#1a8a5e";
+  const CheckDoble = ({ item, tipo, small }) => {
+    const size = small ? 14 : 20;
+    const r = small ? 4 : 6;
+    return (
+      <div style={{ display: "flex", gap: small ? 3 : 5, flexShrink: 0 }}>
+        <div onClick={e => toggleCompletada(item, tipo, e)} title="Completado"
+          style={{ width: size, height: size, borderRadius: r, border: `2px solid ${item.completada ? "#3b82f6" : "#d0d0d0"}`,
+            background: item.completada ? "#3b82f6" : "#fff", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+          {item.completada && <span style={{ color: "#fff", fontSize: small ? 8 : 11, fontWeight: 800 }}>✓</span>}
+        </div>
+        <div onClick={e => toggleAprobada(item, tipo, e)} title={esAdmin ? "Aprobar" : "Solo admin"}
+          style={{ width: size, height: size, borderRadius: r, border: `2px solid ${item.aprobada ? "#1a8a5e" : "#d0d0d0"}`,
+            background: item.aprobada ? "#1a8a5e" : "#fff", cursor: esAdmin ? "pointer" : "default",
+            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
+            opacity: !esAdmin ? 0.5 : 1 }}>
+          {item.aprobada && <span style={{ color: "#fff", fontSize: small ? 8 : 11, fontWeight: 800 }}>✓</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDetalleItem = () => {
+    if (!itemSel) return (
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontSize: 36, opacity: 0.2 }}>📋</div>
+        <div style={{ fontSize: 13, color: "#ccc", fontWeight: 600 }}>Seleccioná una tarea o subtarea</div>
+      </div>
+    );
+
+    return (
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Header item */}
+        <div style={{ padding: "14px 20px 10px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+            <CheckDoble item={itemSel} tipo={itemTipo} />
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                {itemTipo === "subtarea" && <span style={{ fontSize: 10, background: "#ede9fe", color: "#6366f1", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>Subtarea</span>}
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: itemSel.aprobada ? "#1a8a5e" : "#111" }}>{itemSel.texto}</h3>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 11, color: "#aaa", flexWrap: "wrap" }}>
+                {itemSel.completada_por && <span style={{ color: "#3b82f6" }}>✓ {itemSel.completada_por}</span>}
+                {itemSel.aprobada_por && <span style={{ color: "#1a8a5e" }}>✅ {itemSel.aprobada_por}</span>}
+                {itemSel.responsable && <span style={{ color: "#6366f1", fontWeight: 700 }}>@{itemSel.responsable}</span>}
+                {itemSel.pendiente_aprobacion && esAdmin && (
+                  <button onClick={() => actualizarItem(itemSel.id, { pendiente_aprobacion: false }, itemTipo)}
+                    style={{ padding: "2px 8px", background: "#1a8a5e", color: "#fff", border: "none", borderRadius: 5, fontSize: 10, cursor: "pointer", fontWeight: 700 }}>
+                    ✓ Aprobar
+                  </button>
+                )}
+              </div>
+            </div>
+            {esAdmin && <button onClick={e => itemTipo === "tarea" ? eliminarTarea(itemSel.id, e) : eliminarSubtarea(itemSel.id, e)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 16 }}>🗑</button>}
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Fecha parcial</div>
+              <input type="date" key={itemSel.id + "_fecha"} defaultValue={itemSel.fecha_entrega_parcial || ""}
+                onBlur={e => actualizarItem(itemSel.id, { fecha_entrega_parcial: e.target.value || null }, itemTipo)}
+                style={{ padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }} />
+            </div>
+            {itemTipo === "subtarea" && equipo.length > 0 && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Responsable</div>
+                <select key={itemSel.id + "_resp"} defaultValue={itemSel.responsable || ""}
+                  onBlur={e => actualizarItem(itemSel.id, { responsable: e.target.value || null }, itemTipo)}
+                  style={{ padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }}>
+                  <option value="">Sin asignar</option>
+                  {equipo.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+                </select>
+              </div>
+            )}
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "#f0f0f0", borderRadius: 7, cursor: "pointer", fontSize: 12, color: "#555", border: "1.5px solid #e0e0e0", marginBottom: 1 }}>
+              📎 Adjuntar
+              <input type="file" style={{ display: "none" }} onChange={e => e.target.files[0] && subirArchivo(e.target.files[0], itemTipo)} />
+            </label>
+          </div>
+        </div>
+
+        {/* Descripción */}
+        <div style={{ padding: "10px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+          <textarea key={itemSel.id + "_desc"} defaultValue={itemSel.descripcion || ""}
+            onBlur={e => actualizarItem(itemSel.id, { descripcion: e.target.value }, itemTipo)}
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e8e8e8", borderRadius: 8, fontSize: 13, resize: "none", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.5 }}
+            rows={2} placeholder="📝 Descripción, notas técnicas, instrucciones…" />
+        </div>
+
+        {/* Comunicación */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f8f9ff" }}>
+          <div style={{ padding: "8px 20px 6px", flexShrink: 0, display: "flex", alignItems: "center", gap: 8, background: "#fff", borderBottom: "1px solid #e8e8e8" }}>
+            <span style={{ fontSize: 16 }}>💬</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Comentarios</span>
+            <span style={{ fontSize: 11, color: "#aaa" }}>— usá @nombre para mencionar</span>
+            {mensajes.length > 0 && <span style={{ marginLeft: "auto", fontSize: 11, color: "#888", background: "#f0f0f0", padding: "2px 8px", borderRadius: 20 }}>{mensajes.length}</span>}
+          </div>
+          <div style={{ flex: 1, overflow: "auto", padding: "10px 20px" }}>
+            {loadingMsgs ? <p style={{ color: "#aaa", fontSize: 12, textAlign: "center" }}>Cargando…</p> :
+              mensajes.length === 0 ? <div style={{ textAlign: "center", padding: 20 }}><div style={{ fontSize: 24, opacity: 0.2 }}>💬</div><div style={{ fontSize: 12, color: "#ccc" }}>Sin comentarios aún</div></div> :
+              mensajes.map(m => {
+                const esPropio = m.autor === perfil?.nombre;
+                return (
+                  <div key={m.id} style={{ display: "flex", gap: 8, marginBottom: 10, flexDirection: esPropio ? "row-reverse" : "row" }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: m.rol === "admin" ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                      {(m.autor || "?")[0].toUpperCase()}
+                    </div>
+                    <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: esPropio ? "flex-end" : "flex-start" }}>
+                      <div style={{ fontSize: 10, color: "#bbb", marginBottom: 2 }}>{m.autor} · {new Date(m.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</div>
+                      <div style={{ fontSize: 13, padding: "7px 11px", borderRadius: esPropio ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
+                        background: esPropio ? (m.rol === "admin" ? "#0a0a0a" : "#6366f1") : "#fff",
+                        color: esPropio ? "#fff" : "#333", lineHeight: 1.5, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+                        {m.mensaje.split(/(@\w+)/g).map((part, i) =>
+                          part.startsWith("@") ? <strong key={i} style={{ color: esPropio ? "#c4b5fd" : "#6366f1" }}>{part}</strong> : part
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            }
+            <div ref={msgEndRef} />
+          </div>
+          {/* Input con @menciones */}
+          <div style={{ padding: "10px 16px", borderTop: "1.5px solid #e8e8e8", background: "#fff", flexShrink: 0 }}>
+            {showMention && equipo.length > 0 && (
+              <div style={{ background: "#fff", border: "1.5px solid #e0e0e0", borderRadius: 8, marginBottom: 6, overflow: "hidden", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                {equipo.map(m => (
+                  <div key={m.id} onClick={() => {
+                    const idx = nuevoMsg.lastIndexOf("@");
+                    setNuevoMsg(nuevoMsg.slice(0, idx) + `@${m.nombre} `);
+                    setShowMention(false);
+                    inputMsgRef.current?.focus();
+                  }} style={{ padding: "7px 12px", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#f8f8f8"}
+                    onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{m.nombre[0]}</div>
+                    <span>{m.nombre}</span>
+                    <span style={{ fontSize: 10, color: "#aaa" }}>{m.rol}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: perfil?.rol === "admin" ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0, marginBottom: 1 }}>
+                {(perfil?.nombre || "?")[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 10, border: "1.5px solid #e0e0e0", display: "flex", alignItems: "center", padding: "6px 12px" }}>
+                <input ref={inputMsgRef} value={nuevoMsg} onChange={e => {
+                  setNuevoMsg(e.target.value);
+                  const lastAt = e.target.value.lastIndexOf("@");
+                  setShowMention(lastAt >= 0 && lastAt === e.target.value.length - 1);
+                }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviarMensaje(); setShowMention(false); } if (e.key === "Escape") setShowMention(false); }}
+                  style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                  placeholder="Escribí un comentario… usá @ para mencionar" />
+                <button onClick={() => { enviarMensaje(); setShowMention(false); }} disabled={!nuevoMsg.trim()}
+                  style={{ width: 28, height: 28, borderRadius: 8, background: nuevoMsg.trim() ? "#0a0a0a" : "#e0e0e0", color: nuevoMsg.trim() ? "#fff" : "#aaa", border: "none", cursor: nuevoMsg.trim() ? "pointer" : "default", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>→</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
       <div style={{ background: "#fff", width: "min(1080px, 100%)", height: "94vh", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,0.4)" }}>
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div style={{ padding: "12px 20px", borderBottom: "1.5px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
             <div>
-              <div style={{ fontSize: 11, color: "#aaa", marginBottom: 1 }}>Tablero del proyecto</div>
+              <div style={{ fontSize: 11, color: "#aaa" }}>Tablero del proyecto</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: "#111" }}>{proyecto?.descripcion}</div>
             </div>
-
-            {/* Fecha entrega — muy visual */}
             {fechaEntrega && (
-              <div style={{ background: diasRestantes !== null && diasRestantes < 0 ? "#fef2f2" : diasRestantes !== null && diasRestantes <= 7 ? "#fffbeb" : "#f0fdf4", borderRadius: 10, padding: "6px 14px", border: `1.5px solid ${colorDias}30`, textAlign: "center" }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: colorDias, lineHeight: 1, fontFamily: "monospace" }}>
-                  {diasRestantes === null ? "—" : diasRestantes < 0 ? `${Math.abs(diasRestantes)}d` : `${diasRestantes}d`}
-                </div>
-                <div style={{ fontSize: 10, color: colorDias, fontWeight: 700 }}>
-                  {diasRestantes === null ? "sin fecha" : diasRestantes < 0 ? "VENCIDO" : diasRestantes === 0 ? "HOY" : "para entrega"}
-                </div>
-                <div style={{ fontSize: 10, color: "#aaa", marginTop: 1 }}>{fmtFecha(fechaEntrega)}</div>
+              <div style={{ background: diasRestantes < 0 ? "#fef2f2" : diasRestantes <= 7 ? "#fffbeb" : "#f0fdf4", borderRadius: 10, padding: "6px 14px", border: `1.5px solid ${colorDias}30`, textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: colorDias, lineHeight: 1, fontFamily: "monospace" }}>{diasRestantes < 0 ? `${Math.abs(diasRestantes)}d` : `${diasRestantes}d`}</div>
+                <div style={{ fontSize: 10, color: colorDias, fontWeight: 700 }}>{diasRestantes < 0 ? "VENCIDO" : diasRestantes === 0 ? "HOY" : "para entrega"}</div>
+                <div style={{ fontSize: 10, color: "#aaa" }}>{fmtFecha(fechaEntrega)}</div>
               </div>
             )}
-
-            {/* Progreso */}
             {total > 0 && (
               <div style={{ minWidth: 140 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
-                  <span style={{ color: "#3b82f6" }}>✓ {completadas} completadas</span>
-                  <span style={{ color: "#1a8a5e", fontWeight: 700 }}>✅ {pct}%</span>
+                  <span style={{ color: "#3b82f6" }}>✓ {completadas}/{total}</span>
+                  <span style={{ color: "#1a8a5e", fontWeight: 700 }}>✅ {aprobadas}</span>
                 </div>
                 <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
                   <div style={{ width: `${Math.round(completadas/total*100)}%`, height: "100%", background: "#3b82f640", borderRadius: 3 }} />
                 </div>
-                <div style={{ height: 3, background: "transparent", borderRadius: 3, overflow: "hidden", marginTop: 2 }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: "#1a8a5e", borderRadius: 3, transition: "width 0.4s" }} />
+                <div style={{ height: 3, marginTop: 2, background: "transparent", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.round(aprobadas/total*100)}%`, height: "100%", background: "#1a8a5e", borderRadius: 3 }} />
                 </div>
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#aaa", padding: 4 }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#aaa" }}>✕</button>
         </div>
 
-        {/* ── Body split ── */}
+        {/* Split panel */}
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-          {/* ── Panel izquierdo ── */}
-          <div style={{ width: 320, flexShrink: 0, borderRight: "1.5px solid #f0f0f0", overflow: "auto", background: "#fafafa" }}>
+          {/* Panel izquierdo */}
+          <div style={{ width: 340, flexShrink: 0, borderRight: "1.5px solid #f0f0f0", overflow: "auto", background: "#fafafa" }}>
             {loading ? <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Cargando…</p> : (
               <div style={{ padding: "12px 10px" }}>
                 {checklists.map(cl => {
@@ -388,57 +604,77 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
                   const pctSec = tot > 0 ? Math.round(ok / tot * 100) : 0;
                   return (
                     <div key={cl.id} style={{ marginBottom: 16 }}>
-                      {/* Sección header */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 6px", marginBottom: 6 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                             <span style={{ fontSize: 11, fontWeight: 800, color: "#333", textTransform: "uppercase", letterSpacing: 0.5 }}>{cl.nombre}</span>
                             <span style={{ fontSize: 10, color: ok === tot && tot > 0 ? "#1a8a5e" : "#aaa", fontWeight: 700 }}>{ok}/{tot}</span>
                           </div>
-                          {tot > 0 && (
-                            <div style={{ height: 3, background: "#e8e8e8", borderRadius: 2, overflow: "hidden" }}>
-                              <div style={{ width: `${pctSec}%`, height: "100%", background: pctSec === 100 ? "#1a8a5e" : "#3b82f6", transition: "width 0.3s" }} />
-                            </div>
-                          )}
+                          {tot > 0 && <div style={{ height: 3, background: "#e8e8e8", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${pctSec}%`, height: "100%", background: pctSec === 100 ? "#1a8a5e" : "#3b82f6", transition: "width 0.3s" }} /></div>}
                         </div>
-                        {esAdmin && <button onClick={e => eliminarChecklist(cl.id, e)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 13, padding: "0 4px", marginLeft: 6 }}>✕</button>}
+                        {esAdmin && <button onClick={e => eliminarChecklist(cl.id, e)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 12, padding: "0 4px", marginLeft: 6 }}>✕</button>}
                       </div>
 
-                      {/* Items */}
                       {cl.tareas.map(t => {
-                        const sel = itemSel?.id === t.id;
+                        const selT = itemSel?.id === t.id && itemTipo === "tarea";
+                        const expandida = expandidos[t.id];
                         return (
-                          <div key={t.id} onClick={() => seleccionar(t)}
-                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, marginBottom: 1, cursor: "pointer",
-                              background: sel ? "#eff6ff" : "#fff", border: `1.5px solid ${sel ? "#3b82f6" : "transparent"}`,
-                              transition: "all 0.1s" }}
-                            onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#f4f4f4"; }}
-                            onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "#fff"; }}>
-
-                            {/* Check 1: completada */}
-                            <div onClick={e => toggleCompletada(t, e)} title="Completado"
-                              style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${t.completada ? "#3b82f6" : "#d0d0d0"}`,
-                                background: t.completada ? "#3b82f6" : "transparent", flexShrink: 0,
-                                display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                              {t.completada && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
-                            </div>
-                            {/* Check 2: aprobada */}
-                            <div onClick={e => toggleAprobada(t, e)} title={esAdmin ? "Aprobar" : "Solo admin"}
-                              style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${t.aprobada ? "#1a8a5e" : "#d0d0d0"}`,
-                                background: t.aprobada ? "#1a8a5e" : "transparent", flexShrink: 0,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                cursor: esAdmin ? "pointer" : "default", transition: "all 0.15s" }}>
-                              {t.aprobada && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+                          <div key={t.id}>
+                            {/* Fila tarea */}
+                            <div onClick={() => seleccionar(t, "tarea")}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, marginBottom: 1, cursor: "pointer",
+                                background: selT ? "#eff6ff" : "#fff", border: `1.5px solid ${selT ? "#3b82f6" : "transparent"}` }}
+                              onMouseEnter={e => { if (!selT) e.currentTarget.style.background = "#f4f4f4"; }}
+                              onMouseLeave={e => { if (!selT) e.currentTarget.style.background = "#fff"; }}>
+                              <CheckDoble item={t} tipo="tarea" small />
+                              <span style={{ flex: 1, fontSize: 12, color: t.aprobada ? "#1a8a5e" : "#333", fontWeight: t.aprobada ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {t.texto}
+                              </span>
+                              {t.subtareas?.length > 0 && (
+                                <span style={{ fontSize: 10, color: "#aaa", flexShrink: 0 }}>{t.subtareas.filter(s => s.aprobada).length}/{t.subtareas.length}</span>
+                              )}
+                              <button onClick={e => { e.stopPropagation(); setExpandidos(p => ({ ...p, [t.id]: !p[t.id] })); }}
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 10, padding: "0 2px", flexShrink: 0 }}>
+                                {expandida ? "▲" : "▼"}
+                              </button>
                             </div>
 
-                            <span style={{ flex: 1, fontSize: 12, color: t.aprobada ? "#1a8a5e" : t.completada ? "#3b82f6" : "#333",
-                              fontWeight: t.aprobada ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                              textDecoration: t.aprobada ? "none" : "none" }}>
-                              {t.texto}
-                            </span>
-
-                            {t.pendiente_aprobacion && <span style={{ fontSize: 9, background: "#fef9c3", color: "#c4781a", borderRadius: 3, padding: "1px 4px", fontWeight: 700, flexShrink: 0 }}>⏳</span>}
-                            {t.fecha_entrega_parcial && <span style={{ fontSize: 9, color: "#aaa", flexShrink: 0 }}>📅</span>}
+                            {/* Subtareas */}
+                            {expandida && (
+                              <div style={{ marginLeft: 12, marginBottom: 4 }}>
+                                {t.subtareas?.map(s => {
+                                  const selS = itemSel?.id === s.id && itemTipo === "subtarea";
+                                  return (
+                                    <div key={s.id} onClick={() => seleccionar(s, "subtarea")}
+                                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 7, marginBottom: 1, cursor: "pointer",
+                                        background: selS ? "#ede9fe" : "#f8f8f8", border: `1.5px solid ${selS ? "#6366f1" : "transparent"}` }}
+                                      onMouseEnter={e => { if (!selS) e.currentTarget.style.background = "#f0f0f0"; }}
+                                      onMouseLeave={e => { if (!selS) e.currentTarget.style.background = "#f8f8f8"; }}>
+                                      <span style={{ fontSize: 9, color: "#aaa", flexShrink: 0 }}>↳</span>
+                                      <CheckDoble item={s} tipo="subtarea" small />
+                                      <span style={{ flex: 1, fontSize: 11, color: s.aprobada ? "#1a8a5e" : "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {s.texto}
+                                      </span>
+                                      {s.responsable && <span style={{ fontSize: 9, color: "#6366f1", flexShrink: 0, fontWeight: 700 }}>@{s.responsable.split(" ")[0]}</span>}
+                                    </div>
+                                  );
+                                })}
+                                {/* Nueva subtarea */}
+                                <div style={{ display: "flex", gap: 4, padding: "3px 6px", alignItems: "center" }}>
+                                  <span style={{ fontSize: 9, color: "#ccc" }}>↳</span>
+                                  <input value={nuevaSubtarea[t.id]?.texto || ""} onChange={e => setNuevaSubtarea(p => ({ ...p, [t.id]: { ...p[t.id], texto: e.target.value } }))}
+                                    onKeyDown={e => e.key === "Enter" && crearSubtarea(t.id, cl.id)}
+                                    style={{ flex: 1, padding: "3px 7px", border: "1.5px solid #e0e0e0", borderRadius: 5, fontSize: 10, fontFamily: "inherit", background: "#f0f0f0" }}
+                                    placeholder="+ Subtarea…" />
+                                  <select value={nuevaSubtarea[t.id]?.responsable || ""} onChange={e => setNuevaSubtarea(p => ({ ...p, [t.id]: { ...p[t.id], responsable: e.target.value } }))}
+                                    style={{ padding: "3px 5px", border: "1.5px solid #e0e0e0", borderRadius: 5, fontSize: 10, fontFamily: "inherit", background: "#f0f0f0", maxWidth: 80 }}>
+                                    <option value="">@</option>
+                                    {equipo.map(m => <option key={m.id} value={m.nombre}>{m.nombre.split(" ")[0]}</option>)}
+                                  </select>
+                                  <button onClick={() => crearSubtarea(t.id, cl.id)} style={{ width: 20, height: 20, background: "#6366f1", color: "#fff", border: "none", borderRadius: 4, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -456,7 +692,7 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
                 })}
 
                 {/* Agregar sección */}
-                <div style={{ background: "#fff", borderRadius: 10, padding: "10px", border: "1.5px dashed #e0e0e0", marginTop: 4 }}>
+                <div style={{ background: "#fff", borderRadius: 10, padding: 10, border: "1.5px dashed #e0e0e0", marginTop: 4 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Agregar sección</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
                     {Object.keys(SECCIONES_DEFAULT).filter(n => !checklists.find(c => c.nombre === n)).map(n => (
@@ -479,147 +715,9 @@ function PanelChecklist({ proyectoId, proyecto, onClose, perfil }) {
             )}
           </div>
 
-          {/* ── Panel derecho ── */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#fff" }}>
-            {!itemSel ? (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: 36, opacity: 0.2 }}>📋</div>
-                <div style={{ fontSize: 13, color: "#ccc", fontWeight: 600 }}>Seleccioná una tarea</div>
-              </div>
-            ) : (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-                {/* Item header */}
-                <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-                    {/* Checks grandes */}
-                    <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-                      <div style={{ textAlign: "center" }}>
-                        <div onClick={e => toggleCompletada(itemSel, e)}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: `2.5px solid ${itemSel.completada ? "#3b82f6" : "#d0d0d0"}`,
-                            background: itemSel.completada ? "#3b82f6" : "#fff", cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                          {itemSel.completada && <span style={{ color: "#fff", fontSize: 14, fontWeight: 800 }}>✓</span>}
-                        </div>
-                        <div style={{ fontSize: 9, color: "#aaa", marginTop: 2 }}>Hecho</div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div onClick={e => toggleAprobada(itemSel, e)}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: `2.5px solid ${itemSel.aprobada ? "#1a8a5e" : "#d0d0d0"}`,
-                            background: itemSel.aprobada ? "#1a8a5e" : "#fff", cursor: esAdmin ? "pointer" : "default",
-                            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
-                            opacity: !esAdmin ? 0.5 : 1 }}>
-                          {itemSel.aprobada && <span style={{ color: "#fff", fontSize: 14, fontWeight: 800 }}>✓</span>}
-                        </div>
-                        <div style={{ fontSize: 9, color: "#aaa", marginTop: 2 }}>Aprobado</div>
-                      </div>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: itemSel.aprobada ? "#1a8a5e" : "#111", lineHeight: 1.3 }}>{itemSel.texto}</h3>
-                      <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#aaa", flexWrap: "wrap" }}>
-                        {itemSel.completada_por && <span style={{ color: "#3b82f6" }}>✓ {itemSel.completada_por}</span>}
-                        {itemSel.aprobada_por && <span style={{ color: "#1a8a5e" }}>✅ {itemSel.aprobada_por}</span>}
-                        {itemSel.pendiente_aprobacion && esAdmin && (
-                          <button onClick={() => actualizarTarea(itemSel.id, { pendiente_aprobacion: false })}
-                            style={{ padding: "2px 10px", background: "#1a8a5e", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
-                            ✓ Aprobar creación
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {esAdmin && <button onClick={e => eliminarTarea(itemSel.id, e)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ddd", fontSize: 16 }}>🗑</button>}
-                  </div>
-
-                  {/* Fecha + adjuntos */}
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Fecha parcial</div>
-                      <input type="date" key={itemSel.id + "_fecha"} defaultValue={itemSel.fecha_entrega_parcial || ""}
-                        onBlur={e => actualizarTarea(itemSel.id, { fecha_entrega_parcial: e.target.value || null })}
-                        style={{ padding: "5px 10px", border: "1.5px solid #e0e0e0", borderRadius: 7, fontSize: 12, fontFamily: "inherit" }} />
-                    </div>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "#f0f0f0", borderRadius: 7, cursor: "pointer", fontSize: 12, color: "#555", border: "1.5px solid #e0e0e0", marginBottom: 1 }}>
-                      📎 Adjuntar
-                      <input type="file" style={{ display: "none" }} onChange={e => e.target.files[0] && subirArchivo(e.target.files[0])} />
-                    </label>
-                    {itemSel.adjuntos?.map(a => (
-                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer"
-                        style={{ fontSize: 11, padding: "5px 10px", background: "#eff6ff", color: "#3b82f6", borderRadius: 6, textDecoration: "none", border: "1px solid #bfdbfe" }}>
-                        📎 {a.nombre}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Descripción */}
-                <div style={{ padding: "10px 20px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
-                  <textarea key={itemSel.id + "_desc"} defaultValue={itemSel.descripcion || ""}
-                    onBlur={e => actualizarTarea(itemSel.id, { descripcion: e.target.value })}
-                    style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e8e8e8", borderRadius: 8, fontSize: 13, resize: "none", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.5, color: "#333" }}
-                    rows={2} placeholder="📝 Descripción, notas técnicas, instrucciones…" />
-                </div>
-
-                {/* ── Comunicación ── */}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f8f9ff" }}>
-                  {/* Header comunicación */}
-                  <div style={{ padding: "8px 20px", borderBottom: "1px solid #e8e8e8", flexShrink: 0, display: "flex", alignItems: "center", gap: 8, background: "#fff" }}>
-                    <span style={{ fontSize: 16 }}>💬</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>Comunicación</span>
-                    <span style={{ fontSize: 11, color: "#aaa" }}>— ida y vuelta entre calculista y NPL</span>
-                    {mensajes.length > 0 && <span style={{ marginLeft: "auto", fontSize: 11, color: "#888", background: "#f0f0f0", padding: "2px 8px", borderRadius: 20 }}>{mensajes.length} mensajes</span>}
-                  </div>
-
-                  {/* Lista mensajes */}
-                  <div style={{ flex: 1, overflow: "auto", padding: "12px 20px" }}>
-                    {loadingMsgs ? (
-                      <p style={{ color: "#aaa", fontSize: 12, textAlign: "center" }}>Cargando…</p>
-                    ) : mensajes.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: 24 }}>
-                        <div style={{ fontSize: 28, marginBottom: 6, opacity: 0.3 }}>💬</div>
-                        <div style={{ fontSize: 12, color: "#ccc" }}>Sin mensajes aún. Escribí el primero.</div>
-                      </div>
-                    ) : mensajes.map((m, i) => {
-                      const esPropio = m.autor === perfil?.nombre;
-                      const esAdminMsg = m.rol === "admin";
-                      return (
-                        <div key={m.id} style={{ display: "flex", gap: 8, marginBottom: 10, flexDirection: esPropio ? "row-reverse" : "row" }}>
-                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: esAdminMsg ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
-                            {(m.autor || "?")[0].toUpperCase()}
-                          </div>
-                          <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: esPropio ? "flex-end" : "flex-start" }}>
-                            <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 3 }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: esAdminMsg ? "#111" : "#6366f1" }}>{m.autor}</span>
-                              <span style={{ fontSize: 10, color: "#bbb" }}>{new Date(m.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>
-                            </div>
-                            <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, padding: "8px 12px", borderRadius: esPropio ? "12px 2px 12px 12px" : "2px 12px 12px 12px", background: esPropio ? (esAdminMsg ? "#0a0a0a" : "#6366f1") : "#fff", color: esPropio ? "#fff" : "#333", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
-                              {m.mensaje}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div ref={msgEndRef} />
-                  </div>
-
-                  {/* Input mensaje — siempre visible */}
-                  <div style={{ padding: "10px 16px", borderTop: "1.5px solid #e8e8e8", background: "#fff", flexShrink: 0 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: perfil?.rol === "admin" ? "#0a0a0a" : "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0, marginBottom: 1 }}>
-                        {(perfil?.nombre || "?")[0].toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 10, border: "1.5px solid #e0e0e0", display: "flex", alignItems: "center", gap: 6, padding: "6px 12px" }}>
-                        <input ref={inputMsgRef} value={nuevoMsg} onChange={e => setNuevoMsg(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviarMensaje()}
-                          style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontFamily: "inherit", outline: "none", color: "#333" }}
-                          placeholder="Escribí un mensaje… (Enter para enviar)" />
-                        <button onClick={enviarMensaje} disabled={!nuevoMsg.trim()}
-                          style={{ width: 28, height: 28, borderRadius: 8, background: nuevoMsg.trim() ? "#0a0a0a" : "#e0e0e0", color: nuevoMsg.trim() ? "#fff" : "#aaa", border: "none", cursor: nuevoMsg.trim() ? "pointer" : "default", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", flexShrink: 0 }}>→</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+          {/* Panel derecho */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {renderDetalleItem()}
           </div>
         </div>
       </div>
