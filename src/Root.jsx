@@ -87,10 +87,10 @@ export default function Root() {
 
   const cargarPerfil = async (uid) => {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
-    console.log('Perfil cargado:', data?.mail, data?.rol)
+    console.log('Perfil cargado:', data?.mail, data?.rol, 'uid:', uid)
     setPerfil(data)
-    if (data?.rol === 'jefe_obra') navTo('obras')
-    if (data?.rol === 'calculista' || data?.rol === 'arquitecto') navTo('legajos')
+    if (data?.rol === 'jefe_obra') { console.log('Redirigiendo a obras'); navTo('obras'); }
+    if (data?.rol === 'calculista' || data?.rol === 'arquitecto') { console.log('Redirigiendo a legajos'); navTo('legajos'); }
     setLoading(false)
   }
 
@@ -127,20 +127,22 @@ export default function Root() {
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
   const themeCtx = { theme, palette };
-  console.log('current:', current, 'perfil.rol:', perfil?.rol);
+  // Leer current directo del hash para evitar bugs de estado
+  const currentModule = window.location.hash.replace('#', '').split(':')[0] || current;
+  console.log('currentModule:', currentModule, 'current state:', current, 'perfil.rol:', perfil?.rol);
 
-  if (current === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
-  if (current === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
-  if (current === 'planificacion') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Planificacion perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
-  if (current === 'perfil') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} /></Layout></ThemeContext.Provider>
-  if (current === 'legajos') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={true}><Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
-  if (current === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
-  if (current === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
-  if (current === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard onNav={navTo} /></Layout></ThemeContext.Provider>
-  if (current === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
-  if (current === 'biblioteca') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Biblioteca /></Layout></ThemeContext.Provider>
-  if (current === 'configuracion') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Configuracion /></Layout></ThemeContext.Provider>
-  if (current === 'usuarios') return <ThemeContext.Provider value={themeCtx}><Layout current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Usuarios session={session} palette={palette} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'presupuestos') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><App deepLinkId={deepLinkId} onNav={navTo} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'proyectos') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'planificacion') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Planificacion perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'perfil') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'legajos') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={true}><Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'calculistas') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Calculistas /></Layout></ThemeContext.Provider>
+  if (currentModule === 'crm') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><CRM /></Layout></ThemeContext.Provider>
+  if (currentModule === 'dashboard') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Dashboard onNav={navTo} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'obras') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} /></Layout></ThemeContext.Provider>
+  if (currentModule === 'biblioteca') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Biblioteca /></Layout></ThemeContext.Provider>
+  if (currentModule === 'configuracion') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Configuracion /></Layout></ThemeContext.Provider>
+  if (currentModule === 'usuarios') return <ThemeContext.Provider value={themeCtx}><Layout current={currentModule} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette}><Usuarios session={session} palette={palette} /></Layout></ThemeContext.Provider>
 
   // ─── Pantalla de inicio (selector de apps) ───
   return (
