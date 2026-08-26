@@ -87,20 +87,21 @@ export default function Root() {
 
   const cargarPerfil = async (uid) => {
     const { data } = await supabase.from('perfiles').select('*').eq('id', uid).single()
+    console.log('Perfil cargado:', data?.mail, data?.rol)
     setPerfil(data)
     if (data?.rol === 'jefe_obra') navTo('obras')
-    if (data?.rol === 'calculista') navTo('legajos')
+    if (data?.rol === 'calculista' || data?.rol === 'arquitecto') navTo('legajos')
     setLoading(false)
   }
 
   const navTo = (modulo, deepId) => {
-    const hashValue = deepId ? `${modulo}:${deepId}` : (modulo || '');
+    const hashValue = deepId ? `${modulo}:${deepId}` : modulo;
+    setCurrent(modulo || null);
+    setDeepLinkId(deepId || null);
     if (modulo) {
       window.location.hash = hashValue;
     } else {
-      window.location.hash = '';
-      setCurrent(null);
-      setDeepLinkId(null);
+      window.history.pushState(null, '', window.location.pathname);
     }
   }
 
