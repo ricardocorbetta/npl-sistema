@@ -9,7 +9,7 @@ import Obras from './Obras.jsx'
 import Biblioteca from './Biblioteca.jsx'
 import Configuracion from './Configuracion.jsx'
 import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
-import Postulacion from './Postulacion.jsx'
+import { getModulo } from './router.jsx'
 import Planificacion from './Planificacion.jsx'
 
 const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
@@ -126,24 +126,8 @@ export default function Root() {
 
   const themeCtx = { theme, palette };
 
-  const MODULOS = {
-    presupuestos:  <App deepLinkId={deepLinkId} onNav={navTo} />,
-    proyectos:     <Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} />,
-    legajos:       <Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} />,
-    planificacion: <Planificacion perfil={perfil} onNav={navTo} />,
-    perfil:        <PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} />,
-    calculistas:   <Calculistas />,
-    profesionales: <Calculistas />,
-    crm:           <CRM />,
-    dashboard:     <Dashboard onNav={navTo} />,
-    obras:         <Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} />,
-    biblioteca:    <Biblioteca />,
-    configuracion: <Configuracion />,
-    usuarios:      <Usuarios session={session} palette={palette} />,
-  };
-
   const hideBuscador = current === 'legajos';
-  const modulo = MODULOS[current];
+  const modulo = getModulo(current, { deepLinkId, perfil, navTo, logout, session, palette });
 
   if (modulo) return (
     <ThemeContext.Provider value={themeCtx}>
