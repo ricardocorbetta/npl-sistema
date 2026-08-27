@@ -125,9 +125,24 @@ export default function Root() {
   const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
 
   const themeCtx = { theme, palette };
-
   const hideBuscador = current === 'legajos';
-  const modulo = getModulo(current, { deepLinkId, perfil, navTo, logout, session, palette });
+
+  let modulo = null;
+  switch(current) {
+    case 'presupuestos':  modulo = <App deepLinkId={deepLinkId} onNav={navTo} />; break;
+    case 'proyectos':     modulo = <Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} />; break;
+    case 'legajos':       modulo = <Proyectos deepLinkId={deepLinkId} perfil={perfil} onNav={navTo} />; break;
+    case 'planificacion': modulo = <Planificacion perfil={perfil} onNav={navTo} />; break;
+    case 'perfil':        modulo = <PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} />; break;
+    case 'calculistas':   modulo = <Calculistas />; break;
+    case 'crm':           modulo = <CRM />; break;
+    case 'dashboard':     modulo = <Dashboard onNav={navTo} />; break;
+    case 'obras':         modulo = <Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} />; break;
+    case 'biblioteca':    modulo = <Biblioteca />; break;
+    case 'configuracion': modulo = <Configuracion />; break;
+    case 'usuarios':      modulo = <Usuarios session={session} palette={palette} />; break;
+    default: modulo = null;
+  }
 
   if (modulo) return (
     <ThemeContext.Provider value={themeCtx}>
