@@ -59,9 +59,9 @@ export default function Root() {
   const deepLinkId = getHash().deepLinkId;
 
   useEffect(() => {
-    const onHashChange = () => forceUpdate(n => n + 1);
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    const controller = new AbortController();
+    window.addEventListener("hashchange", () => forceUpdate(n => n + 1), { signal: controller.signal });
+    return () => controller.abort();
   }, []);
 
   const isPostulacion = window.location.hash.replace("#", "").split(":")[0] === "postulacion";
