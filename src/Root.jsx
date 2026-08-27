@@ -9,7 +9,7 @@ import Obras from './Obras.jsx'
 import Biblioteca from './Biblioteca.jsx'
 import Configuracion from './Configuracion.jsx'
 import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
-import { getModulo } from './router.jsx'
+import Postulacion from './Postulacion.jsx'
 import Planificacion from './Planificacion.jsx'
 
 const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
