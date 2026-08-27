@@ -48,7 +48,6 @@ export default function Root() {
   const [session, setSession] = useState(null)
   const [perfil, setPerfil] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [, forceUpdate] = useState(0);
   const { theme, toggle, palette } = useTheme();
 
   const getHash = () => {
@@ -57,12 +56,6 @@ export default function Root() {
   };
   const current = getHash().current;
   const deepLinkId = getHash().deepLinkId;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    window.addEventListener("hashchange", () => forceUpdate(n => n + 1), { signal: controller.signal });
-    return () => controller.abort();
-  }, []);
 
   const isPostulacion = window.location.hash.replace("#", "").split(":")[0] === "postulacion";
 
@@ -96,10 +89,9 @@ export default function Root() {
   const navTo = (modulo, deepId) => {
     const hashValue = deepId ? `${modulo}:${deepId}` : (modulo || '');
     if (modulo) {
-      window.location.hash = hashValue;
+      window.location.href = `${window.location.pathname}#${hashValue}`;
     } else {
-      history.pushState(null, '', window.location.pathname);
-      forceUpdate(n => n + 1);
+      window.location.href = window.location.pathname;
     }
   }
 
