@@ -48,14 +48,26 @@ export default function Root() {
   const [session, setSession] = useState(null)
   const [perfil, setPerfil] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [current, setCurrent] = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash.split(":")[0] || null;
+  });
+  const [deepLinkId, setDeepLinkId] = useState(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash.split(":")[1] || null;
+  });
   const { theme, toggle, palette } = useTheme();
 
-  const getHash = () => {
-    const hash = window.location.hash.replace("#", "");
-    return { current: hash.split(":")[0] || null, deepLinkId: hash.split(":")[1] || null };
-  };
-  const current = getHash().current;
-  const deepLinkId = getHash().deepLinkId;
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      const [mod, id] = hash.split(":");
+      setCurrent(mod || null);
+      setDeepLinkId(id || null);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const isPostulacion = window.location.hash.replace("#", "").split(":")[0] === "postulacion";
 
@@ -87,11 +99,13 @@ export default function Root() {
   }
 
   const navTo = (modulo, deepId) => {
-    const hashValue = deepId ? `${modulo}:${deepId}` : (modulo || '');
+    const hashValue = deepId ? `${modulo}:${deepId}` : modulo;
+    setCurrent(modulo || null);
+    setDeepLinkId(deepId || null);
     if (modulo) {
-      window.location.href = `${window.location.pathname}#${hashValue}`;
+      window.location.hash = hashValue;
     } else {
-      window.location.href = window.location.pathname;
+      window.history.pushState(null, '', window.location.pathname);
     }
   }
 
