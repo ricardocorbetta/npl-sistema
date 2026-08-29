@@ -2005,6 +2005,24 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     total:      proyectos.filter(p => !p.archivado).length,
   };
 
+  // ── Métricas gerenciales ──
+  const HOY_P = new Date().toISOString().slice(0, 10);
+  const mesActualP = HOY_P.slice(0, 7);
+  const proyVencidos = proyectos.filter(p => p.fecha_entrega_plan && p.fecha_entrega_plan < HOY_P && !["entregado"].includes(p.estado) && !p.archivado);
+  const proyProximos7 = proyectos.filter(p => {
+    if (!p.fecha_entrega_plan || p.estado === "entregado") return false;
+    const dias = Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000);
+    return dias >= 0 && dias <= 7;
+  });
+  const proyEntregadosMes = proyectos.filter(p => p.estado === "entregado" && (p.fecha_entrega_real || "").slice(0, 7) === mesActualP);
+  const proyNuevosMes = proyectos.filter(p => (p.created_at || "").slice(0, 7) === mesActualP);
+  const tiemposEntrega = proyectos.filter(p => p.estado === "entregado" && p.fecha_inicio_real && p.fecha_entrega_real)
+    .map(p => Math.ceil((new Date(p.fecha_entrega_real + "T12:00") - new Date(p.fecha_inicio_real + "T12:00")) / 86400000));
+  const promDiasP = tiemposEntrega.length > 0 ? Math.round(tiemposEntrega.reduce((s, d) => s + d, 0) / tiemposEntrega.length) : null;
+  const entregadosATiempoP = proyectos.filter(p => p.estado === "entregado" && p.fecha_entrega_plan && p.fecha_entrega_real && p.fecha_entrega_real <= p.fecha_entrega_plan).length;
+  const tasaATiempoP = kpis.entregado > 0 ? Math.round(entregadosATiempoP / kpis.entregado * 100) : null;
+  const [showMetricas, setShowMetricas] = useState(false);
+
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "20px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
@@ -2037,6 +2055,71 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
       </div>
 
       {/* Flujo de caja — solo admin */}
+      {esAdmin && (
+        <div style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
+          <div onClick={() => setShowMetricas(v => !v)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", cursor: "pointer" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+            onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span>📊</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Indicadores de gestión</span>
+              {proyVencidos.length > 0 && <span style={{ fontSize: 10, background: "#fef2f2", color: "#c0392b", borderRadius: 20, padding: "1px 7px", fontWeight: 700 }}>🔴 {proyVencidos.length} vencidos</span>}
+              {proyProximos7.length > 0 && <span style={{ fontSize: 10, background: "#fffbeb", color: "#c4781a", borderRadius: 20, padding: "1px 7px", fontWeight: 700 }}>🟡 {proyProximos7.length} próximos</span>}
+            </div>
+            <span style={{ color: "#aaa", fontSize: 16, transform: showMetricas ? "rotate(180deg)" : "none", transition: "0.2s" }}>⌄</span>
+          </div>
+          {showMetricas && (
+            <div style={{ borderTop: "1px solid #f0f0f0", padding: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
+                {[
+                  { icon: "⏱", label: "Tiempo promedio", value: promDiasP !== null ? `${promDiasP}d` : "—", sub: "inicio a entrega", color: "#6366f1" },
+                  { icon: "✅", label: "Entregados a tiempo", value: tasaATiempoP !== null ? `${tasaATiempoP}%` : "—", sub: `${entregadosATiempoP} de ${kpis.entregado}`, color: tasaATiempoP >= 80 ? "#1a8a5e" : tasaATiempoP >= 60 ? "#f59e0b" : "#c0392b" },
+                  { icon: "📦", label: "Entregados este mes", value: proyEntregadosMes.length, sub: `Total: ${kpis.entregado}`, color: "#1a8a5e" },
+                  { icon: "🆕", label: "Nuevos este mes", value: proyNuevosMes.length, sub: "proyectos iniciados", color: "#3b82f6" },
+                  { icon: "🔴", label: "Vencidos", value: proyVencidos.length, sub: "con fecha pasada", color: proyVencidos.length > 0 ? "#c0392b" : "#1a8a5e" },
+                  { icon: "🟡", label: "Vencen en 7 días", value: proyProximos7.length, sub: "en riesgo", color: proyProximos7.length > 0 ? "#f59e0b" : "#1a8a5e" },
+                ].map(k => (
+                  <div key={k.label} style={{ background: "#f8f8f8", borderRadius: 10, padding: "10px 14px" }}>
+                    <div style={{ fontSize: 16, marginBottom: 4 }}>{k.icon}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
+                    <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 2 }}>{k.label}</div>
+                    {k.sub && <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{k.sub}</div>}
+                  </div>
+                ))}
+              </div>
+              {proyVencidos.length > 0 && (
+                <div style={{ background: "#fef2f2", borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#c0392b", marginBottom: 8 }}>🔴 Proyectos vencidos</div>
+                  {proyVencidos.map(p => {
+                    const dias = Math.ceil((new Date() - new Date(p.fecha_entrega_plan + "T12:00")) / 86400000);
+                    return (
+                      <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #fecaca", fontSize: 12 }}>
+                        <span style={{ fontWeight: 600 }}>{p.descripcion} <span style={{ color: "#aaa", fontWeight: 400 }}>· {p.encargado}</span></span>
+                        <span style={{ color: "#c0392b", fontWeight: 700 }}>{dias}d vencido</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {proyProximos7.length > 0 && (
+                <div style={{ background: "#fffbeb", borderRadius: 8, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#c4781a", marginBottom: 8 }}>🟡 Vencen pronto</div>
+                  {proyProximos7.map(p => {
+                    const dias = Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000);
+                    return (
+                      <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #fde68a", fontSize: 12 }}>
+                        <span style={{ fontWeight: 600 }}>{p.descripcion} <span style={{ color: "#aaa", fontWeight: 400 }}>· {p.encargado}</span></span>
+                        <span style={{ color: dias <= 3 ? "#c0392b" : "#f59e0b", fontWeight: 700 }}>{dias === 0 ? "HOY" : `${dias}d`}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {esAdmin && <FlujoCaja proyectos={proyectos} presupuestosMap={presupuestosMap} />}
 
       {/* Tabs + filtro integrado */}
