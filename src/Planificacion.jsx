@@ -18,6 +18,14 @@ async function api(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+function codigoProyecto(p) {
+  const nro = p.numero_proyecto || p.codigo || "";
+  const pres = p.presupuesto_codigo || "";
+  if (nro && pres && nro !== pres) return nro + " · " + pres;
+  return nro || pres || "—";
+}
+
+
 const ESTADO_COLOR = {
   onboarding: { color: "#f59e0b", bg: "#fffbeb", label: "Onboarding" },
   activo:     { color: "#3b82f6", bg: "#eff6ff", label: "Activo" },
@@ -175,7 +183,7 @@ function TarjetaProyecto({ p, onClick }) {
     onMouseEnter={e => e.currentTarget.style.borderColor = "#3b82f6"}
     onMouseLeave={e => e.currentTarget.style.borderColor = dr !== null && dr <= 5 ? "#fecaca" : "#e8e8e8"}>
       <div style={{ fontSize: 11, fontWeight: 700, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 3 }}>
-        {p.codigo && <span style={{ fontSize: 9, color: "#aaa", marginRight: 5, fontFamily: "monospace" }}>{p.codigo}</span>}
+        <span style={{ fontSize: 9, color: "#aaa", marginRight: 5, fontFamily: "monospace" }}>{codigoProyecto(p)}</span>
         {p.descripcion || "Sin descripción"}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -417,7 +425,7 @@ export default function Planificacion({ perfil, onNav }) {
                                     <div style={{ width: 3, height: 20, borderRadius: 2, background: estado.color, flexShrink: 0 }} />
                                     <div style={{ minWidth: 0 }}>
                                       <div style={{ fontSize: 11, fontWeight: 600, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-                                        {p.codigo && <span style={{ fontSize: 9, color: "#aaa", marginRight: 4 }}>{p.codigo}</span>}
+                                        <span style={{ fontSize: 9, color: "#aaa", marginRight: 4 }}>{codigoProyecto(p)}</span>
                                         {p.descripcion || "—"}
                                       </div>
                                       <div style={{ fontSize: 9, color: dr !== null && dr < 0 ? "#c0392b" : dr !== null && dr <= 7 ? "#f59e0b" : "#bbb", fontWeight: dr !== null && dr <= 7 ? 700 : 400 }}>
