@@ -1048,6 +1048,20 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
     })();
   }, []);
 
+  // Auto-vincular presupuesto cuando se escribe el número de proyecto
+  useEffect(() => {
+    if (!form.numero_proyecto || form.presupuesto_id) return;
+    const pres = presupuestos.find(p =>
+      p.codigo === form.numero_proyecto ||
+      p.codigo === form.numero_proyecto.replace('-P', '') ||
+      String(p.codigo).trim() === String(form.numero_proyecto).trim()
+    );
+    if (pres) {
+      setForm(f => ({ ...f, presupuesto_id: pres.id }));
+      setPresSeleccionado(pres);
+    }
+  }, [form.numero_proyecto, presupuestos]);
+
   // Auto-completar desde presupuesto
   useEffect(() => {
     if (form.presupuesto_id && presupuestos.length > 0) {
@@ -1200,10 +1214,19 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
             <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
               <span style={{ background: "#f0f0f0", borderRadius: 4, padding: "2px 8px" }}>Info general</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10 }}>
               <div>
-                <span style={S.lbl}>Nro proyecto</span>
-                <input value={form.numero_proyecto} onChange={e => setForm(f => ({ ...f, numero_proyecto: e.target.value }))} style={S.inp} placeholder="1188-P" />
+                <span style={S.lbl}>Nº Proyecto (interno NPL)</span>
+                <input value={form.numero_proyecto} onChange={e => setForm(f => ({ ...f, numero_proyecto: e.target.value }))} style={S.inp} placeholder="Ej: 1188" />
+              </div>
+              <div>
+                <span style={S.lbl}>Nº Presupuesto vinculado</span>
+                <input
+                  value={presSeleccionado?.codigo || ""}
+                  disabled
+                  style={{ ...S.inp, background: presSeleccionado ? "#f0fdf4" : "#f8f8f8", color: presSeleccionado ? "#1a8a5e" : "#aaa", fontWeight: presSeleccionado ? 700 : 400, cursor: "default" }}
+                  placeholder="Se completa al vincular presupuesto"
+                />
               </div>
               <div>
                 <span style={S.lbl}>Descripción *</span>
