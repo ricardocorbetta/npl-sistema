@@ -21,6 +21,15 @@ async function api(path, options = {}) {
   return data;
 }
 
+// Helper para mostrar código completo del proyecto
+function codigoProyecto(p) {
+  const nro = p.numero_proyecto || p.codigo || "";
+  const pres = p.presupuesto_codigo || "";
+  if (nro && pres && nro !== pres) return nro + " · " + pres;
+  return nro || pres || "—";
+}
+
+
 const ESTADOS = [
   { v: "onboarding", label: "Onboarding", color: "#f59e0b", bg: "#fffbeb", border: "#fde68a" },
   { v: "activo",     label: "Activo",     color: "#3b82f6", bg: "#eff6ff", border: "#bfdbfe" },
@@ -123,7 +132,7 @@ function CardProyecto({ p, presupuesto, onClick }) {
     <div style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, overflow: "hidden" }}>
       <div onClick={onClick} style={{ padding: "12px 16px", cursor: "pointer", display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 12, alignItems: "center" }}>
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{p.codigo || p.numero_proyecto || "—"}</div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{codigoProyecto(p)}</div>
           {p.fecha_entrega_plan && <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>📅 {fmtFecha(p.fecha_entrega_plan)}</div>}
         </div>
         <div style={{ minWidth: 0 }}>
@@ -1899,8 +1908,13 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
         : esCalculista && perfil?.nombre
         ? `&encargado=eq.${encodeURIComponent(perfil.nombre)}`
         : "";
-      const rows = await api(`/proyectos?order=created_at.desc${filtro}`).catch(() => []);
-      setProyectos(Array.isArray(rows) ? rows : []);
+      const rows = await api(`/proyectos?order=created_at.desc${filtro}&select=*,presupuestos(codigo)`).catch(() => []);
+      // Mapear codigo del presupuesto
+      const rowsMapped = (Array.isArray(rows) ? rows : []).map(p => ({
+        ...p,
+        presupuesto_codigo: p.presupuestos?.codigo || null,
+      }));
+      setProyectos(rowsMapped);
 
       // Cargar equipo de todos los proyectos
       const equipoR = await api(`/proyecto_equipo?select=proyecto_id,nombre,rol,mail&order=created_at.asc`).catch(() => []);
@@ -2084,7 +2098,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                   <>
                     <div onClick={() => setModal(p)} style={{ padding: "12px 16px", cursor: "pointer", display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 12, alignItems: "center" }}>
                       <div>
-                        <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{p.codigo || p.numero_proyecto || "—"}</div>
+                        <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#555" }}>{codigoProyecto(p)}</div>
                         {p.fecha_entrega_plan && <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>📅 {fmtFecha(p.fecha_entrega_plan)}</div>}
                       </div>
                       <div style={{ minWidth: 0 }}>
