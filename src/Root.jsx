@@ -1,16 +1,16 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from './supabase.js'
-import App from './App.jsx'
-import Proyectos from './Proyectos.jsx'
-import Calculistas from './Calculistas.jsx'
-import CRM from './CRM.jsx'
-import Dashboard from './Dashboard.jsx'
-import Obras from './Obras.jsx'
-import Biblioteca from './Biblioteca.jsx'
-import Configuracion from './Configuracion.jsx'
+const App = lazy(() => import('./App.jsx'))
+const Proyectos = lazy(() => import('./Proyectos.jsx'))
+const Calculistas = lazy(() => import('./Calculistas.jsx'))
+const CRM = lazy(() => import('./CRM.jsx'))
+const Dashboard = lazy(() => import('./Dashboard.jsx'))
+const Obras = lazy(() => import('./Obras.jsx'))
+const Biblioteca = lazy(() => import('./Biblioteca.jsx'))
+const Configuracion = lazy(() => import('./Configuracion.jsx'))
 import { useTheme, ThemeToggle, makeShared, FONT_MONO, GlobalSearch } from './uiKit.jsx'
-import Postulacion from './Postulacion.jsx'
-import Planificacion from './Planificacion.jsx'
+const Postulacion = lazy(() => import('./Postulacion.jsx'))
+const Planificacion = lazy(() => import('./Planificacion.jsx'))
 
 const EDGE_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/crear-usuario'
 const EDGE_LIST_URL = 'https://imkmosifqxzbtqgzssst.supabase.co/functions/v1/listar-usuarios'
@@ -116,7 +116,7 @@ export default function Root() {
   const shared = makeShared(palette);
   const sans = { fontFamily: 'system-ui, -apple-system, sans-serif' };
 
-  if (current === 'postulacion') return <Postulacion />
+  if (current === 'postulacion') return <Suspense fallback={null}><Postulacion /></Suspense>
 
   if (loading) return (
     <div style={{ ...sans, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: palette.textFaint, fontSize: 14, background: palette.bgApp }}>
@@ -152,7 +152,7 @@ export default function Root() {
   if (modulo) return (
     <ThemeContext.Provider value={themeCtx}>
       <Layout key={current} current={current} onNav={navTo} apps={apps} onLogout={logout} perfil={perfil} theme={theme} toggle={toggle} palette={palette} hideBuscador={hideBuscador}>
-        {modulo}
+        <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'60vh',color:'#aaa',fontSize:14}}>Cargando…</div>}>{modulo}</Suspense>
       </Layout>
     </ThemeContext.Provider>
   );
