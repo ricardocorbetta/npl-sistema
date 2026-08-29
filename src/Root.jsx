@@ -22,7 +22,6 @@ const APPS_ADMIN = [
   { id: 'planificacion', label: 'Planificación', icon: '📅', desc: 'Gantt y carga de trabajo' },
   { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
   { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
-  { id: 'profesionales', label: 'Profesionales', icon: '👷', desc: 'Calculistas y equipo' },
   { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
   { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
   { id: 'configuracion', label: 'Config', icon: '⚙️', desc: 'Datos empresa' },
