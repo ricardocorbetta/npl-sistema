@@ -1332,7 +1332,7 @@ function ModalProyecto({ proyecto, onClose, onGuardar, perfil }) {
                 <input type="number" value={form.monto_saldo} onChange={e => setForm(f => ({ ...f, monto_saldo: e.target.value }))} style={S.inp} placeholder="0" />
               </div>
               <div style={{ gridColumn: "1 / 3" }}>
-                <span style={S.lbl}>Fecha entrega estimada</span>
+                <span style={S.lbl}>Fecha de entrega</span>
                 <input type="date" value={form.fecha_entrega_plan} onChange={e => setForm(f => ({ ...f, fecha_entrega_plan: e.target.value }))} style={S.inp} />
               </div>
               <div style={{ gridColumn: "3 / -1" }}>
