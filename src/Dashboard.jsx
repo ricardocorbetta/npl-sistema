@@ -11,7 +11,6 @@ async function getToken() {
 function hdrs(tk) {
   return { apikey: ANON_KEY, Authorization: `Bearer ${tk}`, "Content-Type": "application/json" };
 }
-
 function fmtMonto(v) {
   if (!v) return "—";
   const n = parseFloat(v);
@@ -30,11 +29,34 @@ function tiempoRelativo(d) {
   return `${Math.floor(diff/1440)}d`;
 }
 
-const ESTADO_COLOR = {
-  onboarding: "#f59e0b", activo: "#3b82f6", revision: "#6366f1",
-  aprobado: "#1a8a5e", enviado: "#3b82f6", negociacion: "#f59e0b",
-  rechazado: "#c0392b", borrador: "#aaa",
-};
+// Mini barra de progreso
+function MiniBar({ value, max, color = "#3b82f6", height = 4 }) {
+  const pct = max > 0 ? Math.min(100, Math.round(value / max * 100)) : 0;
+  return (
+    <div style={{ height, background: "#f0f0f0", borderRadius: 2, overflow: "hidden" }}>
+      <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.4s" }} />
+    </div>
+  );
+}
+
+// KPI card
+function KpiCard({ icon, label, value, sub, color = "#111", onClick, trend }) {
+  return (
+    <div onClick={onClick} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, padding: "12px 16px", cursor: onClick ? "pointer" : "default", transition: "all 0.1s" }}
+      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = "#3b82f6")}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "#e8e8e8")}>
+      <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, color, fontFamily: "monospace", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 2 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: "#bbb", marginTop: 3 }}>{sub}</div>}
+      {trend !== undefined && (
+        <div style={{ fontSize: 11, color: trend >= 0 ? "#1a8a5e" : "#c0392b", marginTop: 3, fontWeight: 600 }}>
+          {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}% vs mes anterior
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Dashboard({ onNav }) {
   const [perfil, setPerfil] = useState(null);
@@ -42,6 +64,7 @@ export default function Dashboard({ onNav }) {
   const [proyectos, setProyectos] = useState([]);
   const [calculistas, setCalculistas] = useState([]);
   const [cobros, setCobros] = useState([]);
+  const [honorarios, setHonorarios] = useState([]);
   const [inbox, setInbox] = useState([]);
   const [inboxAbierto, setInboxAbierto] = useState(null);
   const [inboxMensajes, setInboxMensajes] = useState([]);
@@ -49,6 +72,7 @@ export default function Dashboard({ onNav }) {
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tc, setTc] = useState(null);
+  const [seccion, setSeccion] = useState("general"); // general | equipo | tiempos | financiero
 
   useEffect(() => {
     (async () => {
@@ -64,19 +88,20 @@ export default function Dashboard({ onNav }) {
   const cargar = useCallback(async () => {
     setLoading(true);
     const tk = await getToken();
-    const [presR, proyR, calcR, cobrosR, msgsR] = await Promise.all([
-      fetch(`${SUPA_URL}/presupuestos?archivado=is.false&order=created_at.desc&limit=200`, { headers: hdrs(tk) }).then(r => r.json()),
+    const [presR, proyR, calcR, cobrosR, honR, msgsR] = await Promise.all([
+      fetch(`${SUPA_URL}/presupuestos?archivado=is.false&order=created_at.desc&limit=300`, { headers: hdrs(tk) }).then(r => r.json()),
       fetch(`${SUPA_URL}/proyectos?archivado=is.false&order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
       fetch(`${SUPA_URL}/calculistas?order=nombre.asc`, { headers: hdrs(tk) }).then(r => r.json()),
-      fetch(`${SUPA_URL}/proyecto_cobros?order=fecha_cobro.desc&limit=100`, { headers: hdrs(tk) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/proyecto_cobros?order=fecha_cobro.desc&limit=200`, { headers: hdrs(tk) }).then(r => r.json()),
+      fetch(`${SUPA_URL}/proyecto_honorarios?order=created_at.desc`, { headers: hdrs(tk) }).then(r => r.json()),
       fetch(`${SUPA_URL}/tarea_mensajes?order=created_at.desc&limit=200`, { headers: hdrs(tk) }).then(r => r.json()),
     ]);
     setPresupuestos(Array.isArray(presR) ? presR : []);
     setProyectos(Array.isArray(proyR) ? proyR : []);
     setCalculistas(Array.isArray(calcR) ? calcR : []);
     setCobros(Array.isArray(cobrosR) ? cobrosR : []);
+    setHonorarios(Array.isArray(honR) ? honR : []);
 
-    // Armar inbox agrupado por proyecto
     const msgs = Array.isArray(msgsR) ? msgsR : [];
     const proyMap = {};
     msgs.forEach(m => {
@@ -116,47 +141,74 @@ export default function Dashboard({ onNav }) {
   }
 
   // ── Métricas ──
-  const mesActual = new Date().toISOString().slice(0, 7);
-  const hoy = new Date().toISOString().slice(0, 10);
+  const HOY = new Date().toISOString().slice(0, 10);
+  const mesActual = HOY.slice(0, 7);
+  const mesAnterior = (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); })();
 
+  // PRESUPUESTOS
   const presAprobados = presupuestos.filter(p => p.estado === "aprobado");
-  const presAprobadosMes = presAprobados.filter(p => (p.fecha_aprobacion || p.fecha_emision || "").slice(0, 7) === mesActual);
+  const presAprobadosMes = presAprobados.filter(p => (p.fecha_aprobacion || "").slice(0, 7) === mesActual);
+  const presAprobadosMesAnt = presAprobados.filter(p => (p.fecha_aprobacion || "").slice(0, 7) === mesAnterior);
   const presEnviados = presupuestos.filter(p => ["enviado", "negociacion"].includes(p.estado));
   const montoAprobadoMes = presAprobadosMes.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const montoAprobadoMesUSD = tc ? Math.round(montoAprobadoMes / tc) : null;
-  const tasaConversion = presupuestos.filter(p => p.estado !== "borrador" && !p.archivado && (p.fecha_emision || "").slice(0, 7) === mesActual).length;
-  const tasaPct = tasaConversion > 0 ? Math.round(presAprobadosMes.length / tasaConversion * 100) : null;
+  const montoAprobadoMesAnt = presAprobadosMesAnt.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const emitidosMes = presupuestos.filter(p => p.estado !== "borrador" && !p.archivado && (p.fecha_emision || "").slice(0, 7) === mesActual).length;
+  const tasaPct = emitidosMes > 0 ? Math.round(presAprobadosMes.length / emitidosMes * 100) : null;
+  const recontactar = presEnviados.filter(p => {
+    const ref = p.fecha_ultimo_contacto || p.fecha_emision;
+    return ref && Math.floor((new Date() - new Date(ref + "T12:00")) / 86400000) >= 7;
+  });
 
-  const proyOnboarding = proyectos.filter(p => p.estado === "onboarding");
-  const proyActivos = proyectos.filter(p => p.estado === "activo");
-  const proyRevision = proyectos.filter(p => p.estado === "revision");
+  // PROYECTOS
+  const proyActivos = proyectos.filter(p => p.estado === "activo" && !p.archivado);
+  const proyOnboarding = proyectos.filter(p => p.estado === "onboarding" && !p.archivado);
+  const proyRevision = proyectos.filter(p => p.estado === "revision" && !p.archivado);
+  const proyEntregados = proyectos.filter(p => p.estado === "entregado" && !p.archivado);
+  const proyEntregadosMes = proyEntregados.filter(p => (p.fecha_entrega_real || "").slice(0, 7) === mesActual);
+  const proyVencidos = proyectos.filter(p => p.fecha_entrega_plan && p.fecha_entrega_plan < HOY && !["entregado"].includes(p.estado) && !p.archivado);
+  const proyProximos7 = proyectos.filter(p => {
+    if (!p.fecha_entrega_plan || p.estado === "entregado") return false;
+    const dias = Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000);
+    return dias >= 0 && dias <= 7;
+  });
+  const proyNuevosMes = proyectos.filter(p => (p.created_at || "").slice(0, 7) === mesActual);
 
+  // TIEMPOS
+  const tiemposEntrega = proyEntregados
+    .filter(p => p.fecha_inicio_real && p.fecha_entrega_real)
+    .map(p => Math.ceil((new Date(p.fecha_entrega_real + "T12:00") - new Date(p.fecha_inicio_real + "T12:00")) / 86400000));
+  const promDias = tiemposEntrega.length > 0 ? Math.round(tiemposEntrega.reduce((s, d) => s + d, 0) / tiemposEntrega.length) : null;
+  const entregadosATiempo = proyEntregados.filter(p => p.fecha_entrega_plan && p.fecha_entrega_real && p.fecha_entrega_real <= p.fecha_entrega_plan).length;
+  const tasaATiempo = proyEntregados.length > 0 ? Math.round(entregadosATiempo / proyEntregados.length * 100) : null;
+
+  // EQUIPO
+  const calcActivos = calculistas.filter(c => c.estado === "activo");
+  const calcDisponibles = calculistas.filter(c => c.disponible && c.estado === "activo");
+  const calcOcupados = calcActivos.filter(c => !c.disponible);
+  const calcPostulantes = calculistas.filter(c => c.estado === "postulante");
+  const cargaPorCalc = calcActivos.map(c => ({
+    ...c,
+    proyectos: proyectos.filter(p => p.encargado === c.nombre && ["onboarding","activo","revision"].includes(p.estado)).length,
+    vencidos: proyectos.filter(p => p.encargado === c.nombre && p.fecha_entrega_plan && p.fecha_entrega_plan < HOY && p.estado !== "entregado").length,
+  })).sort((a, b) => b.proyectos - a.proyectos);
+  const maxCarga = Math.max(...cargaPorCalc.map(c => c.proyectos), 1);
+
+  // FINANCIERO
   const totalCobrado = cobros.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
   const cobradoMes = cobros.filter(c => (c.fecha_cobro || "").slice(0, 7) === mesActual).reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+  const honorariosPendientes = honorarios.filter(h => h.estado !== "pagado").reduce((s, h) => s + parseFloat(h.monto || 0), 0);
+  const montoProyActivos = proyActivos.reduce((s, p) => s + parseFloat(p.monto_anticipo || 0) + parseFloat(p.monto_saldo || 0), 0);
+  const sinResponder = inbox.filter(i => i.ultimo?.rol !== "admin");
 
-  const calcActivos = calculistas.filter(c => c.estado === "activo");
-  const calcDisponibles = calculistas.filter(c => c.disponible);
-  const calcPostulantes = calculistas.filter(c => c.estado === "postulante");
+  // Tendencia monto aprobado
+  const tendenciaMonto = montoAprobadoMesAnt > 0 ? Math.round((montoAprobadoMes - montoAprobadoMesAnt) / montoAprobadoMesAnt * 100) : null;
 
   // Alertas
   const alertas = [];
-  // Presupuestos para recontactar
-  const recontactar = presEnviados.filter(p => {
-    const ref = p.fecha_ultimo_contacto || p.fecha_emision;
-    if (!ref) return false;
-    return Math.floor((new Date() - new Date(ref + "T12:00")) / 86400000) >= 7;
-  });
   if (recontactar.length > 0) alertas.push({ tipo: "warning", msg: `${recontactar.length} presupuesto${recontactar.length > 1 ? "s" : ""} para recontactar`, modulo: "presupuestos" });
-
-  // Proyectos vencidos
-  const proyVencidos = proyectos.filter(p => p.fecha_entrega_plan && p.fecha_entrega_plan < hoy && p.estado !== "revision" && !p.archivado);
-  if (proyVencidos.length > 0) alertas.push({ tipo: "danger", msg: `${proyVencidos.length} proyecto${proyVencidos.length > 1 ? "s" : ""} con fecha vencida`, modulo: "proyectos" });
-
-  // Calculistas postulantes sin revisar
+  if (proyVencidos.length > 0) alertas.push({ tipo: "danger", msg: `${proyVencidos.length} proyecto${proyVencidos.length > 1 ? "s" : ""} vencido${proyVencidos.length > 1 ? "s" : ""}`, modulo: "proyectos" });
+  if (proyProximos7.length > 0) alertas.push({ tipo: "warning", msg: `${proyProximos7.length} proyecto${proyProximos7.length > 1 ? "s" : ""} vence en ≤7 días`, modulo: "proyectos" });
   if (calcPostulantes.length > 0) alertas.push({ tipo: "info", msg: `${calcPostulantes.length} postulante${calcPostulantes.length > 1 ? "s" : ""} sin revisar`, modulo: "calculistas" });
-
-  // Mensajes sin responder (del calculista, sin respuesta admin posterior)
-  const sinResponder = inbox.filter(i => i.ultimo?.rol !== "admin");
   if (sinResponder.length > 0) alertas.push({ tipo: "purple", msg: `${sinResponder.length} conversación${sinResponder.length > 1 ? "es" : ""} sin respuesta`, modulo: null });
 
   if (loading) return (
@@ -167,7 +219,10 @@ export default function Dashboard({ onNav }) {
 
   const S = {
     card: { background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, padding: "14px 16px" },
-    lbl: { fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 },
+    secBtn: (id) => ({
+      padding: "6px 16px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: seccion === id ? 700 : 500,
+      background: seccion === id ? "#0a0a0a" : "#f0f0f0", color: seccion === id ? "#fff" : "#666", cursor: "pointer",
+    }),
   };
 
   return (
@@ -188,15 +243,15 @@ export default function Dashboard({ onNav }) {
         <button onClick={cargar} style={{ padding: "7px 14px", background: "#f0f0f0", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#555", fontWeight: 600 }}>↺ Actualizar</button>
       </div>
 
-      {/* ── Alertas ── */}
+      {/* Alertas */}
       {alertas.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
           {alertas.map((a, i) => {
             const colores = {
               warning: { bg: "#fffbeb", border: "#f59e0b", color: "#c4781a", icon: "⚠️" },
-              danger: { bg: "#fef2f2", border: "#c0392b", color: "#c0392b", icon: "🔴" },
-              info: { bg: "#eff6ff", border: "#3b82f6", color: "#3b82f6", icon: "ℹ️" },
-              purple: { bg: "#ede9fe", border: "#6366f1", color: "#6366f1", icon: "💬" },
+              danger:  { bg: "#fef2f2", border: "#c0392b", color: "#c0392b", icon: "🔴" },
+              info:    { bg: "#eff6ff", border: "#3b82f6", color: "#3b82f6", icon: "ℹ️" },
+              purple:  { bg: "#ede9fe", border: "#6366f1", color: "#6366f1", icon: "💬" },
             };
             const c = colores[a.tipo] || colores.info;
             return (
@@ -211,141 +266,230 @@ export default function Dashboard({ onNav }) {
         </div>
       )}
 
-      {/* ── KPIs principales ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
-        {[
-          { label: "Aprobado este mes", value: fmtMonto(montoAprobadoMes), sub: montoAprobadoMesUSD ? `U$S ${montoAprobadoMesUSD.toLocaleString("es-AR")}` : null, color: "#1a8a5e", icon: "✅" },
-          { label: "Conversión mes", value: tasaPct !== null ? `${tasaPct}%` : "—", sub: `${presAprobadosMes.length} aprobados`, color: tasaPct >= 50 ? "#1a8a5e" : tasaPct >= 30 ? "#f59e0b" : "#c0392b", icon: "📈" },
-          { label: "Proyectos activos", value: proyActivos.length, sub: `${proyOnboarding.length} onboarding · ${proyRevision.length} revisión`, color: "#3b82f6", icon: "📐" },
-          { label: "Cobrado total", value: fmtMonto(totalCobrado), sub: cobradoMes > 0 ? `${fmtMonto(cobradoMes)} este mes` : null, color: "#1a8a5e", icon: "💰" },
-          { label: "En seguimiento", value: presEnviados.length, sub: `${recontactar.length} para recontactar`, color: recontactar.length > 0 ? "#f59e0b" : "#888", icon: "📨" },
-          { label: "Calculistas", value: calcActivos.length, sub: `${calcDisponibles.length} disponibles · ${calcPostulantes.length} postulantes`, color: "#6366f1", icon: "👷" },
-        ].map(k => (
-          <div key={k.label} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 2 }}>
-            <div style={{ fontSize: 18, marginBottom: 2 }}>{k.icon}</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
-            <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>{k.label}</div>
-            {k.sub && <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{k.sub}</div>}
-          </div>
+      {/* Tabs de sección */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+        {[["general","📊 General"],["equipo","👷 Equipo"],["tiempos","⏱ Tiempos"],["financiero","💰 Financiero"]].map(([id, label]) => (
+          <button key={id} onClick={() => setSeccion(id)} style={S.secBtn(id)}>{label}</button>
         ))}
       </div>
 
-      {/* ── Grid principal ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-
-        {/* Proyectos activos */}
-        <div style={S.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>📐 Proyectos en curso</span>
-            <button onClick={() => onNav && onNav("proyectos")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver todos →</button>
+      {/* ── SECCIÓN GENERAL ── */}
+      {seccion === "general" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+            <KpiCard icon="✅" label="Aprobado este mes" value={fmtMonto(montoAprobadoMes)} sub={tc && montoAprobadoMes ? `U$S ${Math.round(montoAprobadoMes/tc).toLocaleString("es-AR")}` : null} color="#1a8a5e" trend={tendenciaMonto} onClick={() => onNav && onNav("presupuestos")} />
+            <KpiCard icon="📈" label="Conversión mes" value={tasaPct !== null ? `${tasaPct}%` : "—"} sub={`${presAprobadosMes.length} aprobados / ${emitidosMes} emitidos`} color={tasaPct >= 50 ? "#1a8a5e" : tasaPct >= 30 ? "#f59e0b" : "#c0392b"} />
+            <KpiCard icon="📐" label="Proyectos activos" value={proyActivos.length} sub={`${proyOnboarding.length} onboarding · ${proyRevision.length} revisión`} color="#3b82f6" onClick={() => onNav && onNav("proyectos")} />
+            <KpiCard icon="📦" label="Entregados este mes" value={proyEntregadosMes.length} sub={`Total: ${proyEntregados.length} entregados`} color="#1a8a5e" />
+            <KpiCard icon="⚠️" label="En riesgo" value={proyVencidos.length + proyProximos7.length} sub={`${proyVencidos.length} vencidos · ${proyProximos7.length} ≤7d`} color={proyVencidos.length > 0 ? "#c0392b" : "#f59e0b"} onClick={() => onNav && onNav("planificacion")} />
+            <KpiCard icon="💰" label="Cobrado este mes" value={fmtMonto(cobradoMes)} sub={`Total: ${fmtMonto(totalCobrado)}`} color="#1a8a5e" />
           </div>
-          {proyectos.filter(p => ["onboarding","activo","revision"].includes(p.estado)).slice(0, 6).map(p => {
-            const color = ESTADO_COLOR[p.estado] || "#888";
-            const diasEntrega = p.fecha_entrega_plan ? Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000) : null;
-            return (
-              <div key={p.id} onClick={() => onNav && onNav("proyectos", p.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f5f5f5", cursor: "pointer" }}>
-                <div style={{ width: 4, height: 32, borderRadius: 2, background: color, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion}</div>
-                  <div style={{ fontSize: 11, color: "#aaa" }}>
-                    {p.encargado || "Sin asignar"}
-                    {p.cliente && ` · ${p.cliente}`}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {/* Proyectos activos */}
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>📐 Proyectos en curso</span>
+                <button onClick={() => onNav && onNav("proyectos")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer" }}>Ver todos →</button>
+              </div>
+              {proyectos.filter(p => ["onboarding","activo","revision"].includes(p.estado)).slice(0, 6).map(p => {
+                const ECOLOR = { onboarding: "#f59e0b", activo: "#3b82f6", revision: "#6366f1" };
+                const color = ECOLOR[p.estado] || "#888";
+                const dias = p.fecha_entrega_plan ? Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000) : null;
+                return (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f5f5f5" }}>
+                    <div style={{ width: 4, height: 28, borderRadius: 2, background: color, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion}</div>
+                      <div style={{ fontSize: 10, color: "#aaa" }}>{p.encargado || "Sin asignar"}</div>
+                    </div>
+                    {dias !== null && <span style={{ fontSize: 10, fontWeight: 700, color: dias < 0 ? "#c0392b" : dias <= 7 ? "#f59e0b" : "#aaa" }}>{dias < 0 ? `${Math.abs(dias)}d vencido` : `${dias}d`}</span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Presupuestos recientes */}
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>💰 Presupuestos recientes</span>
+                <button onClick={() => onNav && onNav("presupuestos")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer" }}>Ver todos →</button>
+              </div>
+              {presupuestos.slice(0, 7).map(p => {
+                const ECOLOR = { aprobado: "#1a8a5e", enviado: "#3b82f6", negociacion: "#f59e0b", rechazado: "#c0392b", borrador: "#aaa" };
+                const color = ECOLOR[p.estado] || "#888";
+                return (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f5f5f5" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || p.cliente || "—"}</div>
+                      <div style={{ fontSize: 10, color: "#aaa" }}>{p.cliente}</div>
+                    </div>
+                    {p.monto && <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color }}>{fmtMonto(p.monto)}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── SECCIÓN EQUIPO ── */}
+      {seccion === "equipo" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+            <KpiCard icon="👷" label="Calculistas activos" value={calcActivos.length} sub={`${calcDisponibles.length} disponibles · ${calcOcupados.length} ocupados`} color="#6366f1" />
+            <KpiCard icon="✅" label="Disponibles ahora" value={calcDisponibles.length} sub={calcActivos.length > 0 ? `${Math.round(calcDisponibles.length/calcActivos.length*100)}% del equipo` : "—"} color="#1a8a5e" />
+            <KpiCard icon="📋" label="Postulantes" value={calcPostulantes.length} sub="Sin revisar" color="#3b82f6" onClick={() => onNav && onNav("calculistas")} />
+            <KpiCard icon="📐" label="Proyectos por calc." value={calcActivos.length > 0 ? (proyActivos.length / calcActivos.length).toFixed(1) : "—"} sub="promedio activos" color="#f59e0b" />
+          </div>
+
+          <div style={S.card}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>Carga de trabajo por calculista</div>
+            {cargaPorCalc.length === 0 && <p style={{ color: "#aaa", fontSize: 13 }}>Sin calculistas activos</p>}
+            {cargaPorCalc.map(c => (
+              <div key={c.id} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: c.disponible ? "#1a8a5e" : "#e0e0e0", color: c.disponible ? "#fff" : "#aaa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>
+                      {c.nombre[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{c.nombre}</div>
+                      <div style={{ fontSize: 10, color: "#aaa" }}>{c.nivel || "Calculista"} · {c.disponible ? "✓ Disponible" : "Ocupado"}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: c.proyectos > 5 ? "#c0392b" : c.proyectos > 3 ? "#f59e0b" : "#1a8a5e" }}>{c.proyectos}</div>
+                    <div style={{ fontSize: 10, color: "#aaa" }}>proyectos</div>
                   </div>
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: `${color}15`, color }}>{p.estado}</div>
-                  {diasEntrega !== null && <div style={{ fontSize: 10, color: diasEntrega < 0 ? "#c0392b" : diasEntrega <= 7 ? "#f59e0b" : "#aaa", marginTop: 2 }}>{diasEntrega < 0 ? "Vencido" : `${diasEntrega}d`}</div>}
+                <MiniBar value={c.proyectos} max={maxCarga} color={c.proyectos > 5 ? "#c0392b" : c.proyectos > 3 ? "#f59e0b" : "#1a8a5e"} height={6} />
+                {c.vencidos > 0 && <div style={{ fontSize: 10, color: "#c0392b", marginTop: 3, fontWeight: 700 }}>⚠️ {c.vencidos} proyecto{c.vencidos > 1 ? "s" : ""} vencido{c.vencidos > 1 ? "s" : ""}</div>}
+                {/* Proyectos de este calculista */}
+                <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {proyectos.filter(p => p.encargado === c.nombre && ["onboarding","activo","revision"].includes(p.estado)).map(p => {
+                    const dias = p.fecha_entrega_plan ? Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000) : null;
+                    return (
+                      <span key={p.id} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, background: dias !== null && dias < 0 ? "#fef2f2" : dias !== null && dias <= 7 ? "#fffbeb" : "#f8f8f8", border: `1px solid ${dias !== null && dias < 0 ? "#fecaca" : dias !== null && dias <= 7 ? "#fde68a" : "#e8e8e8"}`, color: "#555" }}>
+                        {p.descripcion?.slice(0, 20)}{dias !== null ? ` (${dias < 0 ? "venc." : `${dias}d`})` : ""}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
-          {proyectos.filter(p => ["onboarding","activo","revision"].includes(p.estado)).length === 0 && (
-            <p style={{ color: "#ccc", fontSize: 13, textAlign: "center", padding: 20 }}>Sin proyectos activos</p>
-          )}
-        </div>
-
-        {/* Presupuestos recientes */}
-        <div style={S.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>💰 Presupuestos recientes</span>
-            <button onClick={() => onNav && onNav("presupuestos")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver todos →</button>
+            ))}
           </div>
-          {presupuestos.slice(0, 7).map(p => {
-            const color = ESTADO_COLOR[p.estado] || "#888";
-            return (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f5f5f5" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.descripcion || p.cliente || "—"}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>{p.cliente} · {fmtFecha(p.fecha_emision)}</div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  {p.monto && <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace" }}>{fmtMonto(p.monto)}</div>}
-                  <div style={{ fontSize: 10, color, fontWeight: 600 }}>{p.estado}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* ── Calculistas top ── */}
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: "#111" }}>👷 Equipo de calculistas</span>
-          <button onClick={() => onNav && onNav("calculistas")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver todos →</button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
-          {calcActivos.map(c => {
-            const proyAsignados = proyectos.filter(p => p.encargado === c.nombre && ["onboarding","activo","revision"].includes(p.estado)).length;
-            return (
-              <div key={c.id} style={{ background: "#f8f8f8", borderRadius: 9, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: c.disponible ? "#1a8a5e" : "#e0e0e0", color: c.disponible ? "#fff" : "#aaa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>
-                  {(c.nombre || "?")[0].toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>
-                    {proyAsignados > 0 ? `${proyAsignados} proyecto${proyAsignados > 1 ? "s" : ""}` : "Sin proyectos"}
-                    {c.nivel && ` · ${c.nivel}`}
+      {/* ── SECCIÓN TIEMPOS ── */}
+      {seccion === "tiempos" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+            <KpiCard icon="⏱" label="Tiempo promedio entrega" value={promDias !== null ? `${promDias}d` : "—"} sub="desde inicio a entrega" color="#6366f1" />
+            <KpiCard icon="✅" label="Entregados a tiempo" value={tasaATiempo !== null ? `${tasaATiempo}%` : "—"} sub={`${entregadosATiempo} de ${proyEntregados.length}`} color={tasaATiempo >= 80 ? "#1a8a5e" : tasaATiempo >= 60 ? "#f59e0b" : "#c0392b"} />
+            <KpiCard icon="🔴" label="Vencidos" value={proyVencidos.length} sub="con fecha pasada" color={proyVencidos.length > 0 ? "#c0392b" : "#1a8a5e"} onClick={() => onNav && onNav("planificacion")} />
+            <KpiCard icon="🟡" label="Vencen en 7 días" value={proyProximos7.length} sub="en riesgo inmediato" color={proyProximos7.length > 0 ? "#f59e0b" : "#1a8a5e"} />
+            <KpiCard icon="📦" label="Entregados este mes" value={proyEntregadosMes.length} sub={`Total histórico: ${proyEntregados.length}`} color="#1a8a5e" />
+            <KpiCard icon="🆕" label="Nuevos este mes" value={proyNuevosMes.length} sub="proyectos iniciados" color="#3b82f6" />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {/* Proyectos vencidos */}
+            <div style={S.card}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, color: "#c0392b" }}>🔴 Proyectos vencidos</div>
+              {proyVencidos.length === 0 ? <p style={{ color: "#1a8a5e", fontSize: 13 }}>✅ Sin proyectos vencidos</p> :
+                proyVencidos.map(p => {
+                  const dias = Math.ceil((new Date() - new Date(p.fecha_entrega_plan + "T12:00")) / 86400000);
+                  return (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f5f5f5" }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{p.descripcion}</div>
+                        <div style={{ fontSize: 10, color: "#aaa" }}>{p.encargado || "Sin asignar"}</div>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: "#c0392b" }}>{dias}d vencido</span>
+                    </div>
+                  );
+                })
+              }
+            </div>
+
+            {/* Próximos a vencer */}
+            <div style={S.card}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, color: "#f59e0b" }}>🟡 Vencen próximamente</div>
+              {proyProximos7.length === 0 ? <p style={{ color: "#1a8a5e", fontSize: 13 }}>✅ Sin vencimientos próximos</p> :
+                proyProximos7.map(p => {
+                  const dias = Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000);
+                  return (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f5f5f5" }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{p.descripcion}</div>
+                        <div style={{ fontSize: 10, color: "#aaa" }}>{p.encargado || "Sin asignar"} · {fmtFecha(p.fecha_entrega_plan)}</div>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: dias <= 3 ? "#c0392b" : "#f59e0b" }}>{dias === 0 ? "HOY" : `${dias}d`}</span>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── SECCIÓN FINANCIERO ── */}
+      {seccion === "financiero" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+            <KpiCard icon="💰" label="Cobrado este mes" value={fmtMonto(cobradoMes)} sub={`Total: ${fmtMonto(totalCobrado)}`} color="#1a8a5e" />
+            <KpiCard icon="📊" label="Aprobado este mes" value={fmtMonto(montoAprobadoMes)} sub={tc ? `U$S ${Math.round(montoAprobadoMes/tc).toLocaleString("es-AR")}` : null} color="#1a8a5e" trend={tendenciaMonto} />
+            <KpiCard icon="⏳" label="Hon. pendientes" value={fmtMonto(honorariosPendientes)} sub="calculistas sin pagar" color="#f59e0b" />
+            <KpiCard icon="📈" label="Conversión mes" value={tasaPct !== null ? `${tasaPct}%` : "—"} sub={`${presAprobadosMes.length} de ${emitidosMes} emitidos`} color={tasaPct >= 50 ? "#1a8a5e" : "#f59e0b"} />
+            <KpiCard icon="📋" label="En seguimiento" value={presEnviados.length} sub={`${recontactar.length} para recontactar`} color={recontactar.length > 0 ? "#f59e0b" : "#888"} onClick={() => onNav && onNav("presupuestos")} />
+            <KpiCard icon="💵" label="MEP hoy" value={tc ? `$${tc.toLocaleString("es-AR")}` : "—"} sub="tipo de cambio bolsa" color="#888" />
+          </div>
+
+          <div style={S.card}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>Honorarios pendientes por calculista</div>
+            {calcActivos.filter(c => {
+              return honorarios.some(h => h.calculista === c.nombre && h.estado !== "pagado");
+            }).map(c => {
+              const hons = honorarios.filter(h => h.calculista === c.nombre && h.estado !== "pagado");
+              const total = hons.reduce((s, h) => s + parseFloat(h.monto || 0), 0);
+              return (
+                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f5f5f5" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>
+                      {c.nombre[0]}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{c.nombre}</div>
+                      <div style={{ fontSize: 10, color: "#aaa" }}>{hons.length} proyecto{hons.length > 1 ? "s" : ""}</div>
+                    </div>
                   </div>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: "#f59e0b", fontFamily: "monospace" }}>{fmtMonto(total)}</span>
                 </div>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.disponible ? "#1a8a5e" : "#e0e0e0", flexShrink: 0 }} />
-              </div>
-            );
-          })}
-          {calcActivos.length === 0 && <p style={{ color: "#ccc", fontSize: 12, gridColumn: "1/-1", textAlign: "center", padding: 12 }}>Sin calculistas activos</p>}
-        </div>
-        {calcPostulantes.length > 0 && (
-          <div style={{ marginTop: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12, color: "#3b82f6", fontWeight: 600 }}>📋 {calcPostulantes.length} postulante{calcPostulantes.length > 1 ? "s" : ""} esperando revisión</span>
-            <button onClick={() => onNav && onNav("calculistas")} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>Revisar →</button>
+              );
+            })}
+            {calcActivos.filter(c => honorarios.some(h => h.calculista === c.nombre && h.estado !== "pagado")).length === 0 && (
+              <p style={{ color: "#1a8a5e", fontSize: 13 }}>✅ Sin honorarios pendientes</p>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* ── Inbox ── */}
-      <div style={S.card}>
+      {/* ── INBOX ── */}
+      <div style={{ ...S.card, marginTop: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <span style={{ fontSize: 16 }}>💬</span>
-          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#111" }}>Comunicaciones</h2>
-          {sinResponder.length > 0 && (
-            <span style={{ fontSize: 11, background: "#6366f1", color: "#fff", borderRadius: 20, padding: "2px 9px", fontWeight: 700 }}>
-              {sinResponder.length} sin responder
-            </span>
-          )}
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{inbox.length} proyectos con mensajes</span>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>Comunicaciones</h2>
+          {sinResponder.length > 0 && <span style={{ fontSize: 11, background: "#6366f1", color: "#fff", borderRadius: 20, padding: "2px 9px", fontWeight: 700 }}>{sinResponder.length} sin responder</span>}
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{inbox.length} proyectos</span>
         </div>
-
         {inbox.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#ccc" }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>💬</div>
-            <div style={{ fontSize: 13 }}>Sin mensajes aún</div>
-          </div>
+          <div style={{ textAlign: "center", padding: 24, color: "#ccc" }}>Sin mensajes aún</div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: inboxAbierto ? "300px 1fr" : "1fr", gap: 12 }}>
-
-            {/* Lista */}
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {inbox.map(item => {
                 const p = item.proyecto;
@@ -356,11 +500,9 @@ export default function Dashboard({ onNav }) {
                     if (sel) { setInboxAbierto(null); return; }
                     setInboxAbierto(item.proyecto_id);
                     await cargarMensajesProyecto(item.proyecto_id);
-                  }} style={{ padding: "9px 12px", borderRadius: 9, cursor: "pointer", border: `1.5px solid ${sel ? "#6366f1" : sinResp ? "#c4b5fd" : "#e8e8e8"}`, background: sel ? "#ede9fe" : sinResp ? "#faf5ff" : "#fff", transition: "all 0.1s" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 3 }}>
-                      <div style={{ fontWeight: 700, fontSize: 12, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
-                        {p?.descripcion || "Proyecto"}
-                      </div>
+                  }} style={{ padding: "9px 12px", borderRadius: 9, cursor: "pointer", border: `1.5px solid ${sel ? "#6366f1" : sinResp ? "#c4b5fd" : "#e8e8e8"}`, background: sel ? "#ede9fe" : sinResp ? "#faf5ff" : "#fff" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>{p?.descripcion || "Proyecto"}</div>
                       <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
                         {sinResp && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6366f1", display: "inline-block" }} />}
                         <span style={{ fontSize: 10, color: "#bbb" }}>{tiempoRelativo(item.ultimo.created_at)}</span>
@@ -374,22 +516,17 @@ export default function Dashboard({ onNav }) {
                 );
               })}
             </div>
-
-            {/* Panel conversación */}
             {inboxAbierto && (
-              <div style={{ border: "1.5px solid #e8e8e8", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", height: 400 }}>
+              <div style={{ border: "1.5px solid #e8e8e8", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", height: 380 }}>
                 <div style={{ padding: "10px 14px", borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{inbox.find(i => i.proyecto_id === inboxAbierto)?.proyecto?.descripcion}</div>
-                    <div style={{ fontSize: 10, color: "#aaa" }}>{inboxMensajes.length} mensajes</div>
-                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{inbox.find(i => i.proyecto_id === inboxAbierto)?.proyecto?.descripcion}</div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => onNav && onNav("proyectos", inboxAbierto)} style={{ fontSize: 11, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Ver proyecto →</button>
                     <button onClick={() => setInboxAbierto(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 16 }}>✕</button>
                   </div>
                 </div>
                 <div style={{ flex: 1, overflow: "auto", padding: "10px 14px" }}>
-                  {loadingInbox ? <p style={{ color: "#aaa", fontSize: 12, textAlign: "center" }}>Cargando…</p> :
+                  {loadingInbox ? <p style={{ color: "#aaa", fontSize: 12 }}>Cargando…</p> :
                     inboxMensajes.map(m => {
                       const esAdmin = m.rol === "admin";
                       return (
