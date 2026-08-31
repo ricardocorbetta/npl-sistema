@@ -724,7 +724,7 @@ function ModalPresupuesto({ pres, onGuardar, onGenerar, onNav, onClose }) {
 }
 
 /* ─── Card presupuesto ─── */
-function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar, onGenerar }) {
+function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchivar, onGenerar, onEliminar }) {
   const estado = ESTADOS.find(e => e.v === p.estado);
   const tipo = TIPOS_SERVICIO.find(t => t.v === p.tipo_servicio);
   const sistema = SISTEMAS_CONSTRUCTIVOS.find(s => s.v === p.sistema_constructivo);
@@ -798,7 +798,9 @@ function CardPresupuesto({ p, onEditar, onCambiarEstado, onArchivar, onDesarchiv
           )}
           {p.archivado === true
             ? <button onClick={() => onDesarchivar && onDesarchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#333" }}>↩</button>
-            : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#999" }}>📦</button>
+            : <button onClick={() => onArchivar && onArchivar(p.id)} style={{ background: "#f0f0f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#999" }}>📦</button>}
+          {onEliminar && <button onClick={() => onEliminar && onEliminar(p.id)} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑</button>}
+          {false
           }
         </div>
 
@@ -991,6 +993,13 @@ export default function App({ deepLinkId, onNav }) {
     };
     await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "PATCH", headers: hdrs(tk), body: JSON.stringify(patch) });
     setPresupuestos(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+  }
+
+  async function eliminarPresupuesto(id) {
+    if (!confirm("¿Eliminar este presupuesto? Esta acción no se puede deshacer.")) return;
+    const tk = await getToken();
+    await fetch(`${SUPA_URL}/presupuestos?id=eq.${id}`, { method: "DELETE", headers: hdrs(tk) });
+    cargar();
   }
 
   async function archivar(id) {
@@ -1200,7 +1209,7 @@ export default function App({ deepLinkId, onNav }) {
       {loading ? <p style={{ color: "#aaa" }}>Cargando…</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {ordenados.map(p => (
-            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} onArchivar={archivar} onDesarchivar={desarchivar} onGenerar={generarDesdePresupuesto} />
+            <CardPresupuesto key={p.id} p={p} onEditar={p => { setEditando(p); setShowModal(true); }} onCambiarEstado={cambiarEstado} onArchivar={archivar} onDesarchivar={desarchivar} onGenerar={generarDesdePresupuesto} onEliminar={eliminarPresupuesto} />
           ))}
           {ordenados.length === 0 && <p style={{ color: "#aaa", textAlign: "center", padding: 40 }}>Sin resultados</p>}
         </div>
