@@ -1965,6 +1965,14 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     ));
   }
 
+  async function eliminarProyecto(p) {
+    if (!confirm(`¿Eliminar el proyecto "${p.descripcion}"? Esta acción no se puede deshacer.`)) return;
+    await api(`/proyectos?id=eq.${p.id}`, { method: "DELETE" });
+    setMsg("✓ Proyecto eliminado");
+    setTimeout(() => setMsg(""), 2500);
+    cargar();
+  }
+
   async function cambiarEstado(p, nuevoEstado) {
     const hoy = new Date().toISOString().slice(0, 10);
     const patch = { estado: nuevoEstado };
