@@ -2263,6 +2263,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                         if (!siguiente) return null;
                         return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
                       })()}
+                      <button onClick={() => eliminarProyecto(p)} style={{ ...S.btnSm, color: "#c0392b", borderColor: "#fecaca", background: "#fef2f2" }}>🗑</button>
                     </div>
                   </>
                 ) : (
