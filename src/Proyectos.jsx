@@ -2017,15 +2017,29 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
   }).sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999));
 
   const mesFiltro = filtroMes || new Date().toISOString().slice(0, 7);
+  const aprobadosMes = proyectos.filter(p => p.fecha_aprobacion && p.fecha_aprobacion.slice(0, 7) === mesFiltro && !p.archivado);
+  const entregadosMesArr = proyectos.filter(p => p.fecha_entrega_real && p.fecha_entrega_real.slice(0, 7) === mesFiltro);
+  const ratioMes = aprobadosMes.length > 0 ? Math.round(entregadosMesArr.length / aprobadosMes.length * 100) : null;
+  const montoAprobadoMes = aprobadosMes.reduce((s, p) => s + (parseFloat(p.monto_anticipo || 0) + parseFloat(p.monto_saldo || 0)), 0);
+  const promDiasEjecucion = (() => {
+    const conFechas = proyectos.filter(p => p.fecha_inicio_real && p.fecha_entrega_real);
+    if (!conFechas.length) return null;
+    const suma = conFechas.reduce((s, p) => s + Math.ceil((new Date(p.fecha_entrega_real + "T12:00") - new Date(p.fecha_inicio_real + "T12:00")) / 86400000), 0);
+    return Math.round(suma / conFechas.length);
+  })();
+
   const kpis = {
-    onboarding:   proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
-    activos:      proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
-    revision:     proyectos.filter(p => p.estado === "revision" && !p.archivado).length,
-    entregado:    proyectos.filter(p => p.estado === "entregado" && !p.archivado).length,
-    archivados:   proyectos.filter(p => p.archivado).length,
-    total:        proyectos.filter(p => !p.archivado).length,
-    confirmadosMes: proyectos.filter(p => (p.fecha_aprobacion || p.created_at || "").slice(0, 7) === mesFiltro && !p.archivado).length,
-    entregadosMes:  proyectos.filter(p => p.estado === "entregado" && (p.fecha_entrega_real || "").slice(0, 7) === mesFiltro).length,
+    onboarding:      proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
+    activos:         proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
+    revision:        proyectos.filter(p => p.estado === "revision" && !p.archivado).length,
+    entregado:       proyectos.filter(p => p.estado === "entregado" && !p.archivado).length,
+    archivados:      proyectos.filter(p => p.archivado).length,
+    total:           proyectos.filter(p => !p.archivado).length,
+    aprobadosMes:    aprobadosMes.length,
+    entregadosMes:   entregadosMesArr.length,
+    ratioMes,
+    montoAprobadoMes,
+    promDiasEjecucion,
   };
 
   // ── Métricas gerenciales ──
@@ -2065,12 +2079,13 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {[
           { label: "Onboarding", value: kpis.onboarding, color: "#f59e0b" },
-          { label: "Activos",         value: kpis.activos,         color: "#3b82f6" },
-          { label: "Revisión",        value: kpis.revision,        color: "#6366f1" },
-          { label: "Entregado",       value: kpis.entregado,       color: "#1a8a5e" },
-          { label: filtroMes ? `Confirmados ${filtroMes}` : "Confirmados mes", value: kpis.confirmadosMes, color: "#f59e0b" },
-          { label: filtroMes ? `Entregados ${filtroMes}` : "Entregados mes",   value: kpis.entregadosMes,  color: "#1a8a5e" },
-          { label: "Total",           value: kpis.total,           color: "#888" },
+          { label: "Activos",          value: kpis.activos,         color: "#3b82f6" },
+          { label: "Revisión",         value: kpis.revision,        color: "#6366f1" },
+          { label: "Total",            value: kpis.total,           color: "#888" },
+          { label: `Aprobados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.aprobadosMes, color: "#f59e0b", sub: "por fecha de aprobación" },
+          { label: `Entregados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.entregadosMes, color: "#1a8a5e", sub: "por fecha de entrega real" },
+          { label: "Ratio entrega/aprobación", value: kpis.ratioMes !== null ? `${kpis.ratioMes}%` : "—", color: kpis.ratioMes >= 80 ? "#1a8a5e" : kpis.ratioMes >= 50 ? "#f59e0b" : "#c0392b", sub: `${kpis.entregadosMes}/${kpis.aprobadosMes}` },
+          { label: "Días promedio ejecución", value: kpis.promDiasEjecucion !== null ? `${kpis.promDiasEjecucion}d` : "—", color: "#6366f1", sub: "inicio a entrega" },
         ].map(k => (
           <div key={k.label} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 10, padding: "8px 14px", minWidth: 80 }}>
             <div style={{ fontSize: 20, fontWeight: 900, color: k.color, fontFamily: "monospace" }}>{k.value}</div>
@@ -2080,71 +2095,6 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
       </div>
 
       {/* Flujo de caja — solo admin */}
-      {esAdmin && (
-        <div style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
-          <div onClick={() => setShowMetricas(v => !v)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", cursor: "pointer" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
-            onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span>📊</span>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>Indicadores de gestión</span>
-              {proyVencidos.length > 0 && <span style={{ fontSize: 10, background: "#fef2f2", color: "#c0392b", borderRadius: 20, padding: "1px 7px", fontWeight: 700 }}>🔴 {proyVencidos.length} vencidos</span>}
-              {proyProximos7.length > 0 && <span style={{ fontSize: 10, background: "#fffbeb", color: "#c4781a", borderRadius: 20, padding: "1px 7px", fontWeight: 700 }}>🟡 {proyProximos7.length} próximos</span>}
-            </div>
-            <span style={{ color: "#aaa", fontSize: 16, transform: showMetricas ? "rotate(180deg)" : "none", transition: "0.2s" }}>⌄</span>
-          </div>
-          {showMetricas && (
-            <div style={{ borderTop: "1px solid #f0f0f0", padding: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
-                {[
-                  { icon: "⏱", label: "Tiempo promedio", value: promDiasP !== null ? `${promDiasP}d` : "—", sub: "inicio a entrega", color: "#6366f1" },
-                  { icon: "✅", label: "Entregados a tiempo", value: tasaATiempoP !== null ? `${tasaATiempoP}%` : "—", sub: `${entregadosATiempoP} de ${kpis.entregado}`, color: tasaATiempoP >= 80 ? "#1a8a5e" : tasaATiempoP >= 60 ? "#f59e0b" : "#c0392b" },
-                  { icon: "📦", label: "Entregados este mes", value: proyEntregadosMes.length, sub: `Total: ${kpis.entregado}`, color: "#1a8a5e" },
-                  { icon: "🆕", label: "Nuevos este mes", value: proyNuevosMes.length, sub: "proyectos iniciados", color: "#3b82f6" },
-                  { icon: "🔴", label: "Vencidos", value: proyVencidos.length, sub: "con fecha pasada", color: proyVencidos.length > 0 ? "#c0392b" : "#1a8a5e" },
-                  { icon: "🟡", label: "Vencen en 7 días", value: proyProximos7.length, sub: "en riesgo", color: proyProximos7.length > 0 ? "#f59e0b" : "#1a8a5e" },
-                ].map(k => (
-                  <div key={k.label} style={{ background: "#f8f8f8", borderRadius: 10, padding: "10px 14px" }}>
-                    <div style={{ fontSize: 16, marginBottom: 4 }}>{k.icon}</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
-                    <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 2 }}>{k.label}</div>
-                    {k.sub && <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{k.sub}</div>}
-                  </div>
-                ))}
-              </div>
-              {proyVencidos.length > 0 && (
-                <div style={{ background: "#fef2f2", borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#c0392b", marginBottom: 8 }}>🔴 Proyectos vencidos</div>
-                  {proyVencidos.map(p => {
-                    const dias = Math.ceil((new Date() - new Date(p.fecha_entrega_plan + "T12:00")) / 86400000);
-                    return (
-                      <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #fecaca", fontSize: 12 }}>
-                        <span style={{ fontWeight: 600 }}>{p.descripcion} <span style={{ color: "#aaa", fontWeight: 400 }}>· {p.encargado}</span></span>
-                        <span style={{ color: "#c0392b", fontWeight: 700 }}>{dias}d vencido</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {proyProximos7.length > 0 && (
-                <div style={{ background: "#fffbeb", borderRadius: 8, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#c4781a", marginBottom: 8 }}>🟡 Vencen pronto</div>
-                  {proyProximos7.map(p => {
-                    const dias = Math.ceil((new Date(p.fecha_entrega_plan + "T12:00") - new Date()) / 86400000);
-                    return (
-                      <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #fde68a", fontSize: 12 }}>
-                        <span style={{ fontWeight: 600 }}>{p.descripcion} <span style={{ color: "#aaa", fontWeight: 400 }}>· {p.encargado}</span></span>
-                        <span style={{ color: dias <= 3 ? "#c0392b" : "#f59e0b", fontWeight: 700 }}>{dias === 0 ? "HOY" : `${dias}d`}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {esAdmin && <FlujoCaja proyectos={proyectos} presupuestosMap={presupuestosMap} />}
 
       {/* Tabs + filtro integrado */}
