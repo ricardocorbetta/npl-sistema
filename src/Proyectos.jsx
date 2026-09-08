@@ -2012,7 +2012,8 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     const okPersona = !filtroPersona ||
       (p.encargado || "").toLowerCase().includes(filtroPersona.toLowerCase()) ||
       equipoProy.some(m => m.nombre.toLowerCase().includes(filtroPersona.toLowerCase()));
-    return okTab && okBusq && okPersona;
+    const okMes = !filtroMes || (p.fecha_entrega_plan || "").slice(0, 7) === filtroMes;
+    return okTab && okBusq && okPersona && okMes;
   }).sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999));
 
   const mesFiltro = filtroMes || new Date().toISOString().slice(0, 7);
