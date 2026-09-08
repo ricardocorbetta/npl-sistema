@@ -1880,6 +1880,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
   const [tab, setTab] = useState("todos");
   const [busq, setBusq] = useState("");
   const [filtroPersona, setFiltroPersona] = useState("");
+  const [filtroMes, setFiltroMes] = useState("");
   const [modal, setModal] = useState(null);
   const [dragging, setDragging] = useState(null);
   const [dragOver, setDragOver] = useState(null);
@@ -1965,6 +1966,14 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     ));
   }
 
+  async function archivarProyecto(p) {
+    const archivado = !p.archivado;
+    await api(`/proyectos?id=eq.${p.id}`, { method: "PATCH", body: JSON.stringify({ archivado }) });
+    setMsg(archivado ? "✓ Proyecto archivado" : "✓ Proyecto restaurado");
+    setTimeout(() => setMsg(""), 2000);
+    cargar();
+  }
+
   async function eliminarProyecto(p) {
     if (!confirm(`¿Eliminar el proyecto "${p.descripcion}"? Esta acción no se puede deshacer.`)) return;
     await api(`/proyectos?id=eq.${p.id}`, { method: "DELETE" });
@@ -1988,8 +1997,9 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
   const TABS = [
     { id: "onboarding", label: "Onboarding", filter: p => p.estado === "onboarding" && !p.archivado },
     { id: "activos",    label: "Activos",    filter: p => p.estado === "activo" && !p.archivado },
-    { id: "revision",   label: "Revisión",   filter: p => p.estado === "revision" && !p.archivado },
     { id: "entregado",  label: "Entregado",  filter: p => p.estado === "entregado" && !p.archivado },
+    { id: "revision",   label: "Revisión",   filter: p => p.estado === "revision" && !p.archivado },
+    { id: "archivados", label: "Archivados", filter: p => p.archivado },
     { id: "todos",      label: "Todos",      filter: p => !p.archivado },
   ];
 
@@ -2005,12 +2015,16 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     return okTab && okBusq && okPersona;
   }).sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999));
 
+  const mesFiltro = filtroMes || new Date().toISOString().slice(0, 7);
   const kpis = {
-    onboarding: proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
-    activos:    proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
-    revision:   proyectos.filter(p => p.estado === "revision" && !p.archivado).length,
-    entregado:  proyectos.filter(p => p.estado === "entregado" && !p.archivado).length,
-    total:      proyectos.filter(p => !p.archivado).length,
+    onboarding:   proyectos.filter(p => p.estado === "onboarding" && !p.archivado).length,
+    activos:      proyectos.filter(p => p.estado === "activo" && !p.archivado).length,
+    revision:     proyectos.filter(p => p.estado === "revision" && !p.archivado).length,
+    entregado:    proyectos.filter(p => p.estado === "entregado" && !p.archivado).length,
+    archivados:   proyectos.filter(p => p.archivado).length,
+    total:        proyectos.filter(p => !p.archivado).length,
+    confirmadosMes: proyectos.filter(p => (p.fecha_aprobacion || p.created_at || "").slice(0, 7) === mesFiltro && !p.archivado).length,
+    entregadosMes:  proyectos.filter(p => p.estado === "entregado" && (p.fecha_entrega_real || "").slice(0, 7) === mesFiltro).length,
   };
 
   // ── Métricas gerenciales ──
@@ -2050,10 +2064,12 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {[
           { label: "Onboarding", value: kpis.onboarding, color: "#f59e0b" },
-          { label: "Activos",    value: kpis.activos,    color: "#3b82f6" },
-          { label: "Revisión",   value: kpis.revision,   color: "#6366f1" },
-          { label: "Entregado",  value: kpis.entregado,  color: "#1a8a5e" },
-          { label: "Total",      value: kpis.total,      color: "#888" },
+          { label: "Activos",         value: kpis.activos,         color: "#3b82f6" },
+          { label: "Revisión",        value: kpis.revision,        color: "#6366f1" },
+          { label: "Entregado",       value: kpis.entregado,       color: "#1a8a5e" },
+          { label: filtroMes ? `Confirmados ${filtroMes}` : "Confirmados mes", value: kpis.confirmadosMes, color: "#f59e0b" },
+          { label: filtroMes ? `Entregados ${filtroMes}` : "Entregados mes",   value: kpis.entregadosMes,  color: "#1a8a5e" },
+          { label: "Total",           value: kpis.total,           color: "#888" },
         ].map(k => (
           <div key={k.label} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 10, padding: "8px 14px", minWidth: 80 }}>
             <div style={{ fontSize: 20, fontWeight: 900, color: k.color, fontFamily: "monospace" }}>{k.value}</div>
@@ -2148,6 +2164,20 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
         <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Filtrar lista…"
           style={{ border: "none", outline: "none", fontSize: 12, color: "#555", background: "transparent", width: 160 }} />
         {busq && <button onClick={() => setBusq("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 14 }}>✕</button>}
+        <div style={{ width: 1, height: 16, background: "#e0e0e0", margin: "0 4px" }} />
+        <span style={{ fontSize: 11, color: "#aaa", flexShrink: 0 }}>📅</span>
+        <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)}
+          style={{ border: "none", outline: "none", fontSize: 12, color: filtroMes ? "#111" : "#aaa", background: "transparent", cursor: "pointer" }}>
+          <option value="">Todos los meses</option>
+          {Array.from({ length: 12 }, (_, i) => {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const val = d.toISOString().slice(0, 7);
+            const label = d.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+            return <option key={val} value={val}>{label}</option>;
+          })}
+        </select>
+        {filtroMes && <button onClick={() => setFiltroMes("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 14 }}>✕</button>}
         <div style={{ width: 1, height: 16, background: "#e0e0e0", margin: "0 4px" }} />
         <span style={{ fontSize: 11, color: "#aaa", flexShrink: 0 }}>👤</span>
         <select value={filtroPersona} onChange={e => setFiltroPersona(e.target.value)}
@@ -2264,6 +2294,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                         return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
                       })()}
                       <button onClick={() => eliminarProyecto(p)} style={{ ...S.btnSm, color: "#c0392b", borderColor: "#fecaca", background: "#fef2f2" }}>🗑</button>
+                      <button onClick={() => archivarProyecto(p)} style={{ ...S.btnSm, color: "#888" }}>{p.archivado ? "↩ Restaurar" : "📦 Archivar"}</button>
                     </div>
                   </>
                 ) : (
