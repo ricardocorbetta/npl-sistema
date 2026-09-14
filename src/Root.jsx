@@ -438,16 +438,31 @@ function Usuarios({ session, palette }) {
 
   const guardarEdicion = async () => {
     if (!editando) return
+    // Validar contraseña si se quiere cambiar
+    if (editForm.password) {
+      if (editForm.password.length < 6) { setMsg('❌ La contraseña debe tener al menos 6 caracteres'); return }
+      if (editForm.password !== editForm.password2) { setMsg('❌ Las contraseñas no coinciden'); return }
+    }
     setSaving(true)
     // Actualizar nombre y rol en perfiles
     await supabase.from('perfiles').update({ nombre: editForm.nombre, rol: editForm.rol }).eq('id', editando.id)
-    // Si cambió el email, actualizar en Auth también
+    const { data: { session: s } } = await supabase.auth.getSession()
+    // Si cambió el email
     if (editForm.mail && editForm.mail !== editando.mail) {
-      const { data: { session: s } } = await supabase.auth.getSession()
       const res = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
         body: JSON.stringify({ accion: 'editarEmail', userId: editando.id, nuevoEmail: editForm.mail }),
+      })
+      const data = await res.json()
+      if (data.error) { setMsg('❌ ' + data.error); setSaving(false); return }
+    }
+    // Si se quiere cambiar contraseña
+    if (editForm.password) {
+      const res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
+        body: JSON.stringify({ accion: 'cambiarPassword', userId: editando.id, password: editForm.password }),
       })
       const data = await res.json()
       if (data.error) { setMsg('❌ ' + data.error); setSaving(false); return }
@@ -626,7 +641,7 @@ function Usuarios({ session, palette }) {
               <p style={{ margin: '2px 0 0', fontSize: 12, color: palette.textMuted }}>{u.mail}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button onClick={() => { setEditando(u); setEditForm({ nombre: u.nombre || '', rol: u.rol || 'calculista', mail: u.mail || '' }) }}
+              <button onClick={() => { setEditando(u); setEditForm({ nombre: u.nombre || '', rol: u.rol || 'calculista', mail: u.mail || '', password: '', password2: '' }) }}
                 style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.bgSoft, cursor: 'pointer', color: palette.text }}>
                 ✏️ Editar
               </button>
@@ -656,6 +671,16 @@ function Usuarios({ session, palette }) {
                 <label style={shared.lbl}>Email</label>
                 <input style={shared.inp} value={editForm.mail} onChange={e => setEditForm(p => ({ ...p, mail: e.target.value }))} placeholder="nuevo@email.com" />
                 {editForm.mail !== editando.mail && <p style={{ fontSize: 11, color: '#f59e0b', margin: '3px 0 0' }}>⚠ Cambiar el email desconectará la sesión actual del usuario</p>}
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={shared.lbl}>Nueva contraseña <span style={{ color: '#aaa', fontWeight: 400, textTransform: 'none' }}>(opcional — dejá en blanco para no cambiarla)</span></label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <input style={shared.inp} type="password" value={editForm.password} onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} placeholder="Nueva contraseña" />
+                  <input style={shared.inp} type="password" value={editForm.password2} onChange={e => setEditForm(p => ({ ...p, password2: e.target.value }))} placeholder="Confirmar contraseña" />
+                </div>
+                {editForm.password && editForm.password.length > 0 && editForm.password.length < 6 && <p style={{ fontSize: 11, color: '#c0392b', margin: '3px 0 0' }}>Mínimo 6 caracteres</p>}
+                {editForm.password && editForm.password2 && editForm.password !== editForm.password2 && <p style={{ fontSize: 11, color: '#c0392b', margin: '3px 0 0' }}>Las contraseñas no coinciden</p>}
+                {editForm.password && editForm.password.length >= 6 && editForm.password === editForm.password2 && <p style={{ fontSize: 11, color: '#1a8a5e', margin: '3px 0 0' }}>✓ Contraseña válida</p>}
               </div>
               <div>
                 <label style={shared.lbl}>Rol</label>
