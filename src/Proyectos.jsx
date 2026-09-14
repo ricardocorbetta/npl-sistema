@@ -2093,26 +2093,82 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {[
-          { label: "Onboarding", value: kpis.onboarding, color: "#f59e0b" },
-          { label: "Activos",          value: kpis.activos,         color: "#3b82f6" },
-          { label: "Revisión",         value: kpis.revision,        color: "#6366f1" },
-          { label: "Total",            value: kpis.total,           color: "#888" },
-          { label: `Aprobados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.aprobadosMes, color: "#f59e0b", sub: fmtMonto(kpis.montoAprobadoMes) },
-          { label: `Entregados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.entregadosMes, color: "#1a8a5e", sub: fmtMonto(kpis.montoEntregadoMes) },
-          { label: "Ratio entrega/aprobación", value: kpis.ratioMes !== null ? `${kpis.ratioMes}%` : "—", color: kpis.ratioMes >= 80 ? "#1a8a5e" : kpis.ratioMes >= 50 ? "#f59e0b" : "#c0392b", sub: `${kpis.entregadosMes}/${kpis.aprobadosMes}` },
-          { label: "Días promedio ejecución", value: kpis.promDiasEjecucion !== null ? `${kpis.promDiasEjecucion}d` : "—", color: "#6366f1", sub: "inicio a entrega" },
-        ].map(k => (
-          <div key={k.label} style={{ background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 10, padding: "8px 14px", minWidth: 80 }}>
-            <div style={{ fontSize: 20, fontWeight: 900, color: k.color, fontFamily: "monospace" }}>{k.value}</div>
-            <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
 
-      {/* Flujo de caja — solo admin */}
-      {esAdmin && <FlujoCaja proyectos={proyectos} presupuestosMap={presupuestosMap} />}
+        {/* Aprobados del mes con monto */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 160 }}>
+          <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+            Aprobados {filtroMes ? filtroMes.slice(5,7) + "/" + filtroMes.slice(0,4) : "este mes"}
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#f59e0b", fontFamily: "monospace" }}>{kpis.aprobadosMes}</span>
+            {esAdmin && kpis.montoAprobadoMes > 0 && <span style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700 }}>{fmtMonto(kpis.montoAprobadoMes)}</span>}
+          </div>
+          <div style={{ fontSize: 11, color: "#aaa" }}>por fecha de aprobación</div>
+        </div>
+
+        {/* Entregados del mes con monto */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 160 }}>
+          <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+            Entregados {filtroMes ? filtroMes.slice(5,7) + "/" + filtroMes.slice(0,4) : "este mes"}
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#1a8a5e", fontFamily: "monospace" }}>{kpis.entregadosMes}</span>
+            {esAdmin && kpis.montoEntregadoMes > 0 && <span style={{ fontSize: 12, color: "#1a8a5e", fontWeight: 700 }}>{fmtMonto(kpis.montoEntregadoMes)}</span>}
+          </div>
+          <div style={{ fontSize: 11, color: "#aaa" }}>por fecha de entrega real</div>
+        </div>
+
+        {/* Ratio */}
+        {kpis.aprobadosMes > 0 && (
+          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 120 }}>
+            <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ratio entrega</div>
+            <div style={{ fontSize: 22, fontWeight: 900, fontFamily: "monospace", color: kpis.ratioMes >= 80 ? "#1a8a5e" : kpis.ratioMes >= 50 ? "#f59e0b" : "#c0392b" }}>
+              {kpis.ratioMes !== null ? `${kpis.ratioMes}%` : "—"}
+            </div>
+            <div style={{ fontSize: 11, color: "#aaa" }}>{kpis.entregadosMes}/{kpis.aprobadosMes}</div>
+          </div>
+        )}
+
+        {/* Activos */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
+          <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Activos</div>
+          <span style={{ fontSize: 22, fontWeight: 900, color: "#3b82f6", fontFamily: "monospace" }}>{kpis.activos}</span>
+          <div style={{ fontSize: 11, color: "#aaa" }}>{kpis.onboarding} onboarding</div>
+        </div>
+
+        {/* Revisión */}
+        {kpis.revision > 0 && (
+          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
+            <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Revisión</div>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#6366f1", fontFamily: "monospace" }}>{kpis.revision}</span>
+          </div>
+        )}
+
+        {/* Vencidos */}
+        {proyVencidos.length > 0 && (
+          <div style={{ background: "#fef2f2", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #fecaca", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
+            <div style={{ fontSize: 11, color: "#c0392b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>🔴 Vencidos</div>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#c0392b", fontFamily: "monospace" }}>{proyVencidos.length}</span>
+          </div>
+        )}
+
+        {/* Días promedio */}
+        {kpis.promDiasEjecucion && (
+          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 100 }}>
+            <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prom. ejecución</div>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#6366f1", fontFamily: "monospace" }}>{kpis.promDiasEjecucion}d</span>
+            <div style={{ fontSize: 11, color: "#aaa" }}>inicio a entrega</div>
+          </div>
+        )}
+
+        {/* Total */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "10px 16px", border: "1.5px solid #e8e8e8", display: "flex", flexDirection: "column", gap: 2, minWidth: 80 }}>
+          <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total</div>
+          <span style={{ fontSize: 22, fontWeight: 900, color: "#888", fontFamily: "monospace" }}>{kpis.total}</span>
+        </div>
+
+      </div>
 
       {/* Tabs + filtro integrado */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center", background: "#fff", borderRadius: 10, padding: "8px 12px", border: "1.5px solid #e8e8e8" }}>
