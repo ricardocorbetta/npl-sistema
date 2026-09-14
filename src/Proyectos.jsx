@@ -1889,6 +1889,8 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
   const [panelCobros, setPanelCobros] = useState(null);
   const [equipoMap, setEquipoMap] = useState({});
   const esAdmin = perfil?.rol === "admin";
+  const esPM = perfil?.rol === "proyecto_manager";
+  const esAdminOPM = esAdmin || esPM;
 
   useEffect(() => { cargar(); }, []);
 
@@ -1902,7 +1904,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
   async function cargar() {
     setLoading(true); setError("");
     try {
-      const esCalculista = perfil?.rol === "calculista";
+      const esCalculista = perfil?.rol === "calculista" || perfil?.rol === "arquitecto";
       // Filtrar por email (campo llave) o nombre como fallback
       const filtro = esCalculista && perfil?.mail
         ? `&encargado_mail=eq.${encodeURIComponent(perfil.mail)}`
@@ -2165,8 +2167,8 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                   opacity: isDragging ? 0.4 : 1, transition: "all 0.15s",
                   boxShadow: isOver ? "0 0 0 2px #3b82f620" : "none",
                   cursor: "grab" }}>
-                {esAdmin ? (
-                  /* ── Vista ADMIN ── */
+                {esAdminOPM ? (
+                  /* ── Vista ADMIN / PM ── */
                   <>
                     <div onClick={() => setModal(p)} style={{ padding: "12px 16px", cursor: "pointer", display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 12, alignItems: "center" }}>
                       <div>
@@ -2215,7 +2217,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                         </div>
                       </div>
                     </div>
-                    {(pres || p.fecha_inicio_real) && (
+                    {esAdmin && (pres || p.fecha_inicio_real) && (
                       <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", background: "#fafafa" }}>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                           {(() => {
@@ -2235,8 +2237,8 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                     <div style={{ borderTop: "1px solid #f5f5f5", padding: "8px 16px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                       <button onClick={() => setModal(p)} style={S.btnSm}>✏️ Editar</button>
                       <button onClick={() => setPanelChecklist(p)} style={S.btnSm}>✅ Tareas</button>
-                      <button onClick={() => setPanelHonorarios(p)} style={S.btnSm}>💰 Honorarios</button>
-                      <button onClick={() => setPanelCobros(p)} style={{ ...S.btnSm, color: "#1a8a5e", borderColor: "#1a8a5e" }}>💵 Cobros</button>
+                      {esAdmin && <button onClick={() => setPanelHonorarios(p)} style={S.btnSm}>💰 Honorarios</button>}
+                      {esAdmin && <button onClick={() => setPanelCobros(p)} style={{ ...S.btnSm, color: "#1a8a5e", borderColor: "#1a8a5e" }}>💵 Cobros</button>}
                       {p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ ...S.btnSm, textDecoration: "none" }}>📁 Drive</a>}
                       {(() => {
                         const idx = ESTADOS.findIndex(e => e.v === p.estado);
@@ -2244,7 +2246,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
                         if (!siguiente) return null;
                         return <button onClick={() => cambiarEstado(p, siguiente.v)} style={{ ...S.btnGreen, marginLeft: "auto" }}>→ {siguiente.label}</button>;
                       })()}
-                      <button onClick={() => eliminarProyecto(p)} style={{ ...S.btnSm, color: "#c0392b", borderColor: "#fecaca", background: "#fef2f2" }}>🗑</button>
+                      {esAdmin && <button onClick={() => eliminarProyecto(p)} style={{ ...S.btnSm, color: "#c0392b", borderColor: "#fecaca", background: "#fef2f2" }}>🗑</button>}
                       <button onClick={() => archivarProyecto(p)} style={{ ...S.btnSm, color: "#888" }}>{p.archivado ? "↩ Restaurar" : "📦 Archivar"}</button>
                     </div>
                   </>
