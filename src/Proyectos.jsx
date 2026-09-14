@@ -2022,7 +2022,21 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
   const aprobadosMes = proyectos.filter(p => p.fecha_aprobacion && p.fecha_aprobacion.slice(0, 7) === mesFiltro && !p.archivado);
   const entregadosMesArr = proyectos.filter(p => p.fecha_entrega_real && p.fecha_entrega_real.slice(0, 7) === mesFiltro);
   const ratioMes = aprobadosMes.length > 0 ? Math.round(entregadosMesArr.length / aprobadosMes.length * 100) : null;
-  const montoAprobadoMes = aprobadosMes.reduce((s, p) => s + (parseFloat(p.monto_anticipo || 0) + parseFloat(p.monto_saldo || 0)), 0);
+  const montoAprobadoMes = aprobadosMes.reduce((s, p) => {
+    const pres = presupuestosMap[p.presupuesto_id];
+    return s + parseFloat(pres?.monto || 0);
+  }, 0);
+  const montoEntregadoMes = entregadosMesArr.reduce((s, p) => {
+    const pres = presupuestosMap[p.presupuesto_id];
+    return s + parseFloat(pres?.monto || 0);
+  }, 0);
+  function fmtMonto(v) {
+    if (!v) return "—";
+    const n = parseFloat(v);
+    if (n >= 1000000) return "$" + (n/1000000).toFixed(1) + "M";
+    if (n >= 1000) return "$" + Math.round(n/1000) + "k";
+    return "$" + n.toLocaleString("es-AR");
+  }
   const promDiasEjecucion = (() => {
     const conFechas = proyectos.filter(p => p.fecha_inicio_real && p.fecha_entrega_real);
     if (!conFechas.length) return null;
@@ -2041,6 +2055,7 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
     entregadosMes:   entregadosMesArr.length,
     ratioMes,
     montoAprobadoMes,
+    montoEntregadoMes,
     promDiasEjecucion,
   };
 
@@ -2084,8 +2099,8 @@ export default function Proyectos({ deepLinkId, perfil, onNav }) {
           { label: "Activos",          value: kpis.activos,         color: "#3b82f6" },
           { label: "Revisión",         value: kpis.revision,        color: "#6366f1" },
           { label: "Total",            value: kpis.total,           color: "#888" },
-          { label: `Aprobados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.aprobadosMes, color: "#f59e0b", sub: "por fecha de aprobación" },
-          { label: `Entregados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.entregadosMes, color: "#1a8a5e", sub: "por fecha de entrega real" },
+          { label: `Aprobados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.aprobadosMes, color: "#f59e0b", sub: fmtMonto(kpis.montoAprobadoMes) },
+          { label: `Entregados ${mesFiltro.slice(5,7)}/${mesFiltro.slice(0,4)}`, value: kpis.entregadosMes, color: "#1a8a5e", sub: fmtMonto(kpis.montoEntregadoMes) },
           { label: "Ratio entrega/aprobación", value: kpis.ratioMes !== null ? `${kpis.ratioMes}%` : "—", color: kpis.ratioMes >= 80 ? "#1a8a5e" : kpis.ratioMes >= 50 ? "#f59e0b" : "#c0392b", sub: `${kpis.entregadosMes}/${kpis.aprobadosMes}` },
           { label: "Días promedio ejecución", value: kpis.promDiasEjecucion !== null ? `${kpis.promDiasEjecucion}d` : "—", color: "#6366f1", sub: "inicio a entrega" },
         ].map(k => (
