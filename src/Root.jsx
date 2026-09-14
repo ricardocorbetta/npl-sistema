@@ -405,7 +405,7 @@ function Usuarios({ session, palette }) {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [form, setForm] = useState({ nombre: '', email: '', rol: 'calculista' })
+  const [form, setForm] = useState({ nombre: '', email: '', rol: 'calculista', modo: 'invite', password: '', password2: '' })
   const [editando, setEditando] = useState(null) // usuario que se está editando
   const [editForm, setEditForm] = useState({ nombre: '', rol: '' })
   const shared = makeShared(palette);
@@ -479,13 +479,20 @@ function Usuarios({ session, palette }) {
     if (!form.nombre || !form.email) return setMsg('Completá nombre y email')
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(form.email)) return setMsg('Email inválido')
+    if (form.modo === 'direct') {
+      if (!form.password || form.password.length < 6) return setMsg('La contraseña debe tener al menos 6 caracteres')
+      if (form.password !== form.password2) return setMsg('Las contraseñas no coinciden')
+    }
     setSaving(true); setMsg('')
     try {
       const { data: { session: s } } = await supabase.auth.getSession()
+      const body = form.modo === 'direct'
+        ? { nombre: form.nombre, email: form.email, rol: form.rol, invite: false, password: form.password }
+        : { nombre: form.nombre, email: form.email, rol: form.rol, invite: true }
       const res = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.access_token}` },
-        body: JSON.stringify({ nombre: form.nombre, email: form.email, rol: form.rol, invite: true }),
+        body: JSON.stringify(body),
       })
       const text = await res.text()
       let data = {}
@@ -501,15 +508,11 @@ function Usuarios({ session, palette }) {
         const { data: calcs } = await supabase.from('calculistas').select('id').eq('mail', form.email).limit(1)
         if (calcs && calcs.length > 0) {
           await supabase.from('calculistas').update({ perfil_id: data.id }).eq('id', calcs[0].id)
-          setMsg(`✓ Invitación enviada a ${form.email} — vinculado con calculista existente`)
-        } else {
-          setMsg(`✓ Invitación enviada a ${form.email} — recibirá un email para configurar su contraseña`)
         }
-      } else {
-        setMsg(`✓ Invitación enviada a ${form.email}`)
       }
+      setMsg(form.modo === 'direct' ? `✓ Usuario creado — puede ingresar con ${form.email}` : `✓ Invitación enviada a ${form.email}`)
 
-      setForm({ nombre: '', email: '', rol: 'calculista' })
+      setForm({ nombre: '', email: '', rol: 'calculista', modo: 'invite', password: '', password2: '' })
       setShowForm(false)
       cargar()
     } catch (e) { setMsg('❌ Error de conexión') }
@@ -542,8 +545,22 @@ function Usuarios({ session, palette }) {
 
       {showForm && (
         <div style={{ background: palette.bgSoft, border: `1.5px solid ${palette.border}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: palette.text }}>Invitar usuario</h3>
-          <p style={{ margin: '0 0 16px', fontSize: 12, color: palette.textFaint }}>El usuario recibirá un email para configurar su contraseña y acceder al sistema.</p>
+          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: palette.text }}>Nuevo usuario</h3>
+
+          {/* Selector de modo */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: palette.bgCard, borderRadius: 8, padding: 4, border: `1px solid ${palette.border}` }}>
+            {[['invite', '📧 Enviar invitación por email'], ['direct', '🔑 Crear con contraseña directa']].map(([id, label]) => (
+              <button key={id} onClick={() => setForm(p => ({ ...p, modo: id }))}
+                style={{ flex: 1, padding: '7px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: form.modo === id ? 700 : 500, background: form.modo === id ? '#0a0a0a' : 'transparent', color: form.modo === id ? '#fff' : palette.textMuted, cursor: 'pointer' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <p style={{ margin: '0 0 16px', fontSize: 12, color: palette.textFaint }}>
+            {form.modo === 'invite' ? 'El usuario recibirá un email para configurar su propia contraseña.' : 'El usuario podrá ingresar inmediatamente con la contraseña que definas.'}
+          </p>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={shared.lbl}>Nombre completo *</label>
@@ -553,6 +570,16 @@ function Usuarios({ session, palette }) {
               <label style={shared.lbl}>Email *</label>
               <input style={shared.inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="calculista@mail.com" />
             </div>
+            {form.modo === 'direct' && <>
+              <div>
+                <label style={shared.lbl}>Contraseña *</label>
+                <input style={shared.inp} type="password" value={form.password || ''} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+              </div>
+              <div>
+                <label style={shared.lbl}>Confirmar contraseña *</label>
+                <input style={shared.inp} type="password" value={form.password2 || ''} onChange={e => setForm(p => ({ ...p, password2: e.target.value }))} placeholder="Repetir contraseña" />
+              </div>
+            </>}
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={shared.lbl}>Rol *</label>
@@ -574,7 +601,7 @@ function Usuarios({ session, palette }) {
           {msg && <p style={{ fontSize: 13, color: msg.startsWith('✓') ? '#1a8a5e' : '#c0392b', margin: '0 0 12px' }}>{msg}</p>}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={invitarUsuario} disabled={saving} style={shared.btn}>
-              {saving ? 'Enviando invitación…' : '📧 Enviar invitación'}
+              {saving ? 'Creando usuario…' : form.modo === 'invite' ? '📧 Enviar invitación' : '🔑 Crear usuario'}
             </button>
             <button onClick={() => { setShowForm(false); setMsg(''); }} style={shared.btnSm}>Cancelar</button>
           </div>
