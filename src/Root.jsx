@@ -28,6 +28,16 @@ const APPS_ADMIN = [
   { id: 'usuarios', label: 'Usuarios', icon: '👤', desc: 'Gestión de accesos' },
 ]
 
+const APPS_PM = [
+  { id: 'dashboard', label: 'Dashboard', icon: '📊', desc: 'Panel de control' },
+  { id: 'proyectos', label: 'Proyectos', icon: '🗂️', desc: 'Kanban de proyectos' },
+  { id: 'planificacion', label: 'Planificación', icon: '📅', desc: 'Gantt y carga de trabajo' },
+  { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
+  { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
+  { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
+  { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
+]
+
 const APPS_JEFE = [
   { id: 'obras', label: 'Mis obras', icon: '🏗️', desc: 'Seguimiento diario' },
 ]
@@ -90,9 +100,11 @@ export default function Root() {
     console.log('Perfil cargado:', data?.mail, data?.rol, 'uid:', uid)
     setPerfil(data)
     const hashActual = window.location.hash.replace('#', '').split(':')[0];
-    if (!hashActual || hashActual === '') {
+    if (!hashActual || hashActual === '' || hashActual === 'legajos') {
       if (data?.rol === 'jefe_obra') window.location.hash = 'obras';
       else if (data?.rol === 'calculista' || data?.rol === 'arquitecto') window.location.hash = 'legajos';
+      else if (data?.rol === 'proyecto_manager') window.location.hash = 'dashboard';
+      else if (data?.rol === 'admin' && hashActual === 'legajos') window.location.hash = 'proyectos';
     }
     setLoading(false)
   }
@@ -127,7 +139,10 @@ export default function Root() {
   if (!session) return <LoginScreen palette={palette} />
   if (!perfil || !perfil.activo) return <PendienteScreen onLogout={logout} perfil={perfil} palette={palette} />
 
-  const apps = perfil.rol === 'admin' ? APPS_ADMIN : perfil.rol === 'jefe_obra' ? APPS_JEFE : APPS_CALCULISTA
+  const apps = perfil.rol === 'admin' ? APPS_ADMIN
+    : perfil.rol === 'proyecto_manager' ? APPS_PM
+    : perfil.rol === 'jefe_obra' ? APPS_JEFE
+    : APPS_CALCULISTA
 
   const themeCtx = { theme, palette };
   const hideBuscador = current === 'legajos';
