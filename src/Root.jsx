@@ -29,13 +29,8 @@ const APPS_ADMIN = [
 ]
 
 const APPS_PM = [
-  { id: 'dashboard', label: 'Dashboard', icon: '📊', desc: 'Panel de control' },
   { id: 'proyectos', label: 'Proyectos', icon: '🗂️', desc: 'Kanban de proyectos' },
   { id: 'planificacion', label: 'Planificación', icon: '📅', desc: 'Gantt y carga de trabajo' },
-  { id: 'obras', label: 'Obras', icon: '🏗️', desc: 'Seguimiento diario' },
-  { id: 'calculistas', label: 'Calculistas', icon: '👷', desc: 'Equipo y postulantes' },
-  { id: 'crm', label: 'Clientes', icon: '👥', desc: '148 contactos' },
-  { id: 'biblioteca', label: 'Biblioteca', icon: '📚', desc: 'Rubros y tareas' },
 ]
 
 const APPS_JEFE = [
@@ -103,7 +98,7 @@ export default function Root() {
     if (!hashActual || hashActual === '' || hashActual === 'legajos') {
       if (data?.rol === 'jefe_obra') window.location.hash = 'obras';
       else if (data?.rol === 'calculista' || data?.rol === 'arquitecto') window.location.hash = 'legajos';
-      else if (data?.rol === 'proyecto_manager') window.location.hash = 'dashboard';
+      else if (data?.rol === 'proyecto_manager') window.location.hash = 'proyectos';
       else if (data?.rol === 'admin' && hashActual === 'legajos') window.location.hash = 'proyectos';
     }
     setLoading(false)
@@ -156,7 +151,7 @@ export default function Root() {
     case 'perfil':        modulo = <PanelPerfil perfil={perfil} palette={palette} onVolver={() => navTo(null)} />; break;
     case 'calculistas':   modulo = <Calculistas />; break;
     case 'crm':           modulo = <CRM />; break;
-    case 'dashboard':     modulo = <Dashboard onNav={navTo} />; break;
+    case 'dashboard':     modulo = <Dashboard onNav={navTo} perfil={perfil} />; break;
     case 'obras':         modulo = <Obras perfil={perfil} onLogout={logout} deepLinkId={deepLinkId} />; break;
     case 'biblioteca':    modulo = <Biblioteca />; break;
     case 'configuracion': modulo = <Configuracion />; break;
